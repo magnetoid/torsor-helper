@@ -24,6 +24,19 @@ def test_reindex_indexes_all_notes(tmp_path):
     assert db.cosine_search(conn, HashingEmbedder(64).embed(["architecture"])[0], 50)
 
 
+def test_reindex_rebuilds_when_embedder_dim_changes(tmp_path):
+    store, conn = _setup(tmp_path)
+    reindex(store, conn, HashingEmbedder(dim=64))
+    # Switching to a different-dim embedder must force a full re-embed (no crash,
+    # no mixed dimensions) — reachable when config.embeddings.dim changes between runs.
+    stats = reindex(store, conn, HashingEmbedder(dim=128))
+    assert stats["indexed"] == stats["total"]  # everything re-embedded
+    # cosine search with a 128-dim query must work and not raise on stale 64-dim rows
+    hits = db.cosine_search(conn, HashingEmbedder(dim=128).embed(["architecture"])[0], 50)
+    assert hits
+    assert db.meta_get(conn, "embedder") == "hashing::128"
+
+
 def test_reindex_is_incremental(tmp_path):
     store, conn = _setup(tmp_path)
     reindex(store, conn, HashingEmbedder(dim=64))

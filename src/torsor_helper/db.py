@@ -138,6 +138,8 @@ def cosine_search(conn, qvec, limit):
     scored = []
     for r in rows:
         v = unpack(r["embedding"])
+        if v.shape[0] != q.shape[0]:
+            continue  # stale-dimension vector (embedder changed) — skip defensively
         vn = np.linalg.norm(v)
         if vn == 0:
             continue

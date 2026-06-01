@@ -4,7 +4,18 @@ from torsor_helper import db
 from torsor_helper.store import Store
 
 
+def _embedder_identity(embedder) -> str:
+    return f"{embedder.name}:{getattr(embedder, 'model', '')}:{embedder.dim}"
+
+
 def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
+    # If the embedder (name/model/dim) changed since the last build, the stored
+    # vectors live in a different space — force a full re-embed so cosine search
+    # stays valid (and never mixes dimensions).
+    identity = _embedder_identity(embedder)
+    if db.meta_get(conn, "embedder") not in (None, identity):
+        full = True
+
     existing = db.note_hashes(conn)
     seen: set[str] = set()
     pending: list[tuple[str, str]] = []  # (path, body) to embed
@@ -34,5 +45,6 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
             db.delete_note(conn, path)
             deleted += 1
 
+    db.meta_set(conn, "embedder", identity)
     conn.commit()
     return {"indexed": len(pending), "deleted": deleted, "total": len(seen)}

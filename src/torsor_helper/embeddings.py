@@ -50,6 +50,7 @@ class FastEmbedEmbedder:
     name = "fastembed"
 
     def __init__(self, model: str) -> None:
+        self.model = model
         self._model = _make_fastembed(model)
         probe = next(iter(self._model.embed(["x"])))
         self.dim = len(list(probe))
