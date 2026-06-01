@@ -74,8 +74,10 @@ Five tiers of plain Markdown, ordered by **stability** (wide stable base loaded 
     progress.md               # T3  — done / in-progress / blocked
   memory/
     journal/2026-06-01.md     # T4  — episodic, dated, append-only
+    insights/                 # T4  — DERIVED insight notes auto-mined by the Coach (Phase 6)
   .index/                     # DERIVED, git-ignored, disposable
     torsor.db                 # SQLite: vectors + FTS + graph edges
+    coach_state.json          # Coach dismissal/decay state (Phase 6)
 ```
 
 - Every note uses **YAML frontmatter** (`type`, `status`, `tags`, `links`) and **`[[wikilinks]]`** (basic-memory/Obsidian style); wikilinks become graph edges.
@@ -115,8 +117,9 @@ Each module has one clear purpose, a typed interface (Pydantic), and is independ
 | `check_drift(files \| diff)` | Verdict + citation of the intent a change violates | loss of intent |
 | `map_repo(paths?)` | (Re)generate the repo map | fragmented collapse |
 | `handoff()` | Structured end-of-session summary → next session's bootstrap | soft collapse |
+| `recommend(context?, kinds?, limit?)` | Health + best-practice recommendations (Coach, Phase 6) | duplication / inconsistency / rot |
 
-**Prompts** (user slash-commands): `/torsor:onboard`, `/torsor:checkpoint`, `/torsor:review-drift`.
+**Prompts** (user slash-commands): `/torsor:onboard`, `/torsor:checkpoint`, `/torsor:review-drift`, `/torsor:coach`.
 
 ## 7. Data flow (session lifecycle)
 
@@ -186,6 +189,9 @@ The safety net is that *the index is disposable*:
 3. **Map** — tree-sitter cartographer + symbol graph + `get_intent`. *(Beats fragmented collapse / myopia.)*
 4. **Guard** — ADRs + deterministic rules + sampling drift check + `record_decision` / `check_drift`. *(The differentiator.)*
 5. **Consolidation** — `memify`-style self-improvement + multi-client polish + HTTP/team mode.
+6. **Coach** — independent, non-intrusive health & best-practices advisor: hygiene/maturity checks (`stale`/`thin`/`unruled`/`uncharted`) + retrieval-based best-practice recs (`reuse`/`convention`/`decision`/`rejection`/`learning`) + `torsor coach` report + `recommend()` tool + insight auto-mining + decay/escalation. *(Stabilises the project over time; addresses duplication, inconsistency, repeat bugs.)* See [`2026-06-01-torsor-coach-design.md`](2026-06-01-torsor-coach-design.md).
+
+**Hooks for Phase 6 that earlier phases must leave:** Phase 2 — retrieval filterable by frontmatter `type`/`kind`, index stores `type`/`kind`/`signal_strength` + access frequency, add the `memory/insights/` path, register a thin hygiene-only `recommend` tool stub. Phase 3 — expose a queryable symbol inventory + module list. Phase 4 — guard emits findings the Coach surfaces as `convention` recs; ADR `rules:` is the shared rules source.
 
 ## 14. Out of scope (YAGNI for now)
 

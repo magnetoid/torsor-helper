@@ -51,6 +51,7 @@ Five Markdown tiers, ordered by stability — the stable base loads first, the v
 | `map_repo()` | (Re)generate the repo map | 🔜 Phase 3 |
 | `record_decision(...)` | Write an ADR that also becomes a guard rule | 🔜 Phase 4 |
 | `check_drift(files\|diff)` | Verdict + citation of the intent a change violates | 🔜 Phase 4 |
+| `recommend(context?)` | Health + best-practice recommendations (the Coach) | 🔜 Phase 6 |
 
 ## Works with
 
@@ -80,6 +81,7 @@ uv run torsor doctor                       # checks the project is healthy
 - [ ] **Phase 3 — Map:** tree-sitter cartographer + symbol graph + `get_intent`
 - [ ] **Phase 4 — Guard:** ADRs + deterministic rules + sampling-based drift check + `check_drift`
 - [ ] **Phase 5 — Consolidation:** self-improving memory + multi-client polish + HTTP/team mode
+- [ ] **Phase 6 — Coach:** independent, non-intrusive advisor — knowledge-hygiene checks (`stale`/`thin`/`unruled`/`uncharted`) + best-practice recs (`reuse`/`convention`/`decision`/`rejection`/`learning`) via `torsor coach` + `recommend()`. ([design](docs/superpowers/specs/2026-06-01-torsor-coach-design.md))
 
 ## Design & prior art
 
