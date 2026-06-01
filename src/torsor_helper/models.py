@@ -68,3 +68,20 @@ class Symbol(BaseModel):
     line: int
     doc: str = ""
     refs: int = 0
+
+
+class Rule(BaseModel):
+    kind: str            # "forbid_import" | "forbid_pattern"
+    target: str          # module prefix (forbid_import) or regex (forbid_pattern)
+    scope: str = "*.py"  # fnmatch glob over the posix path, relative to the repo root
+    message: str = ""
+    source: str = ""     # ADR/title that declared this rule (for citation)
+
+
+class Violation(BaseModel):
+    rule_kind: str
+    target: str
+    file: str
+    line: int = 0
+    message: str
+    source: str
