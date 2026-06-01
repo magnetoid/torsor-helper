@@ -66,7 +66,11 @@ def _open_index(store, config):
         return None
     embedder = _embedder_for(config)
     conn = db.connect(store.paths.index_db)
-    reindex(store, conn, embedder)
+    try:
+        reindex(store, conn, embedder)
+    except Exception:
+        conn.close()  # don't leak the connection if indexing fails
+        raise
     return conn
 
 
