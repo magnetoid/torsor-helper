@@ -63,3 +63,13 @@ def test_iter_notes_skips_index_dir(tmp_path):
     titles = {n.title for n in store.iter_notes()}
     assert "Project Charter" in titles
     assert "Junk" not in titles
+
+
+def test_write_note_does_not_mutate_caller_frontmatter(tmp_path):
+    paths = TorsorPaths(tmp_path)
+    store = Store(paths, clock=CLOCK)
+    fm = Frontmatter(type="observation")
+    store.write_note(paths.memory_dir / "a.md", fm, "A", "body")
+    # the caller's object must remain un-stamped
+    assert fm.created is None
+    assert fm.updated is None

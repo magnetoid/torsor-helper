@@ -96,6 +96,7 @@ class Store:
     ) -> Note:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        frontmatter = frontmatter.model_copy()  # don't mutate the caller's object
         stamp = self.clock().isoformat(timespec="seconds")
         if frontmatter.created is None:
             frontmatter.created = stamp
