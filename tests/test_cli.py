@@ -28,6 +28,21 @@ def test_doctor_flags_missing_project(tmp_path):
     assert "not initialized" in result.output.lower()
 
 
+def test_init_rejects_unknown_client_without_scaffolding(tmp_path):
+    result = runner.invoke(app, ["init", "--root", str(tmp_path), "--client", "bogus"])
+    assert result.exit_code == 1
+    # must fail BEFORE creating any .torsor/ side effects
+    assert not TorsorPaths(tmp_path).base.exists()
+
+
+def test_doctor_reports_malformed_config(tmp_path):
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    TorsorPaths(tmp_path).config_file.write_text("this is = not valid toml ===")
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "malformed" in result.output.lower()
+
+
 def test_end_to_end_remember_then_bootstrap(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     from datetime import datetime

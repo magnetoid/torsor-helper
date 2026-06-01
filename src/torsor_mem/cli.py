@@ -21,14 +21,15 @@ def init(
 ) -> None:
     """Scaffold the .torsor/ pyramid and write torsor.toml."""
     paths = TorsorPaths(root)
+    # Validate input before any filesystem side effects.
+    if client and client not in SUPPORTED_CLIENTS:
+        typer.echo(f"Unknown client {client!r}. Known: {', '.join(SUPPORTED_CLIENTS)}", err=True)
+        raise typer.Exit(code=1)
     Store(paths).scaffold(force=force)
     if not paths.config_file.exists() or force:
         save_config(paths, TorsorConfig())
     typer.echo(f"Initialized torsor-mem at {paths.base}")
     if client:
-        if client not in SUPPORTED_CLIENTS:
-            typer.echo(f"Unknown client {client!r}. Known: {', '.join(SUPPORTED_CLIENTS)}", err=True)
-            raise typer.Exit(code=1)
         typer.echo(f"\n# MCP config for {SUPPORTED_CLIENTS[client]}:\n")
         typer.echo(config_snippet(client, root=str(root.resolve())))
 
@@ -56,7 +57,11 @@ def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) 
     if missing:
         typer.echo(f"Project incomplete; missing: {', '.join(missing)}", err=True)
         raise typer.Exit(code=1)
-    load_config(paths)  # raises if malformed
+    try:
+        load_config(paths)
+    except Exception as exc:  # malformed TOML or invalid schema
+        typer.echo(f"Config malformed: {exc}", err=True)
+        raise typer.Exit(code=1)
     typer.echo("OK: torsor-mem project is healthy.")
 
 
