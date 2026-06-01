@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re as _re
 
-from torsor_helper import cartographer, db
+from torsor_helper import cartographer, db, guard
 from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.config import TorsorConfig
 from torsor_helper.embeddings import get_embedder
@@ -211,3 +211,25 @@ def record_decision(store, title, context, decision, consequences="", rules=None
     target = store.paths.decisions_dir / f"{number:04d}-{_slug(title)}.md"
     store.write_note(target, fm, f"ADR {number:04d}: {title}", body)
     return str(target)
+
+
+def _git_changed(root) -> list[str]:
+    import subprocess
+    try:
+        changed = subprocess.run(
+            ["git", "-C", str(root), "diff", "--name-only", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.split()
+        untracked = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--others", "--exclude-standard"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [f for f in (changed + untracked) if f.endswith(".py")]
+
+
+def check_drift(store, config, files=None) -> list:
+    if files is None:
+        files = _git_changed(store.paths.root)
+    return guard.check_drift(store, files)
