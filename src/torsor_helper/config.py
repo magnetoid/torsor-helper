@@ -18,12 +18,21 @@ class EmbeddingConfig(BaseModel):
     # Placeholder for Phase 2; unused in Phase 1.
     provider: str = "fastembed"
     model: str = "BAAI/bge-small-en-v1.5"
+    dim: int = 384
+
+
+class IndexConfig(BaseModel):
+    rrf_k: int = 60
+    recency_weight: float = 0.1
+    graph_boost: float = 0.1
+    auto_index: bool = True
 
 
 class TorsorConfig(BaseModel):
     version: int = 1
     budgets: BudgetConfig = Field(default_factory=BudgetConfig)
     embeddings: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
+    index: IndexConfig = Field(default_factory=IndexConfig)
 
 
 def load_config(paths: TorsorPaths) -> TorsorConfig:

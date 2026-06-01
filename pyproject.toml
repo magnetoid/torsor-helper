@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.2.0",
+    "numpy>=1.26",
     "pydantic>=2.6",
     "pyyaml>=6.0",
     "tomli-w>=1.0",
@@ -18,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "anyio>=4.0"]
+embeddings = ["fastembed>=0.3"]
 
 [project.scripts]
 torsor = "torsor_helper.cli:main"
