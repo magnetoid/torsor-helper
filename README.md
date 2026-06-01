@@ -7,8 +7,8 @@
 **Stop re-explaining your project every session. Stop the silent architectural drift.**
 One small Python MCP server — works with *every* AI coding tool.
 
-![status](https://img.shields.io/badge/status-Phase%201%20shipped-success)
-![tests](https://img.shields.io/badge/tests-49%20passing-brightgreen)
+![status](https://img.shields.io/badge/status-Phase%202%20shipped-success)
+![tests](https://img.shields.io/badge/tests-77%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
 ![local-first](https://img.shields.io/badge/local--first-no%20API%20key-00a3a3)
@@ -63,12 +63,12 @@ Five Markdown tiers, ordered by **stability** — the broad, stable base loads f
 | Tool | What it does | Status |
 |---|---|:--:|
 | `bootstrap_session()` | Hand the agent a budgeted summary of the whole pyramid at session start | ✅ **shipped** |
-| `recall(query)` | Search memory + wiki (keyword today, hybrid semantic in Phase 2) | ✅ **shipped** |
+| `recall(query)` | Hybrid search over memory + wiki — vector + full-text (FTS5) fused via RRF | ✅ **shipped** |
 | `remember(content)` · `update_active(...)` | Self-editing memory the agent maintains as it works | ✅ **shipped** |
 | `handoff()` | Structured end-of-session summary → seeds the *next* session | ✅ **shipped** |
 | `get_intent(topic?)` · `map_repo()` | Surface the architecture/symbols relevant to a change | 🔜 Phase 3 |
 | `record_decision(...)` · `check_drift(...)` | Record ADRs that become rules; flag changes that violate intent | 🔜 Phase 4 |
-| `recommend(context?)` | **The Coach** — health + best-practice recommendations | 🔜 Phase 6 |
+| `recommend(context?)` | **The Coach** — health + best-practice recommendations *(stub today)* | 🔜 Phase 6 |
 
 ### 🩺 The Coach *(designed, Phase 6)*
 
@@ -101,8 +101,8 @@ It's a standard **MCP stdio server**, so any MCP client works. `torsor init --cl
 
 ## 🗺️ Roadmap
 
-- [x] **Phase 1 — Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools *(shipped, 49 tests green)*
-- [ ] **Phase 2 — Index** · SQLite + local embeddings, incremental indexer, hybrid semantic recall, wiki-link graph
+- [x] **Phase 1 — Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools *(shipped)*
+- [x] **Phase 2 — Index** · SQLite (FTS5 + wiki-link graph) + local embeddings (NumPy cosine), incremental indexer, hybrid RRF recall, `torsor index` *(shipped, 77 tests green)*
 - [ ] **Phase 3 — Map** · tree-sitter cartographer + symbol graph + `get_intent`
 - [ ] **Phase 4 — Guard** · ADRs-as-rules + drift detection (`check_drift`)
 - [ ] **Phase 5 — Consolidation** · self-improving memory + team/HTTP mode
@@ -110,8 +110,9 @@ It's a standard **MCP stdio server**, so any MCP client works. `torsor init --cl
 
 ## 🛠️ Built with
 
-**Today:** FastMCP · Typer · Pydantic · PyYAML — *local-first, no API key required.*
-**Coming:** SQLite + vectors + FTS5 · local embeddings · tree-sitter.
+**Today:** FastMCP · Typer · Pydantic · PyYAML · SQLite (FTS5) · NumPy — *local-first, no API key required.*
+**Optional:** `fastembed` (`pip install torsor-helper[embeddings]`) for semantic embeddings.
+**Coming:** tree-sitter cartographer (Phase 3) · drift guard (Phase 4).
 
 ## 📚 Design & prior art
 
