@@ -5,8 +5,11 @@ from typing import Optional
 
 import typer
 
+from torsor_helper import db
 from torsor_helper.clients import SUPPORTED_CLIENTS, config_snippet
 from torsor_helper.config import TorsorConfig, load_config, save_config
+from torsor_helper.embeddings import get_embedder
+from torsor_helper.indexer import reindex
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
 
@@ -63,6 +66,26 @@ def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) 
         typer.echo(f"Config malformed: {exc}", err=True)
         raise typer.Exit(code=1)
     typer.echo("OK: torsor-helper project is healthy.")
+
+
+@app.command()
+def index(
+    root: Path = typer.Option(Path("."), help="Project root containing .torsor/."),
+    full: bool = typer.Option(False, help="Rebuild every note's embedding, ignoring the hash cache."),
+) -> None:
+    """Build or refresh the derived search index."""
+    paths = TorsorPaths(root)
+    if not paths.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(paths)
+    store = Store(paths)
+    conn = db.connect(paths.index_db)
+    try:
+        stats = reindex(store, conn, get_embedder(config), full=full)
+    finally:
+        conn.close()
+    typer.echo(f"Indexed {stats['indexed']} note(s), deleted {stats['deleted']}, total {stats['total']}.")
 
 
 def main() -> None:
