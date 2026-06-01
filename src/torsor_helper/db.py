@@ -1,0 +1,163 @@
+from __future__ import annotations
+
+import re
+import sqlite3
+from pathlib import Path
+from typing import Sequence
+
+import numpy as np
+
+SCHEMA_VERSION = 1
+
+
+def connect(path: Path) -> sqlite3.Connection:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = sqlite3.Row
+    _create_schema(conn)
+    return conn
+
+
+def _create_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS notes (
+            path TEXT PRIMARY KEY, content_hash TEXT, tier INTEGER,
+            type TEXT, kind TEXT, title TEXT, updated TEXT,
+            access_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS vectors (path TEXT PRIMARY KEY, dim INTEGER, embedding BLOB);
+        CREATE TABLE IF NOT EXISTS edges (src TEXT, target_slug TEXT, target_path TEXT);
+        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+        CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(path UNINDEXED, title, body);
+        """
+    )
+    if meta_get(conn, "schema_version") is None:
+        meta_set(conn, "schema_version", str(SCHEMA_VERSION))
+    conn.commit()
+
+
+def meta_get(conn, key):
+    row = conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def meta_set(conn, key, value):
+    conn.execute(
+        "INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=?",
+        (key, value, value),
+    )
+
+
+def pack(vec: Sequence[float]) -> bytes:
+    return np.asarray(list(vec), dtype=np.float32).tobytes()
+
+
+def unpack(blob: bytes) -> np.ndarray:
+    return np.frombuffer(blob, dtype=np.float32)
+
+
+def note_hashes(conn) -> dict[str, str]:
+    return {r["path"]: r["content_hash"] for r in conn.execute("SELECT path, content_hash FROM notes")}
+
+
+def upsert_note(conn, path, content_hash, tier, type_, kind, title, updated):
+    conn.execute(
+        """INSERT INTO notes(path, content_hash, tier, type, kind, title, updated)
+           VALUES(?,?,?,?,?,?,?)
+           ON CONFLICT(path) DO UPDATE SET
+             content_hash=excluded.content_hash, tier=excluded.tier, type=excluded.type,
+             kind=excluded.kind, title=excluded.title, updated=excluded.updated""",
+        (path, content_hash, int(tier), type_, kind, title, updated),
+    )
+
+
+def note_row(conn, path):
+    row = conn.execute("SELECT * FROM notes WHERE path=?", (path,)).fetchone()
+    return dict(row) if row else None
+
+
+def replace_fts(conn, path, title, body):
+    conn.execute("DELETE FROM fts WHERE path=?", (path,))
+    conn.execute("INSERT INTO fts(path, title, body) VALUES(?,?,?)", (path, title, body))
+
+
+def body_of(conn, path):
+    row = conn.execute("SELECT body FROM fts WHERE path=?", (path,)).fetchone()
+    return row["body"] if row else ""
+
+
+def replace_edges(conn, src, slugs):
+    conn.execute("DELETE FROM edges WHERE src=?", (src,))
+    for slug in slugs:
+        target = conn.execute(
+            "SELECT path FROM notes WHERE path = ? OR path LIKE ? LIMIT 1",
+            (f"{slug}.md", f"%/{slug}.md"),
+        ).fetchone()
+        conn.execute(
+            "INSERT INTO edges(src, target_slug, target_path) VALUES(?,?,?)",
+            (src, slug, target["path"] if target else None),
+        )
+
+
+def neighbors(conn, path):
+    return [
+        r["target_path"]
+        for r in conn.execute(
+            "SELECT target_path FROM edges WHERE src=? AND target_path IS NOT NULL", (path,)
+        )
+    ]
+
+
+def upsert_vector(conn, path, vec):
+    blob = pack(vec)
+    conn.execute(
+        "INSERT INTO vectors(path, dim, embedding) VALUES(?,?,?) "
+        "ON CONFLICT(path) DO UPDATE SET dim=excluded.dim, embedding=excluded.embedding",
+        (path, len(vec), blob),
+    )
+
+
+def delete_note(conn, path):
+    conn.execute("DELETE FROM notes WHERE path=?", (path,))
+    conn.execute("DELETE FROM vectors WHERE path=?", (path,))
+    conn.execute("DELETE FROM edges WHERE src=?", (path,))
+    conn.execute("DELETE FROM fts WHERE path=?", (path,))
+
+
+def cosine_search(conn, qvec, limit):
+    rows = conn.execute("SELECT path, embedding FROM vectors").fetchall()
+    if not rows:
+        return []
+    q = np.asarray(list(qvec), dtype=np.float32)
+    qn = np.linalg.norm(q)
+    if qn == 0:
+        return []
+    q = q / qn
+    scored = []
+    for r in rows:
+        v = unpack(r["embedding"])
+        vn = np.linalg.norm(v)
+        if vn == 0:
+            continue
+        scored.append((r["path"], float(np.dot(q, v / vn))))
+    scored.sort(key=lambda t: (-t[1], t[0]))
+    return scored[:limit]
+
+
+def fts_search(conn, query, limit):
+    terms = [t for t in re.findall(r"\w+", query.lower()) if t]
+    if not terms:
+        return []
+    match = " OR ".join(terms)
+    rows = conn.execute(
+        "SELECT path, bm25(fts) AS score FROM fts WHERE fts MATCH ? ORDER BY score LIMIT ?",
+        (match, limit),
+    ).fetchall()
+    return [(r["path"], float(r["score"])) for r in rows]
+
+
+def bump_access(conn, paths):
+    conn.executemany("UPDATE notes SET access_count = access_count + 1 WHERE path=?", [(p,) for p in paths])
+    conn.commit()
