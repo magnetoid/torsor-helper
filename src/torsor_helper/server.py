@@ -47,6 +47,14 @@ def build_server(root: Path | str) -> FastMCP:
         """Write a structured end-of-session handoff that the next session resumes from."""
         return ops.record_handoff(store, summary, decisions, open_questions, next_steps)
 
+    @mcp.tool()
+    def recommend(context: str = "", limit: int = 5) -> str:
+        """Health + best-practice recommendations (the Coach). Arrives in Phase 6."""
+        return (
+            "The Coach (recommendations) lands in Phase 6. Today, use `bootstrap_session` "
+            "for context and `recall` to find prior decisions/learnings."
+        )
+
     @mcp.resource("torsor://charter")
     def charter_resource() -> str:
         return paths.charter.read_text(encoding="utf-8") if paths.charter.exists() else ""

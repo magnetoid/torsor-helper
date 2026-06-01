@@ -78,6 +78,7 @@ class Store:
             self.paths.map_dir,
             self.paths.active_dir,
             self.paths.journal_dir,
+            self.paths.insights_dir,
             self.paths.index_dir,
         ):
             directory.mkdir(parents=True, exist_ok=True)

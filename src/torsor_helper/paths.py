@@ -66,6 +66,10 @@ class TorsorPaths:
         return self.memory_dir / "journal"
 
     @property
+    def insights_dir(self) -> Path:
+        return self.memory_dir / "insights"
+
+    @property
     def index_dir(self) -> Path:
         return self.base / ".index"
 
