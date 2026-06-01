@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from torsor_helper import db
+from torsor_helper import cartographer, db
 from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.config import TorsorConfig
 from torsor_helper.embeddings import get_embedder
@@ -127,3 +127,24 @@ def record_handoff(
     )
     path = store.append_journal(body, kind="handoff", links=[])
     return str(path)
+
+
+def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None) -> dict:
+    symbols = cartographer.scan_repo(store.paths.root, paths)
+    rendered = cartographer.render_map(
+        symbols,
+        overview_tokens=config.budgets.bootstrap_tokens,
+        chars_per_token=config.budgets.chars_per_token,
+    )
+    for relpath, (title, body) in rendered.items():
+        target = store.paths.map_dir / relpath
+        store.write_note(target, Frontmatter(type="map", status="derived", tags=["map"]), title, body)
+
+    conn = db.connect(store.paths.index_db)
+    try:
+        db.replace_all_symbols(conn, symbols)
+        reindex(store, conn, _embedder_for(config))
+    finally:
+        conn.close()
+
+    return {"modules": len({s.module for s in symbols}), "symbols": len(symbols)}
