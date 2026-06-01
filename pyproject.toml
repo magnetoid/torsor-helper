@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "torsor-mem"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Persistent memory + architectural-intent guardrail for AI coding agents, over MCP."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,6 +21,9 @@ dev = ["pytest>=8.0", "anyio>=4.0"]
 
 [project.scripts]
 torsor = "torsor_mem.cli:main"
+
+[tool.hatch.version]
+path = "src/torsor_mem/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/torsor_mem"]
