@@ -59,6 +59,21 @@ def build_server(root: Path | str) -> FastMCP:
         return ops.get_intent(store, config, topic or None)
 
     @mcp.tool()
+    def record_decision(title: str, context: str, decision: str, consequences: str = "", rules: list[dict] | None = None) -> str:
+        """Record an Architecture Decision Record. Optional `rules` become drift-guard rules."""
+        path = ops.record_decision(store, title, context, decision, consequences, rules)
+        return f"Recorded {path}"
+
+    @mcp.tool()
+    def check_drift(files: list[str] | None = None) -> str:
+        """Flag changes that violate declared architectural intent (ADR rules). Defaults to git-changed files."""
+        violations = ops.check_drift(store, config, files)
+        if not violations:
+            return "No drift from declared intent detected."
+        lines = [f"- {v.file}:{v.line} — {v.message} (per {v.source})" for v in violations]
+        return f"{len(violations)} drift violation(s):\n" + "\n".join(lines)
+
+    @mcp.tool()
     def recommend(context: str = "", limit: int = 5) -> str:
         """Health + best-practice recommendations (the Coach). Arrives in Phase 6."""
         return (
