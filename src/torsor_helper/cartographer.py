@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.models import Symbol
 
 DEFAULT_IGNORE = {
@@ -87,3 +88,31 @@ def scan_repo(root: Path, paths: list[str] | None = None, ignore: set[str] = DEF
         base = sym.name.split(".")[-1]
         sym.refs = max(0, blob.count(base) - 1)  # minus the definition itself
     return symbols
+
+
+def render_map(symbols: list[Symbol], *, overview_tokens: int = 2000, chars_per_token: int = 4) -> dict[str, tuple[str, str]]:
+    by_module: dict[str, list[Symbol]] = {}
+    for sym in symbols:
+        by_module.setdefault(sym.module, []).append(sym)
+
+    out: dict[str, tuple[str, str]] = {}
+
+    overview_lines = ["Modules and their key symbols (ranked by references).", ""]
+    for module in sorted(by_module):
+        syms = sorted(by_module[module], key=lambda s: (-s.refs, s.line))
+        overview_lines.append(f"- **{module}** — {len(syms)} symbol(s)")
+        for sym in syms[:5]:
+            overview_lines.append(f"  - `{sym.signature}` ({sym.kind})")
+    overview = truncate_to_tokens("\n".join(overview_lines), overview_tokens, chars_per_token)
+    out["overview.md"] = ("Repository Map", overview)
+
+    for module in sorted(by_module):
+        syms = sorted(by_module[module], key=lambda s: s.line)
+        lines = [f"Symbols in `{module}`.", ""]
+        for sym in syms:
+            doc = f" — {sym.doc}" if sym.doc else ""
+            lines.append(f"- L{sym.line} `{sym.signature}` ({sym.kind}){doc}")
+        safe = module.replace("/", "__")
+        out[f"modules/{safe}.md"] = (module, "\n".join(lines))
+
+    return out
