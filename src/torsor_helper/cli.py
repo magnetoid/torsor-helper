@@ -102,5 +102,29 @@ def map(root: Path = typer.Option(Path("."), help="Project root to map.")) -> No
     typer.echo(f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s).")
 
 
+@app.command()
+def guard(
+    paths: list[str] = typer.Argument(None, help="Files to check (default: git-changed .py files)."),
+    root: Path = typer.Option(Path("."), help="Project root."),
+    strict: bool = typer.Option(False, help="Exit non-zero if any violation is found (for CI)."),
+) -> None:
+    """Check changes against declared architectural intent (ADR rules)."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    violations = ops.check_drift(store, config, paths or None)
+    if not violations:
+        typer.echo("No drift from declared intent detected.")
+        return
+    for v in violations:
+        typer.echo(f"{v.file}:{v.line} — {v.message} (per {v.source})")
+    typer.echo(f"\n{len(violations)} drift violation(s).")
+    if strict:
+        raise typer.Exit(code=1)
+
+
 def main() -> None:
     app()
