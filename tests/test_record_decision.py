@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from torsor_helper import operations as ops
-from torsor_helper.config import TorsorConfig
 from torsor_helper.guard import load_rules
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store

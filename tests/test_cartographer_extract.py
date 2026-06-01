@@ -1,5 +1,4 @@
 from torsor_helper.cartographer import extract_symbols
-from torsor_helper.models import Symbol
 
 
 SRC = '''"""Module."""

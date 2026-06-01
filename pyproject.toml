@@ -33,3 +33,13 @@ packages = ["src/torsor_helper"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+# E731 (lambda-assignment) is intentionally allowed: test fixtures use
+# `CLOCK = lambda: datetime(...)` as injectable clocks, which is clearer
+# inline than a def.
+ignore = ["E731"]
