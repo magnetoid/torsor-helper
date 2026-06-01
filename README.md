@@ -41,16 +41,16 @@ Five Markdown tiers, ordered by stability — the stable base loads first, the v
 
 ### MCP tools
 
-| Tool | Purpose |
-|---|---|
-| `bootstrap_session()` | Budgeted summary of the whole pyramid at session start |
-| `get_intent(topic?)` | Fetch the architecture/ADRs relevant to an upcoming change |
-| `recall(query)` | Hybrid search over memory + wiki + map |
-| `remember(content)` / `update_active(...)` | Self-editing memory |
-| `record_decision(...)` | Write an ADR that also becomes a guard rule |
-| `check_drift(files\|diff)` | Verdict + citation of the intent a change violates |
-| `map_repo()` | (Re)generate the repo map |
-| `handoff()` | Structured end-of-session summary → next session's bootstrap |
+| Tool | Purpose | Status |
+|---|---|---|
+| `bootstrap_session()` | Budgeted summary of the whole pyramid at session start | ✅ Phase 1 |
+| `recall(query)` | Search over memory + wiki (keyword now; hybrid in Phase 2) | ✅ Phase 1 |
+| `remember(content)` / `update_active(...)` | Self-editing memory | ✅ Phase 1 |
+| `handoff()` | Structured end-of-session summary → next session's bootstrap | ✅ Phase 1 |
+| `get_intent(topic?)` | Fetch the architecture/ADRs relevant to an upcoming change | 🔜 Phase 3 |
+| `map_repo()` | (Re)generate the repo map | 🔜 Phase 3 |
+| `record_decision(...)` | Write an ADR that also becomes a guard rule | 🔜 Phase 4 |
+| `check_drift(files\|diff)` | Verdict + citation of the intent a change violates | 🔜 Phase 4 |
 
 ## Works with
 
