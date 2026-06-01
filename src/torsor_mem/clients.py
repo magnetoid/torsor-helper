@@ -18,11 +18,10 @@ SUPPORTED_CLIENTS: dict[str, str] = {
     "warp": "Warp",
 }
 
-# Clients that consume a JSON mcpServers block (file location differs per app).
-_JSON_CLIENTS = {"claude-desktop", "cursor", "windsurf", "vscode", "codex", "gemini", "cline", "roo", "trae", "kiro", "warp"}
-
 
 def config_snippet(client: str, root: str) -> str:
+    # claude-code is configured via a CLI command; every other supported
+    # client consumes the same JSON mcpServers block (file location varies).
     if client not in SUPPORTED_CLIENTS:
         raise KeyError(client)
     if client == "claude-code":
