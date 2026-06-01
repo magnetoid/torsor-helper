@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from torsor_mem.models import (
     Frontmatter, MemoryKind, Note, RecallHit, RecallResult, Tier,
 )
@@ -7,6 +10,16 @@ from torsor_mem.models import (
 
 def test_tier_ordering():
     assert Tier.CHARTER < Tier.ARCHITECTURE < Tier.MAP < Tier.ACTIVE < Tier.EPISODIC
+
+
+def test_frontmatter_requires_type():
+    with pytest.raises(ValidationError):
+        Frontmatter(status="active")  # 'type' is required
+
+
+def test_recall_hit_rejects_negative_score():
+    with pytest.raises(ValidationError):
+        RecallHit(path="a.md", title="A", tier=Tier.EPISODIC, score=-1.0, snippet="x")
 
 
 def test_memory_kind_values():

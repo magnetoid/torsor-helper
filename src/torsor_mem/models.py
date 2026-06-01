@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class Tier(IntEnum):
+    # NOTE: CHARTER == 0 is falsy. Never test a tier with truthiness
+    # (`if note.tier:`); always compare explicitly (`is`, `==`, `.get(tier)`).
     CHARTER = 0
     ARCHITECTURE = 1
     MAP = 2
@@ -48,7 +50,7 @@ class RecallHit(BaseModel):
     path: str
     title: str
     tier: Tier
-    score: float
+    score: float = Field(ge=0.0)  # raw count * tier weight; unbounded above
     snippet: str
 
 
