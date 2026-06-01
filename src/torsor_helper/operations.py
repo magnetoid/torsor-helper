@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re as _re
+
 from torsor_helper import cartographer, db
 from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.config import TorsorConfig
@@ -181,3 +183,31 @@ def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> 
             sections.append("## Relevant existing symbols\n\n" + "\n".join(lines))
 
     return "\n\n".join(sections)
+
+
+def _next_adr_number(store) -> int:
+    nums = []
+    if store.paths.decisions_dir.exists():
+        for p in store.paths.decisions_dir.glob("*.md"):
+            m = _re.match(r"(\d+)", p.name)
+            if m:
+                nums.append(int(m.group(1)))
+    return (max(nums) + 1) if nums else 1
+
+
+def _slug(title: str) -> str:
+    s = _re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    return s or "decision"
+
+
+def record_decision(store, title, context, decision, consequences="", rules=None) -> str:
+    number = _next_adr_number(store)
+    fm = Frontmatter(type="decision", status="accepted", tags=["adr"], rules=rules or [])
+    body = (
+        f"## Context\n{context}\n\n"
+        f"## Decision\n{decision}\n\n"
+        f"## Consequences\n{consequences}\n"
+    )
+    target = store.paths.decisions_dir / f"{number:04d}-{_slug(title)}.md"
+    store.write_note(target, fm, f"ADR {number:04d}: {title}", body)
+    return str(target)
