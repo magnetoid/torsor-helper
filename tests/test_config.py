@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from torsor_mem.config import TorsorConfig, load_config, save_config
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.config import TorsorConfig, load_config, save_config
+from torsor_helper.paths import TorsorPaths
 
 
 def test_defaults_when_no_file(tmp_path: Path):

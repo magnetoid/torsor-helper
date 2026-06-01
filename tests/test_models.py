@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from torsor_mem.models import (
+from torsor_helper.models import (
     Frontmatter, MemoryKind, Note, RecallHit, RecallResult, Tier,
 )
 

@@ -1,7 +1,7 @@
 from typer.testing import CliRunner
 
-from torsor_mem.cli import app
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.cli import app
+from torsor_helper.paths import TorsorPaths
 
 runner = CliRunner()
 
@@ -47,9 +47,9 @@ def test_end_to_end_remember_then_bootstrap(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     from datetime import datetime
 
-    from torsor_mem import operations as ops
-    from torsor_mem.config import load_config
-    from torsor_mem.store import Store
+    from torsor_helper import operations as ops
+    from torsor_helper.config import load_config
+    from torsor_helper.store import Store
 
     paths = TorsorPaths(tmp_path)
     store = Store(paths, clock=lambda: datetime(2026, 6, 1, 9, 30, 0))

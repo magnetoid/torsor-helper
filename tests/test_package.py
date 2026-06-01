@@ -1,6 +1,6 @@
-import torsor_mem
+import torsor_helper
 
 
 def test_version_exposed():
-    assert isinstance(torsor_mem.__version__, str)
-    assert torsor_mem.__version__.count(".") >= 1
+    assert isinstance(torsor_helper.__version__, str)
+    assert torsor_helper.__version__.count(".") >= 1

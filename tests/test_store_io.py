@@ -1,8 +1,8 @@
 from datetime import datetime
 
-from torsor_mem.models import Frontmatter, Tier
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper.models import Frontmatter, Tier
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
 CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 
@@ -12,7 +12,7 @@ def test_scaffold_creates_pyramid_and_gitignore(tmp_path):
     Store(paths, clock=CLOCK).scaffold()
     assert paths.charter.exists()
     assert paths.system_patterns.exists()
-    assert (paths.decisions_dir / "0001-adopt-torsor-mem.md").exists()
+    assert (paths.decisions_dir / "0001-adopt-torsor-helper.md").exists()
     assert paths.active_context.exists()
     assert paths.journal_dir.is_dir()
     assert (paths.base / ".gitignore").read_text().strip() == ".index/"

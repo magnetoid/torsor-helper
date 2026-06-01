@@ -5,12 +5,12 @@ from typing import Optional
 
 import typer
 
-from torsor_mem.clients import SUPPORTED_CLIENTS, config_snippet
-from torsor_mem.config import TorsorConfig, load_config, save_config
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper.clients import SUPPORTED_CLIENTS, config_snippet
+from torsor_helper.config import TorsorConfig, load_config, save_config
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
-app = typer.Typer(help="torsor-mem: persistent memory + architectural intent over MCP.")
+app = typer.Typer(help="torsor-helper: persistent memory + architectural intent over MCP.")
 
 
 @app.command()
@@ -28,7 +28,7 @@ def init(
     Store(paths).scaffold(force=force)
     if not paths.config_file.exists() or force:
         save_config(paths, TorsorConfig())
-    typer.echo(f"Initialized torsor-mem at {paths.base}")
+    typer.echo(f"Initialized torsor-helper at {paths.base}")
     if client:
         typer.echo(f"\n# MCP config for {SUPPORTED_CLIENTS[client]}:\n")
         typer.echo(config_snippet(client, root=str(root.resolve())))
@@ -36,18 +36,18 @@ def init(
 
 @app.command()
 def mcp(root: Path = typer.Option(Path("."), help="Project root containing .torsor/.")) -> None:
-    """Run the torsor-mem MCP server over stdio."""
-    from torsor_mem.server import run
+    """Run the torsor-helper MCP server over stdio."""
+    from torsor_helper.server import run
 
     run(root)
 
 
 @app.command()
 def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) -> None:
-    """Verify a torsor-mem project is healthy."""
+    """Verify a torsor-helper project is healthy."""
     paths = TorsorPaths(root)
     if not paths.base.exists():
-        typer.echo("torsor-mem not initialized here (run `torsor init`).", err=True)
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
         raise typer.Exit(code=1)
     missing = [
         p.name
@@ -62,7 +62,7 @@ def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) 
     except Exception as exc:  # malformed TOML or invalid schema
         typer.echo(f"Config malformed: {exc}", err=True)
         raise typer.Exit(code=1)
-    typer.echo("OK: torsor-mem project is healthy.")
+    typer.echo("OK: torsor-helper project is healthy.")
 
 
 def main() -> None:

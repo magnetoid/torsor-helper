@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.paths import TorsorPaths
 
 CHARTER = """---
 type: charter
@@ -63,10 +63,10 @@ links: []
 rules: []
 ---
 
-# ADR 0001: Adopt torsor-mem
+# ADR 0001: Adopt torsor-helper
 
 ## Context
-This project uses torsor-mem to persist architectural intent and memory.
+This project uses torsor-helper to persist architectural intent and memory.
 
 ## Decision
 Markdown under `.torsor/` is the source of truth; the index is derived and disposable.
@@ -125,7 +125,7 @@ def seed_files(paths: TorsorPaths) -> dict[Path, str]:
         paths.charter: CHARTER,
         paths.system_patterns: SYSTEM_PATTERNS,
         paths.tech_context: TECH_CONTEXT,
-        paths.decisions_dir / "0001-adopt-torsor-mem.md": FIRST_ADR,
+        paths.decisions_dir / "0001-adopt-torsor-helper.md": FIRST_ADR,
         paths.map_overview: MAP_OVERVIEW,
         paths.active_context: ACTIVE_CONTEXT,
         paths.progress: PROGRESS,

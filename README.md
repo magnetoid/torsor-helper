@@ -1,92 +1,126 @@
-# torsor-mem
+<div align="center">
 
-**A persistent memory + architectural-intent guardrail for AI coding agents — over MCP, for every platform.**
+# 🧭 torsor-helper
 
-> **Status: Phase 1 (Foundation) shipped.** The toolkit installs and runs today: `init` scaffolds
-> the pyramid and the MCP server exposes `bootstrap_session` / `recall` (keyword) / `remember` /
-> `update_active` / `handoff`. The vector/graph index, repo-map, and drift guard are on the
-> [Roadmap](#roadmap) (Phases 2–5). See the [design spec](docs/superpowers/specs/2026-06-01-torsor-mem-design.md).
+### The memory & coaching layer for AI coding agents.
+
+**Stop re-explaining your project every session. Stop the silent architectural drift.**
+One small Python MCP server — works with *every* AI coding tool.
+
+![status](https://img.shields.io/badge/status-Phase%201%20shipped-success)
+![tests](https://img.shields.io/badge/tests-49%20passing-brightgreen)
+![python](https://img.shields.io/badge/python-3.11%2B-blue)
+![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
+![local-first](https://img.shields.io/badge/local--first-no%20API%20key-00a3a3)
+
+</div>
 
 ---
 
-## Why
+> **Your AI agent has amnesia.** Every new session starts from zero. Mid-session it forgets the rules you set an hour ago. It rebuilds the helper you already wrote, re-introduces the pattern you explicitly rejected, and quietly drifts away from your architecture — with no audit trail. `torsor-helper` is the persistent brain that fixes this, and a **coach** that keeps nudging your project back toward health.
 
-AI coding agents lose the thread over time. `torsor-mem` targets three documented failure modes:
+## The problem it solves
 
-| Problem | What it looks like |
+AI coding agents are brilliant in the moment and forgetful over time. The research backs it up:
+
+| Failure mode | What it feels like |
 |---|---|
-| **Context Collapse** | New session = blank slate (*hard*); instructions drift mid-session (*soft*); agent only sees pasted files and loses how things connect (*fragmented*). |
-| **Context Myopia** | The agent optimizes for what's *recent* over what's *important*; early decisions lose weight. |
-| **Loss of Architectural Intent** | Constraints set at the start (layering, naming, design decisions) stop being applied; rejected patterns creep back; architecture drifts with no audit trail. |
+| 🧠 **Context Collapse** | New chat = blank slate. Long chats drift. The agent only "sees" pasted files and loses how things connect. |
+| 🔭 **Context Myopia** | The agent optimizes for what's *recent*, not what's *important*. Early decisions silently lose weight. |
+| 🏛️ **Lost Architectural Intent** | Layering, naming, and design rules you set up front stop being followed. Rejected patterns creep back in. |
+| ♻️ **Duplication & drift** | AI rebuilds code that already exists ([~8× more duplication](https://www.builder.io/m/explainers/vibe-coding-limitations)) and mixes inconsistent patterns. |
 
-Most tools fix *one* of these. `torsor-mem` combines a **pyramidal wiki**, an **external memory** with hybrid retrieval, a **repo map**, and — the differentiator — **drift detection against your declared architectural intent**.
+Most tools fix *one* of these. **torsor-helper combines four ideas no one else puts together** — a pyramidal wiki, an external semantic memory, a symbol-level repo map, and a drift guard — plus a **Coach** that proactively recommends fixes over time.
 
-> **Why "torsor"?** A *torsor* is a space that looks like a group but has no fixed origin — you can only measure *differences* between points. That's drift detection: your architecture is the reference frame, and drift is the measured delta from it.
+<sub>**Why "torsor"?** A *torsor* is a space that looks like a group but has **no fixed origin** — you can only measure *differences* between points. That's exactly drift detection: your architecture is the reference frame, and drift is the measured delta from it.</sub>
 
 ## How it works
 
-Memory lives as **plain Markdown** (git-versioned, Obsidian-readable, human- and agent-editable). A disposable **SQLite index** (`sqlite-vec` + FTS5 + a graph of wikilinks/symbols) is derived from those files for semantic + relational recall. A single Python **MCP server** exposes it to any agent.
+Your project's memory lives as **plain Markdown** you own — git-versioned, Obsidian-readable, editable by both you and the agent. A **disposable index** (SQLite + vectors + a wiki-link graph) is *derived* from those files for instant semantic recall. A single Python **MCP server** serves it all to any agent.
 
-### The pyramid
+> **One rule:** Markdown is always the source of truth. The index is throwaway — delete it, rebuild it, never fear it.
 
-Five Markdown tiers, ordered by stability — the stable base loads first, the volatile tip changes constantly:
+### 🔺 The pyramid
+
+Five Markdown tiers, ordered by **stability** — the broad, stable base loads first; the volatile tip changes every session.
 
 ```
-  Tier 4  EPISODIC      memory/journal/   append-only observations & learnings
-  Tier 3  ACTIVE STATE  active/           current focus, progress, open questions
-  Tier 2  MAP (derived) map/              repo map, module & symbol summaries
-  Tier 1  ARCHITECTURE  architecture/     system patterns, tech context, ADRs  <- the intent
-  Tier 0  CHARTER       charter.md        brief, product context, principles   <- most stable
+                 ╱╲
+                ╱T4╲            EPISODIC      memory/      observations, learnings, handoffs
+               ╱────╲
+              ╱  T3  ╲          ACTIVE        active/      current focus · progress · open Qs
+             ╱────────╲
+            ╱    T2    ╲        MAP (derived) map/         repo map · module & symbol summaries
+           ╱────────────╲
+          ╱      T1      ╲      ARCHITECTURE  architecture/ system patterns · tech · ADRs  ← intent
+         ╱────────────────╲
+        ╱        T0        ╲    CHARTER       charter.md   what & why · non-negotiable principles
+       ╱────────────────────╲                                                          ← most stable
 ```
 
-### MCP tools
+### 🧰 The MCP toolbelt
 
-| Tool | Purpose | Status |
-|---|---|---|
-| `bootstrap_session()` | Budgeted summary of the whole pyramid at session start | ✅ Phase 1 |
-| `recall(query)` | Search over memory + wiki (keyword now; hybrid in Phase 2) | ✅ Phase 1 |
-| `remember(content)` / `update_active(...)` | Self-editing memory | ✅ Phase 1 |
-| `handoff()` | Structured end-of-session summary → next session's bootstrap | ✅ Phase 1 |
-| `get_intent(topic?)` | Fetch the architecture/ADRs relevant to an upcoming change | 🔜 Phase 3 |
-| `map_repo()` | (Re)generate the repo map | 🔜 Phase 3 |
-| `record_decision(...)` | Write an ADR that also becomes a guard rule | 🔜 Phase 4 |
-| `check_drift(files\|diff)` | Verdict + citation of the intent a change violates | 🔜 Phase 4 |
-| `recommend(context?)` | Health + best-practice recommendations (the Coach) | 🔜 Phase 6 |
+| Tool | What it does | Status |
+|---|---|:--:|
+| `bootstrap_session()` | Hand the agent a budgeted summary of the whole pyramid at session start | ✅ **shipped** |
+| `recall(query)` | Search memory + wiki (keyword today, hybrid semantic in Phase 2) | ✅ **shipped** |
+| `remember(content)` · `update_active(...)` | Self-editing memory the agent maintains as it works | ✅ **shipped** |
+| `handoff()` | Structured end-of-session summary → seeds the *next* session | ✅ **shipped** |
+| `get_intent(topic?)` · `map_repo()` | Surface the architecture/symbols relevant to a change | 🔜 Phase 3 |
+| `record_decision(...)` · `check_drift(...)` | Record ADRs that become rules; flag changes that violate intent | 🔜 Phase 4 |
+| `recommend(context?)` | **The Coach** — health + best-practice recommendations | 🔜 Phase 6 |
 
-## Works with
+### 🩺 The Coach *(designed, Phase 6)*
 
-It's a standard MCP stdio server, so any MCP client works. `torsor init --client <name>` prints ready-to-paste config for **Claude Code, Claude Desktop, Cursor, Windsurf, VS Code / Copilot, Codex, Gemini CLI, Cline, Roo, Trae, Kiro, and Warp.**
+torsor-helper isn't just storage — it's an **independent advisor that sits beside your coding, never in it.** It watches your project's health over time and nudges:
 
-## Quick start
+- *"Your active context is 6 sessions stale — run a handoff."*
+- *"`architecture/` is still the template — clarify your conventions."*
+- *"You've recorded 12 decisions but set 0 rules — formalize the load-bearing ones."*
+- *"♻️ You already have `format_date()` in `utils/dates.py` — reuse it."*
+
+It **cites its evidence**, suggests a concrete action, and **decays** so it never nags. → [Coach design](docs/superpowers/specs/2026-06-01-torsor-coach-design.md)
+
+## ⚡ Quick start
 
 ```bash
-# from source (PyPI publish is on the roadmap)
-git clone https://github.com/magnetoid/torsor-mem && cd torsor-mem
-uv run torsor init --client claude-code   # scaffolds .torsor/ + prints the MCP config snippet
-uv run torsor mcp                          # runs the MCP server (your agent connects over stdio)
-uv run torsor doctor                       # checks the project is healthy
+git clone https://github.com/magnetoid/torsor-helper && cd torsor-helper
+
+uv run torsor init --client claude-code   # scaffold .torsor/ + print your MCP config snippet
+uv run torsor mcp                          # run the server — your agent connects over stdio
+uv run torsor doctor                       # sanity-check the project
 ```
 
-`init` writes a `.torsor/` directory and prints the MCP config snippet for your chosen client. Once published, this becomes `uvx torsor-mem init`.
+`init` writes a `.torsor/` folder (your pyramid) and prints a ready-to-paste config for your client. *(PyPI `uvx torsor-helper` is on the roadmap.)*
 
-## Tech stack
+## 🔌 Works with everything
 
-**Phase 1 (now):** FastMCP · Typer · Pydantic · PyYAML · `tomli-w` — local-first, no API key required.
-**Planned (Phases 2–3):** SQLite + `sqlite-vec` + FTS5 · FastEmbed (local embeddings) · tree-sitter · watchfiles.
+It's a standard **MCP stdio server**, so any MCP client works. `torsor init --client <name>` emits ready-to-paste config for:
 
-## Roadmap
+**Claude Code · Claude Desktop · Cursor · Windsurf · VS Code / Copilot · Codex · Gemini CLI · Cline · Roo · Trae · Kiro · Warp**
 
-- [x] **Phase 1 — Foundation:** pyramid scaffold, `init`, MCP server with `bootstrap_session` / `remember` / `recall` (keyword) / `update_active` / `handoff`
-- [ ] **Phase 2 — Index:** `sqlite-vec` + FastEmbed, incremental indexer, hybrid retrieval, wikilink graph
-- [ ] **Phase 3 — Map:** tree-sitter cartographer + symbol graph + `get_intent`
-- [ ] **Phase 4 — Guard:** ADRs + deterministic rules + sampling-based drift check + `check_drift`
-- [ ] **Phase 5 — Consolidation:** self-improving memory + multi-client polish + HTTP/team mode
-- [ ] **Phase 6 — Coach:** independent, non-intrusive advisor — knowledge-hygiene checks (`stale`/`thin`/`unruled`/`uncharted`) + best-practice recs (`reuse`/`convention`/`decision`/`rejection`/`learning`) via `torsor coach` + `recommend()`. ([design](docs/superpowers/specs/2026-06-01-torsor-coach-design.md))
+## 🗺️ Roadmap
 
-## Design & prior art
+- [x] **Phase 1 — Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools *(shipped, 49 tests green)*
+- [ ] **Phase 2 — Index** · SQLite + local embeddings, incremental indexer, hybrid semantic recall, wiki-link graph
+- [ ] **Phase 3 — Map** · tree-sitter cartographer + symbol graph + `get_intent`
+- [ ] **Phase 4 — Guard** · ADRs-as-rules + drift detection (`check_drift`)
+- [ ] **Phase 5 — Consolidation** · self-improving memory + team/HTTP mode
+- [ ] **Phase 6 — Coach** · the proactive recommendations advisor
 
-Full design: [`docs/superpowers/specs/2026-06-01-torsor-mem-design.md`](docs/superpowers/specs/2026-06-01-torsor-mem-design.md). It builds on ideas from Cline Memory Bank, mem0/OpenMemory, Letta/MemGPT, basic-memory, cognee, Aider's repo map, Serena, and GitHub spec-kit.
+## 🛠️ Built with
+
+**Today:** FastMCP · Typer · Pydantic · PyYAML — *local-first, no API key required.*
+**Coming:** SQLite + vectors + FTS5 · local embeddings · tree-sitter.
+
+## 📚 Design & prior art
+
+Full design lives in [`docs/superpowers/specs/`](docs/superpowers/specs/). torsor-helper stands on the shoulders of [Cline Memory Bank](https://docs.cline.bot/prompting/cline-memory-bank), [mem0/OpenMemory](https://mem0.ai/openmemory), [Letta/MemGPT](https://docs.letta.com/), [basic-memory](https://github.com/basicmachines-co/basic-memory), [cognee](https://github.com/topoteretes/cognee), [Aider's repo map](https://aider.chat/docs/repomap.html), [Serena](https://github.com/oraios/serena), and [GitHub spec-kit](https://github.com/github/spec-kit) — combining the best ideas from each into one small toolkit.
 
 ## License
 
-TBD.
+TBD (MIT planned).
+
+---
+
+<div align="center"><sub>Built with the <a href="https://claude.com/claude-code">Claude Code</a> superpowers workflow — brainstorm → spec → plan → TDD.</sub></div>

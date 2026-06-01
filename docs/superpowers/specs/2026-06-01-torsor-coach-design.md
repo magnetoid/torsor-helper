@@ -1,13 +1,13 @@
-# torsor-mem Coach — Design Spec
+# torsor-helper Coach — Design Spec
 
 **Date:** 2026-06-01
 **Status:** Approved (brainstorming) → roadmap **Phase 6**, built after Phases 2–4
-**Parent design:** [`2026-06-01-torsor-mem-design.md`](2026-06-01-torsor-mem-design.md)
-**Repo:** https://github.com/magnetoid/torsor-mem
+**Parent design:** [`2026-06-01-torsor-helper-design.md`](2026-06-01-torsor-helper-design.md)
+**Repo:** https://github.com/magnetoid/torsor-helper
 
 ## 1. Problem
 
-Phase 1–4 make torsor-mem a good *memory*. But a second brain only works if it's *maintained* and if its accumulated knowledge actually changes behavior. Two gaps remain:
+Phase 1–4 make torsor-helper a good *memory*. But a second brain only works if it's *maintained* and if its accumulated knowledge actually changes behavior. Two gaps remain:
 
 1. **Knowledge rots silently.** The wiki goes stale, the architecture doc stays a placeholder, decisions pile up with no rules — and nobody notices until a session collapses again. Nothing watches the *health* of the pyramid.
 2. **Learnings are passive.** Memory only helps if the agent happens to `recall` the right thing. The high-ROI move — telling the agent "this already exists / you decided this / this was rejected" *before* it reimplements — never fires on its own.
@@ -60,7 +60,7 @@ Every recommendation carries its **evidence + a concrete action + a source citat
 ## 4. Components
 
 ```
-src/torsor_mem/coach/
+src/torsor_helper/coach/
   models.py        # RecommendationKind, Severity, Recommendation, Recommendations
   health.py        # deterministic hygiene checks (stale/thin/unruled/uncharted) -> list[Recommendation]
   recommender.py   # recommend(): retrieval-based best-practice recs (reuse/convention/decision/rejection/learning)

@@ -1,6 +1,6 @@
-from torsor_mem.models import Frontmatter, Tier
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper.models import Frontmatter, Tier
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
 
 def test_parse_frontmatter_splits_meta_and_body():

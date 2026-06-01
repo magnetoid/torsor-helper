@@ -8,8 +8,8 @@ from typing import Callable, Iterator
 
 import yaml
 
-from torsor_mem.models import Frontmatter, Note, Tier
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.models import Frontmatter, Note, Tier
+from torsor_helper.paths import TorsorPaths
 
 _WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
 _FM_BLOCK = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
@@ -70,7 +70,7 @@ class Store:
 
     # ---- filesystem operations ----
     def scaffold(self, force: bool = False) -> None:
-        from torsor_mem.templates import seed_files
+        from torsor_helper.templates import seed_files
 
         for directory in (
             self.paths.architecture_dir,

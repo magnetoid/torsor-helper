@@ -4,10 +4,10 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from torsor_mem import operations as ops
-from torsor_mem.config import load_config
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper import operations as ops
+from torsor_helper.config import load_config
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
 
 def build_server(root: Path | str) -> FastMCP:
@@ -15,7 +15,7 @@ def build_server(root: Path | str) -> FastMCP:
     store = Store(paths)
     config = load_config(paths)
 
-    mcp = FastMCP("torsor-mem")
+    mcp = FastMCP("torsor-helper")
 
     @mcp.tool()
     def bootstrap_session() -> str:

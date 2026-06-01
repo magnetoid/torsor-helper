@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.templates import seed_files
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.templates import seed_files
 
 
 def test_seed_files_cover_every_tier(tmp_path: Path):
@@ -13,7 +13,7 @@ def test_seed_files_cover_every_tier(tmp_path: Path):
     assert paths.active_context in files
     assert paths.progress in files
     assert paths.map_overview in files
-    first_adr = paths.decisions_dir / "0001-adopt-torsor-mem.md"
+    first_adr = paths.decisions_dir / "0001-adopt-torsor-helper.md"
     assert first_adr in files
     for path, content in files.items():
         assert content.startswith("---\n"), f"{path} missing frontmatter"

@@ -1,8 +1,8 @@
-# torsor-mem — Design Spec
+# torsor-helper — Design Spec
 
 **Date:** 2026-06-01
 **Status:** Approved (brainstorming) → pending implementation plan
-**Repo:** https://github.com/magnetoid/torsor-mem
+**Repo:** https://github.com/magnetoid/torsor-helper
 
 ## 1. Problem
 
@@ -12,7 +12,7 @@ AI coding agents lose the thread over time. Three documented failure modes:
 - **Context Myopia** — the agent optimizes for what is *recent* over what is *important*; early decisions lose weight ("context rot").
 - **Loss of Architectural Intent** — constraints set at the start (layering, naming, design decisions) stop being applied; rejected patterns get re-introduced; architecture drifts with no audit trail.
 
-`torsor-mem` is a Python **MCP server + small CLI** that gives any MCP-capable coding agent a persistent, layered memory and an architectural-intent guardrail. Because it speaks MCP, one install reaches Claude Code, Claude Desktop, Cursor, Windsurf, VS Code/Copilot, Codex, Gemini CLI, Cline, Roo, Trae, Kiro, and Warp.
+`torsor-helper` is a Python **MCP server + small CLI** that gives any MCP-capable coding agent a persistent, layered memory and an architectural-intent guardrail. Because it speaks MCP, one install reaches Claude Code, Claude Desktop, Cursor, Windsurf, VS Code/Copilot, Codex, Gemini CLI, Cline, Roo, Trae, Kiro, and Warp.
 
 **Name rationale:** a *torsor* is a space that looks like a group but has no fixed origin — you can only measure *differences* between points, not absolute positions. That is exactly drift detection: architectural intent is the reference frame, and drift is the measured delta from it.
 
@@ -157,7 +157,7 @@ Two layers. Intent is the reference frame; drift is the measured delta.
 | Code parsing | **tree-sitter** (`tree-sitter-language-pack`) | multi-language repo map |
 | File watching | **watchfiles** | incremental index sync |
 | CLI / models | **Typer** + **Pydantic** | typed tools, clean CLI |
-| Packaging | **uv / hatch** → `uvx torsor-mem` & `pipx` | one-command install |
+| Packaging | **uv / hatch** → `uvx torsor-helper` & `pipx` | one-command install |
 
 ## 10. Error handling
 
@@ -198,4 +198,4 @@ The safety net is that *the index is disposable*:
 - A standalone web dashboard/UI (Markdown + Obsidian already provide a human view).
 - Multi-repo / monorepo federation (single repo first).
 - Cloud-hosted sync service (local-first; HTTP transport covers team use).
-- Editing code on the agent's behalf (Serena already does this; torsor-mem informs, it does not edit source).
+- Editing code on the agent's behalf (Serena already does this; torsor-helper informs, it does not edit source).

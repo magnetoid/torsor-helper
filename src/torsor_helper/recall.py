@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 
-from torsor_mem.budget import estimate_tokens
-from torsor_mem.models import Note, RecallHit, RecallResult, Tier
+from torsor_helper.budget import estimate_tokens
+from torsor_helper.models import Note, RecallHit, RecallResult, Tier
 
 _WORD = re.compile(r"\w+")
 

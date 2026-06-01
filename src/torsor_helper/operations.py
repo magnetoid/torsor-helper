@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from torsor_mem.budget import truncate_to_tokens
-from torsor_mem.config import TorsorConfig
-from torsor_mem.models import Frontmatter, RecallResult
-from torsor_mem.recall import keyword_recall
-from torsor_mem.store import Store
+from torsor_helper.budget import truncate_to_tokens
+from torsor_helper.config import TorsorConfig
+from torsor_helper.models import Frontmatter, RecallResult
+from torsor_helper.recall import keyword_recall
+from torsor_helper.store import Store
 
 # Fractions of the bootstrap budget allocated per section (must sum to <= 1.0).
 _BOOTSTRAP_ALLOC = [

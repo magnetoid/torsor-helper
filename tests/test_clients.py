@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from torsor_mem.clients import SUPPORTED_CLIENTS, config_snippet
+from torsor_helper.clients import SUPPORTED_CLIENTS, config_snippet
 
 
 def test_supported_clients_present():
@@ -20,9 +20,9 @@ def test_claude_code_snippet_is_a_command():
 def test_cursor_snippet_is_valid_json_with_server():
     snippet = config_snippet("cursor", root="/proj")
     data = json.loads(snippet)
-    assert "torsor-mem" in data["mcpServers"]
-    assert data["mcpServers"]["torsor-mem"]["command"] == "torsor"
-    assert "/proj" in data["mcpServers"]["torsor-mem"]["args"]
+    assert "torsor-helper" in data["mcpServers"]
+    assert data["mcpServers"]["torsor-helper"]["command"] == "torsor"
+    assert "/proj" in data["mcpServers"]["torsor-helper"]["args"]
 
 
 def test_unknown_client_raises():

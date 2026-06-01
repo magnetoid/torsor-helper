@@ -1,4 +1,4 @@
-# torsor-mem Phase 1 (Foundation) Implementation Plan
+# torsor-helper Phase 1 (Foundation) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -14,18 +14,18 @@
 
 ```
 pyproject.toml                     # package metadata, deps, `torsor` script
-src/torsor_mem/__init__.py         # __version__
-src/torsor_mem/models.py           # Tier, MemoryKind, Frontmatter, Note, RecallHit, RecallResult
-src/torsor_mem/paths.py            # TorsorPaths — resolves the .torsor/ layout from a root
-src/torsor_mem/templates.py        # seed Markdown for scaffolding
-src/torsor_mem/budget.py           # estimate_tokens / truncate_to_tokens
-src/torsor_mem/config.py           # TorsorConfig + load_config/save_config (torsor.toml)
-src/torsor_mem/store.py            # Store — file I/O, frontmatter/wikilink parsing, scaffold, journal
-src/torsor_mem/recall.py           # keyword_recall (Phase-1 retrieval)
-src/torsor_mem/operations.py       # bootstrap_session/recall/remember/update_active/record_handoff
-src/torsor_mem/clients.py          # MCP client config snippets
-src/torsor_mem/server.py           # build_server (FastMCP) + run
-src/torsor_mem/cli.py              # Typer app: init / mcp / doctor
+src/torsor_helper/__init__.py         # __version__
+src/torsor_helper/models.py           # Tier, MemoryKind, Frontmatter, Note, RecallHit, RecallResult
+src/torsor_helper/paths.py            # TorsorPaths — resolves the .torsor/ layout from a root
+src/torsor_helper/templates.py        # seed Markdown for scaffolding
+src/torsor_helper/budget.py           # estimate_tokens / truncate_to_tokens
+src/torsor_helper/config.py           # TorsorConfig + load_config/save_config (torsor.toml)
+src/torsor_helper/store.py            # Store — file I/O, frontmatter/wikilink parsing, scaffold, journal
+src/torsor_helper/recall.py           # keyword_recall (Phase-1 retrieval)
+src/torsor_helper/operations.py       # bootstrap_session/recall/remember/update_active/record_handoff
+src/torsor_helper/clients.py          # MCP client config snippets
+src/torsor_helper/server.py           # build_server (FastMCP) + run
+src/torsor_helper/cli.py              # Typer app: init / mcp / doctor
 tests/conftest.py                  # tmp_project fixture, FIXED_CLOCK
 tests/test_*.py                    # one per module
 ```
@@ -53,25 +53,25 @@ tests/test_*.py                    # one per module
 
 **Files:**
 - Create: `pyproject.toml`
-- Create: `src/torsor_mem/__init__.py`
+- Create: `src/torsor_helper/__init__.py`
 - Create: `tests/test_package.py`
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_package.py
-import torsor_mem
+import torsor_helper
 
 
 def test_version_exposed():
-    assert isinstance(torsor_mem.__version__, str)
-    assert torsor_mem.__version__.count(".") >= 1
+    assert isinstance(torsor_helper.__version__, str)
+    assert torsor_helper.__version__.count(".") >= 1
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_package.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper'`
 
 - [ ] **Step 3: Write pyproject.toml and the package init**
 
@@ -82,7 +82,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "torsor-mem"
+name = "torsor-helper"
 version = "0.1.0"
 description = "Persistent memory + architectural-intent guardrail for AI coding agents, over MCP."
 readme = "README.md"
@@ -99,10 +99,10 @@ dependencies = [
 dev = ["pytest>=8.0", "anyio>=4.0"]
 
 [project.scripts]
-torsor = "torsor_mem.cli:main"
+torsor = "torsor_helper.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/torsor_mem"]
+packages = ["src/torsor_helper"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
@@ -110,8 +110,8 @@ testpaths = ["tests"]
 ```
 
 ```python
-# src/torsor_mem/__init__.py
-"""torsor-mem: persistent memory + architectural-intent guardrail over MCP."""
+# src/torsor_helper/__init__.py
+"""torsor-helper: persistent memory + architectural-intent guardrail over MCP."""
 
 __version__ = "0.1.0"
 ```
@@ -124,8 +124,8 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pyproject.toml src/torsor_mem/__init__.py tests/test_package.py
-git commit -m "feat: package scaffolding for torsor-mem"
+git add pyproject.toml src/torsor_helper/__init__.py tests/test_package.py
+git commit -m "feat: package scaffolding for torsor-helper"
 ```
 
 ---
@@ -133,7 +133,7 @@ git commit -m "feat: package scaffolding for torsor-mem"
 ### Task 2: Domain models
 
 **Files:**
-- Create: `src/torsor_mem/models.py`
+- Create: `src/torsor_helper/models.py`
 - Create: `tests/test_models.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -142,7 +142,7 @@ git commit -m "feat: package scaffolding for torsor-mem"
 # tests/test_models.py
 from pathlib import Path
 
-from torsor_mem.models import (
+from torsor_helper.models import (
     Frontmatter, MemoryKind, Note, RecallHit, RecallResult, Tier,
 )
 
@@ -186,12 +186,12 @@ def test_recall_result_holds_hits():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_models.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.models'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.models'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/models.py
+# src/torsor_helper/models.py
 from __future__ import annotations
 
 from enum import Enum, IntEnum
@@ -260,7 +260,7 @@ Expected: PASS (5 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/models.py tests/test_models.py
+git add src/torsor_helper/models.py tests/test_models.py
 git commit -m "feat: domain models (Tier, Frontmatter, Note, RecallResult)"
 ```
 
@@ -269,7 +269,7 @@ git commit -m "feat: domain models (Tier, Frontmatter, Note, RecallResult)"
 ### Task 3: Path layout
 
 **Files:**
-- Create: `src/torsor_mem/paths.py`
+- Create: `src/torsor_helper/paths.py`
 - Create: `tests/test_paths.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -278,7 +278,7 @@ git commit -m "feat: domain models (Tier, Frontmatter, Note, RecallResult)"
 # tests/test_paths.py
 from pathlib import Path
 
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.paths import TorsorPaths
 
 
 def test_layout_under_dot_torsor(tmp_path: Path):
@@ -300,12 +300,12 @@ def test_journal_file_by_date(tmp_path: Path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_paths.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.paths'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.paths'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/paths.py
+# src/torsor_helper/paths.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -393,7 +393,7 @@ Expected: PASS (2 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/paths.py tests/test_paths.py
+git add src/torsor_helper/paths.py tests/test_paths.py
 git commit -m "feat: TorsorPaths layout resolver"
 ```
 
@@ -402,14 +402,14 @@ git commit -m "feat: TorsorPaths layout resolver"
 ### Task 4: Token budget helpers
 
 **Files:**
-- Create: `src/torsor_mem/budget.py`
+- Create: `src/torsor_helper/budget.py`
 - Create: `tests/test_budget.py`
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/test_budget.py
-from torsor_mem.budget import estimate_tokens, truncate_to_tokens
+from torsor_helper.budget import estimate_tokens, truncate_to_tokens
 
 
 def test_estimate_tokens_uses_chars_per_token():
@@ -431,12 +431,12 @@ def test_truncate_cuts_long_text_and_marks_it():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_budget.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.budget'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.budget'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/budget.py
+# src/torsor_helper/budget.py
 from __future__ import annotations
 
 _MARKER = "…[truncated]"
@@ -463,7 +463,7 @@ Expected: PASS (3 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/budget.py tests/test_budget.py
+git add src/torsor_helper/budget.py tests/test_budget.py
 git commit -m "feat: token budget helpers"
 ```
 
@@ -472,7 +472,7 @@ git commit -m "feat: token budget helpers"
 ### Task 5: Configuration (torsor.toml)
 
 **Files:**
-- Create: `src/torsor_mem/config.py`
+- Create: `src/torsor_helper/config.py`
 - Create: `tests/test_config.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -481,8 +481,8 @@ git commit -m "feat: token budget helpers"
 # tests/test_config.py
 from pathlib import Path
 
-from torsor_mem.config import TorsorConfig, load_config, save_config
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.config import TorsorConfig, load_config, save_config
+from torsor_helper.paths import TorsorPaths
 
 
 def test_defaults_when_no_file(tmp_path: Path):
@@ -508,12 +508,12 @@ def test_save_then_load_round_trips(tmp_path: Path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_config.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.config'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.config'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/config.py
+# src/torsor_helper/config.py
 from __future__ import annotations
 
 import tomllib
@@ -521,7 +521,7 @@ import tomllib
 import tomli_w
 from pydantic import BaseModel, Field
 
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.paths import TorsorPaths
 
 
 class BudgetConfig(BaseModel):
@@ -564,7 +564,7 @@ Expected: PASS (2 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/config.py tests/test_config.py
+git add src/torsor_helper/config.py tests/test_config.py
 git commit -m "feat: torsor.toml config load/save"
 ```
 
@@ -573,7 +573,7 @@ git commit -m "feat: torsor.toml config load/save"
 ### Task 6: Seed templates
 
 **Files:**
-- Create: `src/torsor_mem/templates.py`
+- Create: `src/torsor_helper/templates.py`
 - Create: `tests/test_templates.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -582,8 +582,8 @@ git commit -m "feat: torsor.toml config load/save"
 # tests/test_templates.py
 from pathlib import Path
 
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.templates import seed_files
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.templates import seed_files
 
 
 def test_seed_files_cover_every_tier(tmp_path: Path):
@@ -596,7 +596,7 @@ def test_seed_files_cover_every_tier(tmp_path: Path):
     assert paths.active_context in files
     assert paths.progress in files
     assert paths.map_overview in files
-    first_adr = paths.decisions_dir / "0001-adopt-torsor-mem.md"
+    first_adr = paths.decisions_dir / "0001-adopt-torsor-helper.md"
     assert first_adr in files
     for path, content in files.items():
         assert content.startswith("---\n"), f"{path} missing frontmatter"
@@ -606,17 +606,17 @@ def test_seed_files_cover_every_tier(tmp_path: Path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_templates.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.templates'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.templates'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/templates.py
+# src/torsor_helper/templates.py
 from __future__ import annotations
 
 from pathlib import Path
 
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.paths import TorsorPaths
 
 CHARTER = """---
 type: charter
@@ -677,10 +677,10 @@ links: []
 rules: []
 ---
 
-# ADR 0001: Adopt torsor-mem
+# ADR 0001: Adopt torsor-helper
 
 ## Context
-This project uses torsor-mem to persist architectural intent and memory.
+This project uses torsor-helper to persist architectural intent and memory.
 
 ## Decision
 Markdown under `.torsor/` is the source of truth; the index is derived and disposable.
@@ -739,7 +739,7 @@ def seed_files(paths: TorsorPaths) -> dict[Path, str]:
         paths.charter: CHARTER,
         paths.system_patterns: SYSTEM_PATTERNS,
         paths.tech_context: TECH_CONTEXT,
-        paths.decisions_dir / "0001-adopt-torsor-mem.md": FIRST_ADR,
+        paths.decisions_dir / "0001-adopt-torsor-helper.md": FIRST_ADR,
         paths.map_overview: MAP_OVERVIEW,
         paths.active_context: ACTIVE_CONTEXT,
         paths.progress: PROGRESS,
@@ -754,7 +754,7 @@ Expected: PASS (1 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/templates.py tests/test_templates.py
+git add src/torsor_helper/templates.py tests/test_templates.py
 git commit -m "feat: seed Markdown templates for the pyramid"
 ```
 
@@ -763,7 +763,7 @@ git commit -m "feat: seed Markdown templates for the pyramid"
 ### Task 7: Store — parsing helpers (frontmatter, wikilinks, hash, tier)
 
 **Files:**
-- Create: `src/torsor_mem/store.py`
+- Create: `src/torsor_helper/store.py`
 - Create: `tests/conftest.py`
 - Create: `tests/test_store_parsing.py`
 
@@ -781,8 +781,8 @@ FIXED_CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 @pytest.fixture
 def tmp_project(tmp_path):
     """A fresh project root with a scaffolded .torsor/ and a fixed clock Store."""
-    from torsor_mem.paths import TorsorPaths
-    from torsor_mem.store import Store
+    from torsor_helper.paths import TorsorPaths
+    from torsor_helper.store import Store
 
     paths = TorsorPaths(tmp_path)
     store = Store(paths, clock=FIXED_CLOCK)
@@ -792,9 +792,9 @@ def tmp_project(tmp_path):
 
 ```python
 # tests/test_store_parsing.py
-from torsor_mem.models import Frontmatter, Tier
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper.models import Frontmatter, Tier
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
 
 def test_parse_frontmatter_splits_meta_and_body():
@@ -839,12 +839,12 @@ def test_tier_for_path(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_store_parsing.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.store'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.store'`
 
 - [ ] **Step 3: Write the implementation (parsing helpers only; methods added next task)**
 
 ```python
-# src/torsor_mem/store.py
+# src/torsor_helper/store.py
 from __future__ import annotations
 
 import hashlib
@@ -855,8 +855,8 @@ from typing import Callable, Iterator
 
 import yaml
 
-from torsor_mem.models import Frontmatter, Note, Tier
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.models import Frontmatter, Note, Tier
+from torsor_helper.paths import TorsorPaths
 
 _WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
 _FM_BLOCK = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
@@ -929,7 +929,7 @@ Expected: PASS (6 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/store.py tests/conftest.py tests/test_store_parsing.py
+git add src/torsor_helper/store.py tests/conftest.py tests/test_store_parsing.py
 git commit -m "feat: Store parsing helpers (frontmatter, wikilinks, hash, tier)"
 ```
 
@@ -938,7 +938,7 @@ git commit -m "feat: Store parsing helpers (frontmatter, wikilinks, hash, tier)"
 ### Task 8: Store — scaffold, read/write, iterate, journal
 
 **Files:**
-- Modify: `src/torsor_mem/store.py` (add methods after the static helpers, inside `Store`)
+- Modify: `src/torsor_helper/store.py` (add methods after the static helpers, inside `Store`)
 - Create: `tests/test_store_io.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -947,9 +947,9 @@ git commit -m "feat: Store parsing helpers (frontmatter, wikilinks, hash, tier)"
 # tests/test_store_io.py
 from datetime import datetime
 
-from torsor_mem.models import Frontmatter, Tier
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper.models import Frontmatter, Tier
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
 CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 
@@ -959,7 +959,7 @@ def test_scaffold_creates_pyramid_and_gitignore(tmp_path):
     Store(paths, clock=CLOCK).scaffold()
     assert paths.charter.exists()
     assert paths.system_patterns.exists()
-    assert (paths.decisions_dir / "0001-adopt-torsor-mem.md").exists()
+    assert (paths.decisions_dir / "0001-adopt-torsor-helper.md").exists()
     assert paths.active_context.exists()
     assert paths.journal_dir.is_dir()
     assert (paths.base / ".gitignore").read_text().strip() == ".index/"
@@ -1023,7 +1023,7 @@ Expected: FAIL — `AttributeError: 'Store' object has no attribute 'scaffold'`
 ```python
     # ---- filesystem operations ----
     def scaffold(self, force: bool = False) -> None:
-        from torsor_mem.templates import seed_files
+        from torsor_helper.templates import seed_files
 
         for directory in (
             self.paths.architecture_dir,
@@ -1124,7 +1124,7 @@ Expected: PASS (5 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/store.py tests/test_store_io.py
+git add src/torsor_helper/store.py tests/test_store_io.py
 git commit -m "feat: Store scaffold/read/write/iterate/journal"
 ```
 
@@ -1133,7 +1133,7 @@ git commit -m "feat: Store scaffold/read/write/iterate/journal"
 ### Task 9: Keyword recall (Phase-1 retrieval)
 
 **Files:**
-- Create: `src/torsor_mem/recall.py`
+- Create: `src/torsor_helper/recall.py`
 - Create: `tests/test_recall.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -1142,8 +1142,8 @@ git commit -m "feat: Store scaffold/read/write/iterate/journal"
 # tests/test_recall.py
 from pathlib import Path
 
-from torsor_mem.models import Frontmatter, Note, Tier
-from torsor_mem.recall import keyword_recall
+from torsor_helper.models import Frontmatter, Note, Tier
+from torsor_helper.recall import keyword_recall
 
 
 def _note(title, body, tier, name):
@@ -1196,18 +1196,18 @@ def test_recall_is_deterministic():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_recall.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.recall'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.recall'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/recall.py
+# src/torsor_helper/recall.py
 from __future__ import annotations
 
 import re
 
-from torsor_mem.budget import estimate_tokens
-from torsor_mem.models import Note, RecallHit, RecallResult, Tier
+from torsor_helper.budget import estimate_tokens
+from torsor_helper.models import Note, RecallHit, RecallResult, Tier
 
 _WORD = re.compile(r"\w+")
 
@@ -1280,7 +1280,7 @@ Expected: PASS (4 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/recall.py tests/test_recall.py
+git add src/torsor_helper/recall.py tests/test_recall.py
 git commit -m "feat: deterministic keyword recall (Phase 1)"
 ```
 
@@ -1289,7 +1289,7 @@ git commit -m "feat: deterministic keyword recall (Phase 1)"
 ### Task 10: Operations layer (the tool behaviors)
 
 **Files:**
-- Create: `src/torsor_mem/operations.py`
+- Create: `src/torsor_helper/operations.py`
 - Create: `tests/test_operations.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -1298,10 +1298,10 @@ git commit -m "feat: deterministic keyword recall (Phase 1)"
 # tests/test_operations.py
 from datetime import datetime
 
-from torsor_mem import operations as ops
-from torsor_mem.config import TorsorConfig
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper import operations as ops
+from torsor_helper.config import TorsorConfig
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
 CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 
@@ -1365,19 +1365,19 @@ def test_record_handoff_is_recallable_next_session(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_operations.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.operations'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.operations'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/operations.py
+# src/torsor_helper/operations.py
 from __future__ import annotations
 
-from torsor_mem.budget import truncate_to_tokens
-from torsor_mem.config import TorsorConfig
-from torsor_mem.models import Frontmatter, RecallResult
-from torsor_mem.recall import keyword_recall
-from torsor_mem.store import Store
+from torsor_helper.budget import truncate_to_tokens
+from torsor_helper.config import TorsorConfig
+from torsor_helper.models import Frontmatter, RecallResult
+from torsor_helper.recall import keyword_recall
+from torsor_helper.store import Store
 
 # Fractions of the bootstrap budget allocated per section (must sum to <= 1.0).
 _BOOTSTRAP_ALLOC = [
@@ -1475,7 +1475,7 @@ Expected: PASS (5 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/operations.py tests/test_operations.py
+git add src/torsor_helper/operations.py tests/test_operations.py
 git commit -m "feat: operations layer (bootstrap/recall/remember/update_active/handoff)"
 ```
 
@@ -1484,7 +1484,7 @@ git commit -m "feat: operations layer (bootstrap/recall/remember/update_active/h
 ### Task 11: MCP client config snippets
 
 **Files:**
-- Create: `src/torsor_mem/clients.py`
+- Create: `src/torsor_helper/clients.py`
 - Create: `tests/test_clients.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -1495,7 +1495,7 @@ import json
 
 import pytest
 
-from torsor_mem.clients import SUPPORTED_CLIENTS, config_snippet
+from torsor_helper.clients import SUPPORTED_CLIENTS, config_snippet
 
 
 def test_supported_clients_present():
@@ -1513,9 +1513,9 @@ def test_claude_code_snippet_is_a_command():
 def test_cursor_snippet_is_valid_json_with_server():
     snippet = config_snippet("cursor", root="/proj")
     data = json.loads(snippet)
-    assert "torsor-mem" in data["mcpServers"]
-    assert data["mcpServers"]["torsor-mem"]["command"] == "torsor"
-    assert "/proj" in data["mcpServers"]["torsor-mem"]["args"]
+    assert "torsor-helper" in data["mcpServers"]
+    assert data["mcpServers"]["torsor-helper"]["command"] == "torsor"
+    assert "/proj" in data["mcpServers"]["torsor-helper"]["args"]
 
 
 def test_unknown_client_raises():
@@ -1526,12 +1526,12 @@ def test_unknown_client_raises():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_clients.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.clients'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.clients'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/clients.py
+# src/torsor_helper/clients.py
 from __future__ import annotations
 
 import json
@@ -1560,10 +1560,10 @@ def config_snippet(client: str, root: str) -> str:
     if client not in SUPPORTED_CLIENTS:
         raise KeyError(client)
     if client == "claude-code":
-        return f'claude mcp add torsor-mem -- torsor mcp --root "{root}"'
+        return f'claude mcp add torsor-helper -- torsor mcp --root "{root}"'
     block = {
         "mcpServers": {
-            "torsor-mem": {
+            "torsor-helper": {
                 "command": "torsor",
                 "args": ["mcp", "--root", root],
             }
@@ -1580,7 +1580,7 @@ Expected: PASS (4 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/clients.py tests/test_clients.py
+git add src/torsor_helper/clients.py tests/test_clients.py
 git commit -m "feat: MCP client config snippets"
 ```
 
@@ -1589,7 +1589,7 @@ git commit -m "feat: MCP client config snippets"
 ### Task 12: FastMCP server adapter
 
 **Files:**
-- Create: `src/torsor_mem/server.py`
+- Create: `src/torsor_helper/server.py`
 - Create: `tests/test_server.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -1598,12 +1598,12 @@ git commit -m "feat: MCP client config snippets"
 # tests/test_server.py
 import anyio
 
-from torsor_mem.server import build_server
+from torsor_helper.server import build_server
 
 
 def test_server_registers_expected_tools(tmp_path):
     server = build_server(tmp_path)
-    assert server.name == "torsor-mem"
+    assert server.name == "torsor-helper"
     tools = anyio.run(server.list_tools)
     names = {t.name for t in tools}
     assert {"bootstrap_session", "recall", "remember", "update_active", "handoff"} <= names
@@ -1619,22 +1619,22 @@ def test_server_resources_registered(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_server.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.server'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.server'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/server.py
+# src/torsor_helper/server.py
 from __future__ import annotations
 
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
-from torsor_mem import operations as ops
-from torsor_mem.config import load_config
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper import operations as ops
+from torsor_helper.config import load_config
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
 
 def build_server(root: Path | str) -> FastMCP:
@@ -1642,7 +1642,7 @@ def build_server(root: Path | str) -> FastMCP:
     store = Store(paths)
     config = load_config(paths)
 
-    mcp = FastMCP("torsor-mem")
+    mcp = FastMCP("torsor-helper")
 
     @mcp.tool()
     def bootstrap_session() -> str:
@@ -1699,7 +1699,7 @@ Expected: PASS (2 passed)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/server.py tests/test_server.py
+git add src/torsor_helper/server.py tests/test_server.py
 git commit -m "feat: FastMCP server adapter wiring tools + resources"
 ```
 
@@ -1708,7 +1708,7 @@ git commit -m "feat: FastMCP server adapter wiring tools + resources"
 ### Task 13: Typer CLI (`init` / `mcp` / `doctor`) + end-to-end test
 
 **Files:**
-- Create: `src/torsor_mem/cli.py`
+- Create: `src/torsor_helper/cli.py`
 - Create: `tests/test_cli.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -1717,8 +1717,8 @@ git commit -m "feat: FastMCP server adapter wiring tools + resources"
 # tests/test_cli.py
 from typer.testing import CliRunner
 
-from torsor_mem.cli import app
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.cli import app
+from torsor_helper.paths import TorsorPaths
 
 runner = CliRunner()
 
@@ -1750,9 +1750,9 @@ def test_end_to_end_remember_then_bootstrap(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     from datetime import datetime
 
-    from torsor_mem import operations as ops
-    from torsor_mem.config import load_config
-    from torsor_mem.store import Store
+    from torsor_helper import operations as ops
+    from torsor_helper.config import load_config
+    from torsor_helper.store import Store
 
     paths = TorsorPaths(tmp_path)
     store = Store(paths, clock=lambda: datetime(2026, 6, 1, 9, 30, 0))
@@ -1764,24 +1764,24 @@ def test_end_to_end_remember_then_bootstrap(tmp_path):
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_cli.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_mem.cli'`
+Expected: FAIL — `ModuleNotFoundError: No module named 'torsor_helper.cli'`
 
 - [ ] **Step 3: Write the implementation**
 
 ```python
-# src/torsor_mem/cli.py
+# src/torsor_helper/cli.py
 from __future__ import annotations
 
 from pathlib import Path
 
 import typer
 
-from torsor_mem.clients import SUPPORTED_CLIENTS, config_snippet
-from torsor_mem.config import TorsorConfig, load_config, save_config
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper.clients import SUPPORTED_CLIENTS, config_snippet
+from torsor_helper.config import TorsorConfig, load_config, save_config
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
-app = typer.Typer(help="torsor-mem: persistent memory + architectural intent over MCP.")
+app = typer.Typer(help="torsor-helper: persistent memory + architectural intent over MCP.")
 
 
 @app.command()
@@ -1795,7 +1795,7 @@ def init(
     Store(paths).scaffold(force=force)
     if not paths.config_file.exists() or force:
         save_config(paths, TorsorConfig())
-    typer.echo(f"Initialized torsor-mem at {paths.base}")
+    typer.echo(f"Initialized torsor-helper at {paths.base}")
     if client:
         if client not in SUPPORTED_CLIENTS:
             typer.echo(f"Unknown client {client!r}. Known: {', '.join(SUPPORTED_CLIENTS)}", err=True)
@@ -1806,18 +1806,18 @@ def init(
 
 @app.command()
 def mcp(root: Path = typer.Option(Path("."), help="Project root containing .torsor/.")) -> None:
-    """Run the torsor-mem MCP server over stdio."""
-    from torsor_mem.server import run
+    """Run the torsor-helper MCP server over stdio."""
+    from torsor_helper.server import run
 
     run(root)
 
 
 @app.command()
 def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) -> None:
-    """Verify a torsor-mem project is healthy."""
+    """Verify a torsor-helper project is healthy."""
     paths = TorsorPaths(root)
     if not paths.base.exists():
-        typer.echo("torsor-mem not initialized here (run `torsor init`).", err=True)
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
         raise typer.Exit(code=1)
     missing = [
         p.name
@@ -1828,7 +1828,7 @@ def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) 
         typer.echo(f"Project incomplete; missing: {', '.join(missing)}", err=True)
         raise typer.Exit(code=1)
     load_config(paths)  # raises if malformed
-    typer.echo("OK: torsor-mem project is healthy.")
+    typer.echo("OK: torsor-helper project is healthy.")
 
 
 def main() -> None:
@@ -1843,7 +1843,7 @@ Expected: PASS (all tests across every module green)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/torsor_mem/cli.py tests/test_cli.py
+git add src/torsor_helper/cli.py tests/test_cli.py
 git commit -m "feat: Typer CLI (init/mcp/doctor) + end-to-end loop test"
 ```
 

@@ -5,7 +5,7 @@ import tomllib
 import tomli_w
 from pydantic import BaseModel, Field
 
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.paths import TorsorPaths
 
 
 class BudgetConfig(BaseModel):

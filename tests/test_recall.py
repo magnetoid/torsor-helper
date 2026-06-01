@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from torsor_mem.models import Frontmatter, Note, Tier
-from torsor_mem.recall import keyword_recall
+from torsor_helper.models import Frontmatter, Note, Tier
+from torsor_helper.recall import keyword_recall
 
 
 def _note(title, body, tier, name):

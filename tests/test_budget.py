@@ -1,4 +1,4 @@
-from torsor_mem.budget import estimate_tokens, truncate_to_tokens
+from torsor_helper.budget import estimate_tokens, truncate_to_tokens
 
 
 def test_estimate_tokens_uses_chars_per_token():

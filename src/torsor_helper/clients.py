@@ -25,10 +25,10 @@ def config_snippet(client: str, root: str) -> str:
     if client not in SUPPORTED_CLIENTS:
         raise KeyError(client)
     if client == "claude-code":
-        return f'claude mcp add torsor-mem -- torsor mcp --root "{root}"'
+        return f'claude mcp add torsor-helper -- torsor mcp --root "{root}"'
     block = {
         "mcpServers": {
-            "torsor-mem": {
+            "torsor-helper": {
                 "command": "torsor",
                 "args": ["mcp", "--root", root],
             }

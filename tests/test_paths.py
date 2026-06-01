@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from torsor_mem.paths import TorsorPaths
+from torsor_helper.paths import TorsorPaths
 
 
 def test_layout_under_dot_torsor(tmp_path: Path):

@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from torsor_mem import operations as ops
-from torsor_mem.config import TorsorConfig
-from torsor_mem.paths import TorsorPaths
-from torsor_mem.store import Store
+from torsor_helper import operations as ops
+from torsor_helper.config import TorsorConfig
+from torsor_helper.paths import TorsorPaths
+from torsor_helper.store import Store
 
 CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 
