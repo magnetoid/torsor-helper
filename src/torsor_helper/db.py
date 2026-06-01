@@ -39,8 +39,10 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
-    if meta_get(conn, "schema_version") is None:
-        meta_set(conn, "schema_version", str(SCHEMA_VERSION))
+    # Always stamp the current version: tables are created additively via
+    # CREATE TABLE IF NOT EXISTS, so an upgraded DB must report the live version
+    # (a Phase-4 migration may key off this).
+    meta_set(conn, "schema_version", str(SCHEMA_VERSION))
     conn.commit()
 
 
