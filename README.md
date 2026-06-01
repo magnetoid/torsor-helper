@@ -2,9 +2,10 @@
 
 **A persistent memory + architectural-intent guardrail for AI coding agents — over MCP, for every platform.**
 
-> ⚠️ **Status: design phase.** This repo currently contains the design spec
-> ([`docs/superpowers/specs/2026-06-01-torsor-mem-design.md`](docs/superpowers/specs/2026-06-01-torsor-mem-design.md)).
-> Implementation is phased (see [Roadmap](#roadmap)). Usage examples below describe the **planned** interface.
+> **Status: Phase 1 (Foundation) shipped.** The toolkit installs and runs today: `init` scaffolds
+> the pyramid and the MCP server exposes `bootstrap_session` / `recall` (keyword) / `remember` /
+> `update_active` / `handoff`. The vector/graph index, repo-map, and drift guard are on the
+> [Roadmap](#roadmap) (Phases 2–5). See the [design spec](docs/superpowers/specs/2026-06-01-torsor-mem-design.md).
 
 ---
 
@@ -51,29 +52,30 @@ Five Markdown tiers, ordered by stability — the stable base loads first, the v
 | `map_repo()` | (Re)generate the repo map |
 | `handoff()` | Structured end-of-session summary → next session's bootstrap |
 
-## Works with (planned)
+## Works with
 
-MCP is the lingua franca, so one install reaches **Claude Code, Claude Desktop, Cursor, Windsurf, VS Code / Copilot, Codex, Gemini CLI, Cline, Roo, Trae, Kiro, and Warp.**
+It's a standard MCP stdio server, so any MCP client works. `torsor init --client <name>` prints ready-to-paste config for **Claude Code, Claude Desktop, Cursor, Windsurf, VS Code / Copilot, Codex, Gemini CLI, Cline, Roo, Trae, Kiro, and Warp.**
 
-## Quick start (planned)
+## Quick start
 
 ```bash
-# install + scaffold the pyramid in your repo
-uvx torsor-mem init --client claude-code
-
-# run the MCP server (your agent connects over stdio)
-torsor mcp
+# from source (PyPI publish is on the roadmap)
+git clone https://github.com/magnetoid/torsor-mem && cd torsor-mem
+uv run torsor init --client claude-code   # scaffolds .torsor/ + prints the MCP config snippet
+uv run torsor mcp                          # runs the MCP server (your agent connects over stdio)
+uv run torsor doctor                       # checks the project is healthy
 ```
 
-`init` writes a `.torsor/` directory and prints the MCP config snippet for your chosen client.
+`init` writes a `.torsor/` directory and prints the MCP config snippet for your chosen client. Once published, this becomes `uvx torsor-mem init`.
 
 ## Tech stack
 
-FastMCP · SQLite + `sqlite-vec` + FTS5 · FastEmbed (local embeddings) · tree-sitter · watchfiles · Typer · Pydantic. Local-first, minimal dependencies, no API key required.
+**Phase 1 (now):** FastMCP · Typer · Pydantic · PyYAML · `tomli-w` — local-first, no API key required.
+**Planned (Phases 2–3):** SQLite + `sqlite-vec` + FTS5 · FastEmbed (local embeddings) · tree-sitter · watchfiles.
 
 ## Roadmap
 
-- [ ] **Phase 1 — Foundation:** pyramid scaffold, `init`, MCP server with `bootstrap_session` / `remember` / `recall` (FTS) / `update_active` / `handoff`
+- [x] **Phase 1 — Foundation:** pyramid scaffold, `init`, MCP server with `bootstrap_session` / `remember` / `recall` (keyword) / `update_active` / `handoff`
 - [ ] **Phase 2 — Index:** `sqlite-vec` + FastEmbed, incremental indexer, hybrid retrieval, wikilink graph
 - [ ] **Phase 3 — Map:** tree-sitter cartographer + symbol graph + `get_intent`
 - [ ] **Phase 4 — Guard:** ADRs + deterministic rules + sampling-based drift check + `check_drift`
