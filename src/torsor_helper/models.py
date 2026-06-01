@@ -58,3 +58,13 @@ class RecallResult(BaseModel):
     query: str
     hits: list[RecallHit] = Field(default_factory=list)
     total_tokens: int = 0
+
+
+class Symbol(BaseModel):
+    name: str
+    kind: str  # "function" | "class" | "method"
+    signature: str
+    module: str
+    line: int
+    doc: str = ""
+    refs: int = 0
