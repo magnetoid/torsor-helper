@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "torsor-mem"
+version = "0.1.0"
+description = "Persistent memory + architectural-intent guardrail for AI coding agents, over MCP."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.2.0",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "tomli-w>=1.0",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "anyio>=4.0"]
+
+[project.scripts]
+torsor = "torsor_mem.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/torsor_mem"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
