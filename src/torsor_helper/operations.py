@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from torsor_helper import db
 from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.config import TorsorConfig
+from torsor_helper.embeddings import get_embedder
+from torsor_helper.indexer import reindex
 from torsor_helper.models import Frontmatter, RecallResult
 from torsor_helper.recall import keyword_recall
+from torsor_helper.search import hybrid_search
 from torsor_helper.store import Store
 
 # Fractions of the bootstrap budget allocated per section (must sum to <= 1.0).
@@ -46,12 +50,39 @@ def _recent_journal(store: Store, max_tokens: int, cpt: int) -> str:
     return truncate_to_tokens(latest.body.strip(), max_tokens, cpt)
 
 
+_EMBEDDER_CACHE: dict = {}
+
+
+def _embedder_for(config):
+    key = (config.embeddings.provider, config.embeddings.model, config.embeddings.dim)
+    if key not in _EMBEDDER_CACHE:
+        _EMBEDDER_CACHE[key] = get_embedder(config)
+    return _EMBEDDER_CACHE[key]
+
+
+def _open_index(store, config):
+    """Return a freshly-synced index connection, or None to use keyword fallback."""
+    if not config.index.auto_index and not store.paths.index_db.exists():
+        return None
+    embedder = _embedder_for(config)
+    conn = db.connect(store.paths.index_db)
+    reindex(store, conn, embedder)
+    return conn
+
+
 def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8) -> RecallResult:
+    conn = _open_index(store, config)
+    if conn is not None:
+        try:
+            return hybrid_search(
+                conn, _embedder_for(config), config, query,
+                limit=limit, max_tokens=config.budgets.recall_tokens,
+            )
+        finally:
+            conn.close()
     notes = list(store.iter_notes())
     return keyword_recall(
-        notes,
-        query,
-        limit=limit,
+        notes, query, limit=limit,
         chars_per_token=config.budgets.chars_per_token,
         max_tokens=config.budgets.recall_tokens,
     )
