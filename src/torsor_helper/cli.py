@@ -6,6 +6,7 @@ from typing import Optional
 import typer
 
 from torsor_helper import db
+from torsor_helper import operations as ops
 from torsor_helper.clients import SUPPORTED_CLIENTS, config_snippet
 from torsor_helper.config import TorsorConfig, load_config, save_config
 from torsor_helper.embeddings import get_embedder
@@ -86,6 +87,19 @@ def index(
     finally:
         conn.close()
     typer.echo(f"Indexed {stats['indexed']} note(s), deleted {stats['deleted']}, total {stats['total']}.")
+
+
+@app.command()
+def map(root: Path = typer.Option(Path("."), help="Project root to map.")) -> None:
+    """Generate the repository symbol map under .torsor/map/."""
+    paths = TorsorPaths(root)
+    if not paths.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(paths)
+    store = Store(paths)
+    stats = ops.map_repo(store, config)
+    typer.echo(f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s).")
 
 
 def main() -> None:
