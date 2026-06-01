@@ -7,7 +7,9 @@ from typing import Sequence
 
 import numpy as np
 
-SCHEMA_VERSION = 1
+from torsor_helper.models import Symbol
+
+SCHEMA_VERSION = 2
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -31,6 +33,10 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS edges (src TEXT, target_slug TEXT, target_path TEXT);
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
         CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(path UNINDEXED, title, body);
+        CREATE TABLE IF NOT EXISTS symbols (
+            name TEXT, kind TEXT, signature TEXT, module TEXT,
+            line INTEGER, doc TEXT, refs INTEGER NOT NULL DEFAULT 0
+        );
         """
     )
     if meta_get(conn, "schema_version") is None:
@@ -163,3 +169,37 @@ def fts_search(conn, query, limit):
 def bump_access(conn, paths):
     conn.executemany("UPDATE notes SET access_count = access_count + 1 WHERE path=?", [(p,) for p in paths])
     conn.commit()
+
+
+def replace_all_symbols(conn, symbols):
+    conn.execute("DELETE FROM symbols")
+    conn.executemany(
+        "INSERT INTO symbols(name, kind, signature, module, line, doc, refs) VALUES(?,?,?,?,?,?,?)",
+        [(s.name, s.kind, s.signature, s.module, s.line, s.doc, s.refs) for s in symbols],
+    )
+    conn.commit()
+
+
+def search_symbols(conn, query, limit=10):
+    terms = [t for t in re.findall(r"\w+", query.lower()) if t]
+    if not terms:
+        return []
+    clause = " OR ".join(["(lower(name) LIKE ? OR lower(signature) LIKE ? OR lower(doc) LIKE ?)"] * len(terms))
+    args: list = []
+    for term in terms:
+        like = f"%{term}%"
+        args += [like, like, like]
+    rows = conn.execute(
+        f"SELECT name, kind, signature, module, line, doc, refs FROM symbols "
+        f"WHERE {clause} ORDER BY refs DESC, name LIMIT ?",
+        (*args, limit),
+    ).fetchall()
+    return [
+        Symbol(name=r["name"], kind=r["kind"], signature=r["signature"],
+               module=r["module"], line=r["line"], doc=r["doc"] or "", refs=r["refs"])
+        for r in rows
+    ]
+
+
+def modules(conn):
+    return [r["module"] for r in conn.execute("SELECT DISTINCT module FROM symbols ORDER BY module")]
