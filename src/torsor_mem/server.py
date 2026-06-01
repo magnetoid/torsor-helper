@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from mcp.server.fastmcp import FastMCP
+
+from torsor_mem import operations as ops
+from torsor_mem.config import load_config
+from torsor_mem.paths import TorsorPaths
+from torsor_mem.store import Store
+
+
+def build_server(root: Path | str) -> FastMCP:
+    paths = TorsorPaths(Path(root))
+    store = Store(paths)
+    config = load_config(paths)
+
+    mcp = FastMCP("torsor-mem")
+
+    @mcp.tool()
+    def bootstrap_session() -> str:
+        """Return a budgeted summary of the whole pyramid for session start."""
+        return ops.bootstrap_session(store, config)
+
+    @mcp.tool()
+    def recall(query: str, limit: int = 8) -> str:
+        """Hybrid keyword search across memory, wiki and map. Returns ranked snippets."""
+        result = ops.recall(store, config, query, limit=limit)
+        if not result.hits:
+            return f"No matches for: {query!r}"
+        lines = [f"### {h.title} ({h.tier.name})\n{h.snippet}" for h in result.hits]
+        return "\n\n".join(lines)
+
+    @mcp.tool()
+    def remember(content: str, kind: str = "observation", links: list[str] | None = None) -> str:
+        """Persist an observation/decision/learning to episodic memory."""
+        return ops.remember(store, content, kind=kind, links=links)
+
+    @mcp.tool()
+    def update_active(focus: str, progress: str, open_questions: str) -> str:
+        """Update the active working state (current focus, progress, open questions)."""
+        ops.update_active(store, focus, progress, open_questions)
+        return "active context updated"
+
+    @mcp.tool()
+    def handoff(summary: str, decisions: str = "", open_questions: str = "", next_steps: str = "") -> str:
+        """Write a structured end-of-session handoff that the next session resumes from."""
+        return ops.record_handoff(store, summary, decisions, open_questions, next_steps)
+
+    @mcp.resource("torsor://charter")
+    def charter_resource() -> str:
+        return paths.charter.read_text(encoding="utf-8") if paths.charter.exists() else ""
+
+    @mcp.resource("torsor://active")
+    def active_resource() -> str:
+        return paths.active_context.read_text(encoding="utf-8") if paths.active_context.exists() else ""
+
+    return mcp
+
+
+def run(root: Path | str) -> None:
+    build_server(root).run()
