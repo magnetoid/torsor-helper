@@ -48,6 +48,17 @@ def build_server(root: Path | str) -> FastMCP:
         return ops.record_handoff(store, summary, decisions, open_questions, next_steps)
 
     @mcp.tool()
+    def map_repo(paths: list[str] | None = None) -> str:
+        """(Re)generate the repository symbol map and refresh the symbol inventory."""
+        stats = ops.map_repo(store, config, paths)
+        return f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s)."
+
+    @mcp.tool()
+    def get_intent(topic: str = "") -> str:
+        """Surface the architecture (patterns, tech, ADRs) and symbols relevant to a topic."""
+        return ops.get_intent(store, config, topic or None)
+
+    @mcp.tool()
     def recommend(context: str = "", limit: int = 5) -> str:
         """Health + best-practice recommendations (the Coach). Arrives in Phase 6."""
         return (
