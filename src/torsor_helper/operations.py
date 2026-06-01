@@ -148,3 +148,36 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None)
         conn.close()
 
     return {"modules": len({s.module for s in symbols}), "symbols": len(symbols)}
+
+
+def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:
+    cpt = config.budgets.chars_per_token
+    total = config.budgets.bootstrap_tokens
+    sections: list[str] = []
+
+    for label, path, frac in [
+        ("System Patterns", store.paths.system_patterns, 0.4),
+        ("Tech Context", store.paths.tech_context, 0.3),
+    ]:
+        if path.exists():
+            note = store.read_note(path)
+            text = truncate_to_tokens(note.body.strip(), int(total * frac), cpt)
+            if text.strip():
+                sections.append(f"## {label}\n\n{text}")
+
+    if store.paths.decisions_dir.exists():
+        titles = [store.read_note(p).title for p in sorted(store.paths.decisions_dir.glob("*.md"))]
+        if titles:
+            sections.append("## Decisions\n\n" + "\n".join(f"- {t}" for t in titles))
+
+    if topic and store.paths.index_db.exists():
+        conn = db.connect(store.paths.index_db)
+        try:
+            syms = db.search_symbols(conn, topic, limit=8)
+        finally:
+            conn.close()
+        if syms:
+            lines = [f"- `{s.signature}` ({s.kind}) — {s.module}:{s.line}" for s in syms]
+            sections.append("## Relevant existing symbols\n\n" + "\n".join(lines))
+
+    return "\n\n".join(sections)
