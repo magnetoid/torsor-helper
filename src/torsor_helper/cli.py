@@ -152,5 +152,21 @@ def coach(
         typer.echo(f"[{r.severity}/{r.kind}] {r.message}{tail}  (key: {r.key})")
 
 
+@app.command()
+def consolidate(root: Path = typer.Option(Path("."), help="Project root.")) -> None:
+    """Self-improving maintenance: mine journal insights, reindex, report duplicates."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    stats = ops.consolidate(store, config)
+    typer.echo(
+        f"Mined {stats['insights']} insight file(s); reindexed {stats['indexed']} note(s); "
+        f"found {stats['duplicates']} duplicate entr(y/ies)."
+    )
+
+
 def main() -> None:
     app()
