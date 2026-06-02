@@ -7,8 +7,8 @@
 **Stop re-explaining your project every session. Stop the silent architectural drift.**
 One small Python MCP server — works with *every* AI coding tool.
 
-![status](https://img.shields.io/badge/status-Phase%206%20(Coach)%20shipped-success)
-![tests](https://img.shields.io/badge/tests-135%20passing-brightgreen)
+![status](https://img.shields.io/badge/status-roadmap%20complete%20(6%2F6)-success)
+![tests](https://img.shields.io/badge/tests-146%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
 ![local-first](https://img.shields.io/badge/local--first-no%20API%20key-00a3a3)
@@ -69,6 +69,7 @@ Five Markdown tiers, ordered by **stability** — the broad, stable base loads f
 | `get_intent(topic?)` · `map_repo()` | Surface the architecture/symbols relevant to a change | ✅ **shipped** |
 | `record_decision(...)` · `check_drift(...)` | Record ADRs that become rules; flag changes that violate intent | ✅ **shipped** |
 | `recommend(context?)` | **The Coach** — health + best-practice recommendations | ✅ **shipped** |
+| `consolidate()` | Self-improving maintenance — mine journal entries into insight notes, reindex, report duplicates | ✅ **shipped** |
 
 ### 🩺 The Coach *(shipped — `torsor coach`)*
 
@@ -105,7 +106,7 @@ It's a standard **MCP stdio server**, so any MCP client works. `torsor init --cl
 - [x] **Phase 2 — Index** · SQLite (FTS5 + wiki-link graph) + local embeddings (NumPy cosine), incremental indexer, hybrid RRF recall, `torsor index` *(shipped)*
 - [x] **Phase 3 — Map** · `ast` cartographer + symbol inventory + `get_intent` / `map_repo` + `torsor map` *(shipped, 95 tests green)*
 - [x] **Phase 4 — Guard** · ADRs carry machine-readable rules; deterministic drift detection (`record_decision` / `check_drift`) + `torsor guard` *(shipped, 113 tests green)*
-- [ ] **Phase 5 — Consolidation** · self-improving memory + team/HTTP mode
+- [x] **Phase 5 — Consolidation** · `torsor consolidate` mines journal entries into curated insight notes (feeding the Coach) + reindexes + reports duplicates *(shipped)* · HTTP/team transport is a planned fast-follow
 - [x] **Phase 6 — Coach** · hygiene checks (`thin`/`stale`/`unruled`/`uncharted`) + best-practice recs (`reuse` + relevant decisions/learnings) via `torsor coach` + `recommend()` *(shipped, 135 tests green)*
 
 ## 🛠️ Built with

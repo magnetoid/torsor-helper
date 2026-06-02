@@ -6,6 +6,12 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### Phase 5 — Consolidation
+- `torsor consolidate` (+ `consolidate` MCP tool): a self-improving maintenance pass.
+- Mines journal entries (`## HH:MM · kind`) into curated, deduped per-kind insight notes under `memory/insights/` (`learning`/`decision`/`rejection`/`blocker`) — idempotent, indexed, and surfaced by the Coach as `learning` recs.
+- Detects duplicate journal entries and reindexes so mined insights are immediately recallable; `db.top_accessed` surfaces the most-recalled notes.
+- Never deletes source Markdown — consolidation only adds derived insights and reports. HTTP/team transport and auto-pruning are deferred fast-follows.
+
 ### Phase 6 — Coach
 - An independent, non-intrusive advisor surfaced via `torsor coach` and the `recommend()` MCP tool.
 - Hygiene/maturity checks (deterministic): `thin` (seed-template files), `stale` (untouched active context), `unruled` (decisions without machine-readable rules), `uncharted` (source modules missing from the map).
