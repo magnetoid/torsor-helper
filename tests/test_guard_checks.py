@@ -62,3 +62,50 @@ def test_forbid_import_module_forbidden_counts_once():
     rule = Rule(kind="forbid_import", target="requests", source="ADR")
     vs = violations_for_file("x.py", "from requests import get, post\n", rule)
     assert len(vs) == 1  # module itself forbidden -> single violation, not per-name
+
+
+def test_require_import_flags_missing_seam():
+    rule = Rule(kind="require_import", target="app.auth", scope="handlers/*.py", source="ADR")
+    vs = violations_for_file("handlers/x.py", "import os\n", rule)
+    assert len(vs) == 1
+    assert vs[0].line == 0  # one file-level violation, not per-node
+
+
+def test_require_import_satisfied_by_any_import_form():
+    rule = Rule(kind="require_import", target="app.auth", source="ADR")
+    assert violations_for_file("h.py", "from app.auth import login\n", rule) == []
+    assert violations_for_file("h.py", "from app import auth\n", rule) == []
+    assert violations_for_file("h.py", "import app.auth\n", rule) == []
+
+
+def test_require_import_skips_syntax_errors():
+    rule = Rule(kind="require_import", target="app.auth", source="ADR")
+    assert violations_for_file("h.py", "def broken(:\n", rule) == []
+
+
+def test_forbid_layer_import_flags_cross_layer_only():
+    rule = Rule(kind="forbid_layer_import", target=r"features\.b(\.|$)", scope="features/a/*.py", source="ADR")
+    assert len(violations_for_file("features/a/x.py", "from features.b import thing\n", rule)) == 1
+    assert len(violations_for_file("features/a/x.py", "import features.b.deep\n", rule)) == 1
+    assert violations_for_file("features/a/x.py", "from features.c import thing\n", rule) == []
+
+
+def test_forbid_layer_import_bad_regex_degrades_to_skip():
+    rule = Rule(kind="forbid_layer_import", target="features.[", scope="*.py", source="ADR")
+    assert violations_for_file("a.py", "import features.b\n", rule) == []
+
+
+def test_require_import_only_applies_in_scope(tmp_path):
+    store = Store(TorsorPaths(tmp_path), clock=CLOCK)
+    store.scaffold()
+    adr = store.paths.decisions_dir / "0002-handlers-need-auth.md"
+    adr.write_text(
+        "---\ntype: decision\nrules:\n  - kind: require_import\n    target: app.auth\n"
+        "    scope: 'handlers/*.py'\n---\n\n# ADR 0002: handlers need auth\n\nb\n"
+    )
+    (tmp_path / "handlers").mkdir()
+    (tmp_path / "handlers" / "h.py").write_text("import os\n")  # in scope, missing seam
+    (tmp_path / "util.py").write_text("import os\n")           # out of scope
+    files = {v.file for v in check_drift(store, ["handlers/h.py", "util.py"])}
+    assert "handlers/h.py" in files
+    assert "util.py" not in files

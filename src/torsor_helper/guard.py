@@ -63,6 +63,67 @@ def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
     return out
 
 
+def _imported_modules(tree: ast.Module) -> list[tuple[str, int]]:
+    """All imported module strings with their line numbers, including the
+    `from pkg import submod` submodule form (mirrors _forbid_import resolution)."""
+    out: list[tuple[str, int]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                out.append((alias.name, node.lineno))
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if base:
+                out.append((base, node.lineno))
+            for alias in node.names:
+                out.append((f"{base}.{alias.name}" if base else alias.name, node.lineno))
+    return out
+
+
+def _require_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
+    """Mandatory-seam check: emit ONE file-level violation when a required import
+    is ABSENT (inverts the usual find-a-match model)."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    target = rule.target
+    present = any(m == target or m.startswith(target + ".") for m, _ in _imported_modules(tree))
+    if present:
+        return []
+    return [_violation(rule, relpath, 0, f"required import '{target}' is missing")]
+
+
+def _forbid_layer_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
+    """Layering check: forbid importing any module whose dotted path matches the
+    `target` regex (e.g. 'features\\.b(\\.|$)'). Use the rule's scope as the
+    'from' selector ('files matching scope X may not import Y')."""
+    try:
+        pattern = re.compile(rule.target)
+    except re.error:
+        return []
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    out: list[Violation] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if pattern.search(alias.name):
+                    out.append(_violation(rule, relpath, node.lineno, f"layer import '{alias.name}' is forbidden here"))
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            candidates = ([base] if base else []) + [
+                (f"{base}.{alias.name}" if base else alias.name) for alias in node.names
+            ]
+            for cand in candidates:
+                if cand and pattern.search(cand):
+                    out.append(_violation(rule, relpath, node.lineno, f"layer import '{cand}' is forbidden here"))
+                    break  # one violation per import statement
+    return out
+
+
 def _forbid_pattern(relpath: str, text: str, rule: Rule) -> list[Violation]:
     try:
         pattern = re.compile(rule.target)
@@ -82,7 +143,12 @@ def _violation(rule: Rule, relpath: str, line: int, default_msg: str) -> Violati
     )
 
 
-_CHECKERS = {"forbid_import": _forbid_import, "forbid_pattern": _forbid_pattern}
+_CHECKERS = {
+    "forbid_import": _forbid_import,
+    "forbid_pattern": _forbid_pattern,
+    "require_import": _require_import,
+    "forbid_layer_import": _forbid_layer_import,
+}
 
 
 def violations_for_file(relpath: str, text: str, rule: Rule) -> list[Violation]:

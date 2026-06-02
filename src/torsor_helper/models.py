@@ -79,8 +79,9 @@ class SymbolEdge(BaseModel):
 
 
 class Rule(BaseModel):
-    kind: str            # "forbid_import" | "forbid_pattern"
-    target: str          # module prefix (forbid_import) or regex (forbid_pattern)
+    # kind: forbid_import | forbid_pattern | require_import | forbid_layer_import
+    kind: str
+    target: str          # module prefix (forbid/require_import), or regex (forbid_pattern/forbid_layer_import)
     scope: str = "*.py"  # fnmatch glob over the posix path, relative to the repo root
     message: str = ""
     source: str = ""     # ADR/title that declared this rule (for citation)
