@@ -38,3 +38,16 @@ def test_assemble_limits_and_records_seen(tmp_path):
     assert len(recs) == 1
     state = CoachState(store.paths.index_dir / "coach_state.json")
     assert state.times_shown(recs[0].key) >= 1
+
+
+def test_decay_sinks_frequently_shown_recs(tmp_path):
+    # A rec shown many times sinks within its severity band (so the Coach never nags).
+    store = _store(tmp_path)
+    state = CoachState(store.paths.index_dir / "coach_state.json")
+    for _ in range(5):
+        state.seen("thin:charter")
+    state.save()
+    recs = report.assemble(store, TorsorConfig(), conn=None, embedder=None)
+    thin_keys = [r.key for r in recs if r.kind == "thin"]
+    assert thin_keys, "expected thin recs on a fresh scaffold"
+    assert thin_keys[-1] == "thin:charter"  # heavily-shown charter ranks last among thins

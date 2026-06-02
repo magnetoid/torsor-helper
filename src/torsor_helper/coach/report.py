@@ -18,7 +18,9 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
 
     state = CoachState(store.paths.index_dir / "coach_state.json")
     recs = [r for r in recs if not state.is_dismissed(r.key)]
-    recs.sort(key=lambda r: (_SEVERITY_RANK.get(r.severity, 1), -r.score, r.key))
+    # Rank by severity, then decay (recs shown many times sink within their band
+    # so the Coach never nags), then score, then key for a stable total order.
+    recs.sort(key=lambda r: (_SEVERITY_RANK.get(r.severity, 1), state.times_shown(r.key), -r.score, r.key))
     recs = recs[:limit]
 
     for rec in recs:
