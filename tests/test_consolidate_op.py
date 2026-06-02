@@ -22,6 +22,7 @@ def test_consolidate_mines_and_reports(tmp_path):
     stats = ops.consolidate(store, TorsorConfig())
     assert stats["insights"] >= 1
     assert stats["duplicates"] >= 1
+    assert stats["indexed"] >= 1  # freshly-mined insights are indexed (not always 0)
     assert (store.paths.insights_dir / "learning.md").exists()
 
 

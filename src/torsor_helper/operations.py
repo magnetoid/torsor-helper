@@ -269,12 +269,13 @@ def consolidate(store, config) -> dict:
     written = coach_mining.mine_insights(store)
     duplicates = coach_mining.find_duplicate_entries(store)
 
-    indexed = 0
-    conn = _open_index(store, config)
-    if conn is not None:
-        try:
-            indexed = reindex(store, conn, _embedder_for(config))["indexed"]
-        finally:
-            conn.close()
+    # consolidate is a maintenance pass: index once, directly, so the `indexed`
+    # count reflects the freshly-mined insights. (Using _open_index here would
+    # reindex internally first, leaving this explicit call to report 0.)
+    conn = db.connect(store.paths.index_db)
+    try:
+        indexed = reindex(store, conn, _embedder_for(config))["indexed"]
+    finally:
+        conn.close()
 
     return {"insights": len(written), "duplicates": len(duplicates), "indexed": indexed}
