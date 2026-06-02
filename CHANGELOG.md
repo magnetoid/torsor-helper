@@ -44,6 +44,11 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 - `torsor init` / `mcp` / `doctor` CLI; per-client MCP config snippets for 12 clients.
 - Token-budgeted context everywhere; Markdown is the source of truth, the index is disposable.
 
+### Packaging
+- MIT-licensed; complete PyPI metadata (authors, classifiers, project URLs, keywords) and a lean sdist (excludes `.torsor/`, `docs/`, CI config).
+- Verified: `uv build` produces a clean wheel + sdist and the `torsor` console script runs from a fresh install.
+- GitHub Actions: CI (lint + tests on 3.11/3.12) and a secret-less **PyPI Trusted Publishing** release workflow. See [`PUBLISHING.md`](PUBLISHING.md).
+
 ### Fixed
 - `bootstrap_session` recent-memory now spans multiple journal days (a fresh/sparse latest day no longer hides prior memory).
 

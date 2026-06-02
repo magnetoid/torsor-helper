@@ -7,8 +7,10 @@
 **Stop re-explaining your project every session. Stop the silent architectural drift.**
 One small Python MCP server — works with *every* AI coding tool.
 
+![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
 ![status](https://img.shields.io/badge/status-roadmap%20complete%20(6%2F6)-success)
-![tests](https://img.shields.io/badge/tests-146%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-147%20passing-brightgreen)
+![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
 ![local-first](https://img.shields.io/badge/local--first-no%20API%20key-00a3a3)
@@ -85,14 +87,17 @@ It **cites its evidence**, suggests a concrete action, and **decays** so it neve
 ## ⚡ Quick start
 
 ```bash
-git clone https://github.com/magnetoid/torsor-helper && cd torsor-helper
+# once published to PyPI (release-ready — see PUBLISHING.md):
+uvx torsor-helper init --client claude-code   # scaffold .torsor/ + print your MCP config snippet
+uvx torsor-helper mcp                           # run the server — your agent connects over stdio
 
-uv run torsor init --client claude-code   # scaffold .torsor/ + print your MCP config snippet
-uv run torsor mcp                          # run the server — your agent connects over stdio
-uv run torsor doctor                       # sanity-check the project
+# from source today:
+git clone https://github.com/magnetoid/torsor-helper && cd torsor-helper
+uv run torsor init --client claude-code
+uv run torsor mcp        # · doctor · index · map · guard · coach · consolidate
 ```
 
-`init` writes a `.torsor/` folder (your pyramid) and prints a ready-to-paste config for your client. *(PyPI `uvx torsor-helper` is on the roadmap.)*
+`init` writes a `.torsor/` folder (your pyramid) and prints a ready-to-paste config for your client. Packaging is complete (MIT-licensed, clean wheel/sdist, CI + a secret-less Trusted-Publishing release workflow) — the maintainer just cuts a GitHub Release. See [PUBLISHING.md](PUBLISHING.md).
 
 ## 🔌 Works with everything
 
@@ -122,7 +127,7 @@ Full design lives in [`docs/superpowers/specs/`](docs/superpowers/specs/). torso
 
 ## License
 
-TBD (MIT planned).
+[MIT](LICENSE) © Marko Tiosavljevic.
 
 ---
 

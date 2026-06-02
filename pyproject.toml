@@ -8,6 +8,20 @@ dynamic = ["version"]
 description = "Persistent memory + architectural-intent guardrail for AI coding agents, over MCP."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Marko Tiosavljevic", email = "marko.tiosavljevic@gmail.com" }]
+keywords = ["mcp", "ai", "coding-agent", "memory", "context-engineering", "llm", "rag", "architecture"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Documentation",
+    "Environment :: Console",
+]
 dependencies = [
     "mcp>=1.2.0",
     "numpy>=1.26",
@@ -24,11 +38,22 @@ embeddings = ["fastembed>=0.3"]
 [project.scripts]
 torsor = "torsor_helper.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/magnetoid/torsor-helper"
+Repository = "https://github.com/magnetoid/torsor-helper"
+Changelog = "https://github.com/magnetoid/torsor-helper/blob/main/CHANGELOG.md"
+Issues = "https://github.com/magnetoid/torsor-helper/issues"
+
 [tool.hatch.version]
 path = "src/torsor_helper/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/torsor_helper"]
+
+[tool.hatch.build.targets.sdist]
+# Keep the sdist lean: ship src + README/LICENSE/CHANGELOG/pyproject (+ tests),
+# not the dogfooded .torsor/ memory, internal planning docs, or CI config.
+exclude = [".torsor", "docs", ".github", ".gitignore"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
