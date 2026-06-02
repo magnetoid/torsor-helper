@@ -76,3 +76,10 @@ def test_recent_journal_spans_multiple_days(tmp_path):
     out = ops.bootstrap_session(store, TorsorConfig())
     assert "beta update" in out   # newest day
     assert "alpha approach" in out  # older day still surfaced within budget
+
+
+def test_bootstrap_weaves_recommendations_digest(tmp_path):
+    store = _store(tmp_path)  # fresh scaffold -> thin recs present
+    out = ops.bootstrap_session(store, TorsorConfig())
+    assert "## Recommendations" in out
+    assert "seed template" in out.lower()  # the thin hygiene nudge

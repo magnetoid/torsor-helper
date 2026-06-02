@@ -82,7 +82,7 @@ torsor-helper isn't just storage — it's an **independent advisor that sits bes
 - *"You've recorded 12 decisions but set 0 rules — formalize the load-bearing ones."*
 - *"♻️ You already have `format_date()` in `utils/dates.py` — reuse it."*
 
-It **cites its evidence**, suggests a concrete action, and **decays** so it never nags. → [Coach design](docs/superpowers/specs/2026-06-01-torsor-coach-design.md)
+It **cites its evidence**, suggests a concrete action, and **decays** so it never nags. Run it on demand (`torsor coach` / `recommend()`), and `bootstrap_session` also **pushes** a short hygiene digest at session start (silent when the project is healthy). → [Coach design](docs/superpowers/specs/2026-06-01-torsor-coach-design.md)
 
 ## ⚡ Quick start
 

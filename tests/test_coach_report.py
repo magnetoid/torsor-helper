@@ -51,3 +51,16 @@ def test_decay_sinks_frequently_shown_recs(tmp_path):
     thin_keys = [r.key for r in recs if r.kind == "thin"]
     assert thin_keys, "expected thin recs on a fresh scaffold"
     assert thin_keys[-1] == "thin:charter"  # heavily-shown charter ranks last among thins
+
+
+def test_session_digest_is_index_free_and_respects_dismissal(tmp_path):
+    store = _store(tmp_path)  # fresh scaffold -> thin (important) + stale
+    digest = report.session_digest(store, limit=3)
+    assert digest and digest[0].severity == "important"  # thin ranks first
+    assert all(r.kind in ("thin", "stale", "unruled") for r in digest)  # no uncharted (index-free)
+    # dismissed keys are filtered out
+    from torsor_helper.coach.state import CoachState
+    st = CoachState(store.paths.index_dir / "coach_state.json")
+    st.dismiss("thin:charter")
+    st.save()
+    assert all(r.key != "thin:charter" for r in report.session_digest(store))

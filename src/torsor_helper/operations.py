@@ -44,6 +44,12 @@ def bootstrap_session(store: Store, config: TorsorConfig) -> str:
     if recent:
         sections.append(f"## Recent Memory\n\n{recent}")
 
+    # Push a short hygiene digest from the Coach (index-free, dismissible).
+    digest = coach_report.session_digest(store, limit=3)
+    if digest:
+        lines = "\n".join(f"- [{rec.severity}] {rec.message}" for rec in digest)
+        sections.append(f"## Recommendations\n\n{lines}")
+
     return "\n\n".join(sections)
 
 

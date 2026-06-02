@@ -17,6 +17,7 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 - Hygiene/maturity checks (deterministic): `thin` (seed-template files), `stale` (untouched active context), `unruled` (decisions without machine-readable rules), `uncharted` (source modules missing from the map).
 - Best-practice recs (retrieval): `reuse` (existing symbols matching a context — anti-duplication) + relevant prior `decision`/`learning` notes.
 - Dismissal + decay via a disposable `coach_state.json`; recs rank by severity and cite their source. Advisory — never blocks or edits.
+- `bootstrap_session` now **pushes** a short hygiene digest (thin/stale/unruled) at session start — read-only, dismissal-aware, and silent on a healthy project (proactive delivery, not just on-demand).
 - Deferred fast-follows: insight auto-mining, severity escalation over repeat checkups, and weaving recs into `bootstrap_session`/`get_intent`/`check_drift` outputs.
 
 ### Phase 4 — Guard
