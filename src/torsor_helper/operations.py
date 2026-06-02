@@ -3,7 +3,7 @@ from __future__ import annotations
 import re as _re
 
 from torsor_helper import cartographer, db, guard
-from torsor_helper.budget import truncate_to_tokens
+from torsor_helper.budget import estimate_tokens, truncate_to_tokens
 from torsor_helper.config import TorsorConfig
 from torsor_helper.embeddings import get_embedder
 from torsor_helper.indexer import reindex
@@ -45,11 +45,22 @@ def bootstrap_session(store: Store, config: TorsorConfig) -> str:
 
 
 def _recent_journal(store: Store, max_tokens: int, cpt: int) -> str:
-    journals = sorted(store.paths.journal_dir.glob("*.md")) if store.paths.journal_dir.exists() else []
-    if not journals:
+    if not store.paths.journal_dir.exists():
         return ""
-    latest = store.read_note(journals[-1])
-    return truncate_to_tokens(latest.body.strip(), max_tokens, cpt)
+    # Newest day first, so a fresh/sparse latest day still surfaces prior memory.
+    journals = sorted(store.paths.journal_dir.glob("*.md"), reverse=True)
+    parts: list[str] = []
+    used = 0
+    for jpath in journals:
+        body = store.read_note(jpath).body.strip()
+        if not body:
+            continue
+        cost = estimate_tokens(body, cpt)
+        if parts and used + cost > max_tokens:
+            break
+        parts.append(body)
+        used += cost
+    return truncate_to_tokens("\n\n".join(parts), max_tokens, cpt)
 
 
 _EMBEDDER_CACHE: dict = {}

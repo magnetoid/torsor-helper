@@ -60,3 +60,19 @@ def test_record_handoff_is_recallable_next_session(tmp_path):
     )
     out = ops.bootstrap_session(store, TorsorConfig())
     assert "Finished store + recall" in out
+
+
+def test_recent_journal_spans_multiple_days(tmp_path):
+    # Regression: a fresh/sparse newest day must not hide the prior day's memory.
+    store = _store(tmp_path)
+    store.paths.journal_dir.joinpath("2025-01-01.md").write_text(
+        "---\ntype: journal\n---\n\n# Journal 2025-01-01\n\n## 09:00 - decision\n\nchose alpha approach\n",
+        encoding="utf-8",
+    )
+    store.paths.journal_dir.joinpath("2026-06-02.md").write_text(
+        "---\ntype: journal\n---\n\n# Journal 2026-06-02\n\n## 09:00 - note\n\nbeta update\n",
+        encoding="utf-8",
+    )
+    out = ops.bootstrap_session(store, TorsorConfig())
+    assert "beta update" in out   # newest day
+    assert "alpha approach" in out  # older day still surfaced within budget
