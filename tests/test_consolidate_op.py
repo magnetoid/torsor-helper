@@ -32,3 +32,12 @@ def test_consolidate_insight_is_recallable(tmp_path):
     ops.consolidate(store, TorsorConfig())
     res = ops.recall(store, TorsorConfig(), "embedder cache")
     assert any("embedder" in h.snippet for h in res.hits)
+
+
+def test_consolidate_reports_top_accessed(tmp_path):
+    store = _store(tmp_path)
+    store.append_journal("SQLite chosen for the index", kind="decision", links=[])
+    ops.recall(store, TorsorConfig(), "SQLite index")  # bumps access_count on hits
+    stats = ops.consolidate(store, TorsorConfig())
+    assert "top_accessed" in stats
+    assert any(n >= 1 for _path, n in stats["top_accessed"])

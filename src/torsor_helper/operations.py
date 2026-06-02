@@ -275,7 +275,13 @@ def consolidate(store, config) -> dict:
     conn = db.connect(store.paths.index_db)
     try:
         indexed = reindex(store, conn, _embedder_for(config))["indexed"]
+        top_accessed = db.top_accessed(conn, limit=3)
     finally:
         conn.close()
 
-    return {"insights": len(written), "duplicates": len(duplicates), "indexed": indexed}
+    return {
+        "insights": len(written),
+        "duplicates": len(duplicates),
+        "indexed": indexed,
+        "top_accessed": top_accessed,
+    }

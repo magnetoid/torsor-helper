@@ -77,10 +77,14 @@ def build_server(root: Path | str) -> FastMCP:
     def consolidate() -> str:
         """Self-improving maintenance: mine journal entries into insight notes, reindex, report duplicates."""
         stats = ops.consolidate(store, config)
-        return (
+        msg = (
             f"Mined {stats['insights']} insight file(s); reindexed {stats['indexed']} note(s); "
             f"found {stats['duplicates']} duplicate entr(y/ies)."
         )
+        if stats["top_accessed"]:
+            hot = ", ".join(f"{path} ({n}x)" for path, n in stats["top_accessed"])
+            msg += f"\nMost-recalled: {hot}"
+        return msg
 
     @mcp.tool()
     def recommend(context: str = "", limit: int = 8) -> str:

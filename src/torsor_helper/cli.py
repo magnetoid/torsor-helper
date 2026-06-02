@@ -166,6 +166,9 @@ def consolidate(root: Path = typer.Option(Path("."), help="Project root.")) -> N
         f"Mined {stats['insights']} insight file(s); reindexed {stats['indexed']} note(s); "
         f"found {stats['duplicates']} duplicate entr(y/ies)."
     )
+    if stats["top_accessed"]:
+        hot = ", ".join(f"{path} ({n}x)" for path, n in stats["top_accessed"])
+        typer.echo(f"Most-recalled: {hot}")
 
 
 def main() -> None:
