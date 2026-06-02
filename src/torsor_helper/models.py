@@ -67,7 +67,15 @@ class Symbol(BaseModel):
     module: str
     line: int
     doc: str = ""
-    refs: int = 0
+    refs: int = 0  # count of *resolved* references (AST edges), not substring hits
+
+
+class SymbolEdge(BaseModel):
+    caller: str             # enclosing symbol that makes the reference ("<module>" for top level)
+    referenced_name: str    # the referenced name (call target / read / write)
+    role: str               # "call" | "read" | "write"
+    module: str             # module (relpath) the reference lives in
+    resolved_module: str | None = None  # module the name resolves to, or None if best-effort failed
 
 
 class Rule(BaseModel):

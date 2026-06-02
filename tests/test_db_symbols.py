@@ -1,5 +1,5 @@
 from torsor_helper import db
-from torsor_helper.models import Symbol
+from torsor_helper.models import Symbol, SymbolEdge
 
 
 def _conn(tmp_path):
@@ -13,11 +13,25 @@ def _syms():
     ]
 
 
-def test_schema_version_is_2_and_symbols_table_exists(tmp_path):
+def test_schema_version_and_symbol_tables_exist(tmp_path):
     conn = _conn(tmp_path)
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "symbols" in tables
-    assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION == 2
+    assert "symbol_edges" in tables
+    assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION == 3
+
+
+def test_replace_all_edges_and_who_references(tmp_path):
+    conn = _conn(tmp_path)
+    db.replace_all_edges(conn, [
+        SymbolEdge(caller="run", referenced_name="format_date", role="call", module="app.py", resolved_module="pkg.dates"),
+        SymbolEdge(caller="run", referenced_name="obj", role="read", module="app.py", resolved_module=None),
+    ])
+    db.replace_all_edges(conn, [  # idempotent: replaces, doesn't accumulate
+        SymbolEdge(caller="run", referenced_name="format_date", role="call", module="app.py", resolved_module="pkg.dates"),
+    ])
+    callers = db.who_references(conn, "pkg.dates", "format_date")
+    assert ("run", "app.py") in callers
 
 
 def test_replace_all_symbols_is_idempotent(tmp_path):

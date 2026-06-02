@@ -9,7 +9,7 @@ import numpy as np
 
 from torsor_helper.models import Symbol
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -36,6 +36,10 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS symbols (
             name TEXT, kind TEXT, signature TEXT, module TEXT,
             line INTEGER, doc TEXT, refs INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS symbol_edges (
+            caller TEXT, referenced_name TEXT, role TEXT,
+            module TEXT, resolved_module TEXT
         );
         """
     )
@@ -190,6 +194,34 @@ def replace_all_symbols(conn, symbols):
         [(s.name, s.kind, s.signature, s.module, s.line, s.doc, s.refs) for s in symbols],
     )
     conn.commit()
+
+
+def replace_all_edges(conn, edges):
+    conn.execute("DELETE FROM symbol_edges")
+    conn.executemany(
+        "INSERT INTO symbol_edges(caller, referenced_name, role, module, resolved_module) VALUES(?,?,?,?,?)",
+        [(e.caller, e.referenced_name, e.role, e.module, e.resolved_module) for e in edges],
+    )
+    conn.commit()
+
+
+def who_references(conn, resolved_module, name):
+    """Return [(caller, module)] of references to `name` resolving to `resolved_module`."""
+    rows = conn.execute(
+        "SELECT DISTINCT caller, module FROM symbol_edges "
+        "WHERE resolved_module=? AND referenced_name=? ORDER BY module, caller",
+        (resolved_module, name),
+    ).fetchall()
+    return [(r["caller"], r["module"]) for r in rows]
+
+
+def module_edges(conn):
+    """Distinct (module, resolved_module) pairs for module-level dependency views."""
+    rows = conn.execute(
+        "SELECT DISTINCT module, resolved_module FROM symbol_edges "
+        "WHERE resolved_module IS NOT NULL ORDER BY module, resolved_module"
+    ).fetchall()
+    return [(r["module"], r["resolved_module"]) for r in rows]
 
 
 def search_symbols(conn, query, limit=10):

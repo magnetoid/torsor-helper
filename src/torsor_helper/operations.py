@@ -152,7 +152,7 @@ def record_handoff(
 
 
 def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None) -> dict:
-    symbols = cartographer.scan_repo(store.paths.root, paths)
+    symbols, edges = cartographer.scan_repo_with_edges(store.paths.root, paths)
     rendered = cartographer.render_map(
         symbols,
         overview_tokens=config.budgets.bootstrap_tokens,
@@ -165,11 +165,12 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None)
     conn = db.connect(store.paths.index_db)
     try:
         db.replace_all_symbols(conn, symbols)
+        db.replace_all_edges(conn, edges)
         reindex(store, conn, _embedder_for(config))
     finally:
         conn.close()
 
-    return {"modules": len({s.module for s in symbols}), "symbols": len(symbols)}
+    return {"modules": len({s.module for s in symbols}), "symbols": len(symbols), "edges": len(edges)}
 
 
 def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:
