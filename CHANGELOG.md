@@ -6,6 +6,12 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### Usability & docs
+- **HTTP/team transport:** `torsor mcp --http [--host --port]` serves over streamable-http (shared/remote use); stdio remains the default.
+- **One-command client setup:** `torsor init --write` writes/merges a project `.mcp.json` (preserving other servers) so Claude Code and other clients auto-detect torsor-helper.
+- **Per-client config:** `torsor init --client <name>` prints exact setup — `claude mcp add` for Claude Code, TOML for Codex, the `mcpServers` block for Cursor/Windsurf/VS Code/Gemini/Cline/Roo/Trae/Kiro/Warp.
+- **Spectacular README:** detailed install matrix (uv tool / pipx / uvx / pip / source), per-client connection guides, full CLI + MCP-tool reference, a typical-loop walkthrough, and a "what's inside" architecture map.
+
 ### Phase 5 — Consolidation
 - `torsor consolidate` (+ `consolidate` MCP tool): a self-improving maintenance pass.
 - Mines journal entries (`## HH:MM · kind`) into curated, deduped per-kind insight notes under `memory/insights/` (`learning`/`decision`/`rejection`/`blocker`) — idempotent, indexed, and surfaced by the Coach as `learning` recs.

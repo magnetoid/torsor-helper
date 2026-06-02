@@ -28,3 +28,10 @@ def test_cursor_snippet_is_valid_json_with_server():
 def test_unknown_client_raises():
     with pytest.raises(KeyError):
         config_snippet("nope", root="/proj")
+
+
+def test_codex_snippet_is_toml():
+    snippet = config_snippet("codex", root="/proj")
+    assert "[mcp_servers.torsor-helper]" in snippet
+    assert 'command = "torsor"' in snippet
+    assert "/proj" in snippet

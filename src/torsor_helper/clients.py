@@ -36,6 +36,14 @@ def config_snippet(client: str, root: str) -> str:
         raise KeyError(client)
     if client == "claude-code":
         return f'claude mcp add torsor-helper -- torsor mcp --root "{root}"'
+    if client == "codex":
+        # Codex CLI uses TOML at ~/.codex/config.toml, not the mcpServers JSON block.
+        return (
+            "# add to ~/.codex/config.toml\n"
+            "[mcp_servers.torsor-helper]\n"
+            'command = "torsor"\n'
+            f'args = ["mcp", "--root", "{root}"]\n'
+        )
     return json.dumps(mcp_servers_block(root), indent=2)
 
 
