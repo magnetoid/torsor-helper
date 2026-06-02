@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re as _re
 
-from torsor_helper import cartographer, db, guard
+from torsor_helper import cartographer, db, export as _export, guard
 from torsor_helper.coach import mining as coach_mining
 from torsor_helper.coach import report as coach_report
 from torsor_helper.coach.state import CoachState
@@ -192,6 +192,10 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
         "symbols": len(symbols),
         "edges": len(edges),
     }
+
+
+def export_project(store: Store, config: TorsorConfig) -> dict:
+    return _export.export_project(store, config)
 
 
 def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:

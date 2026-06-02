@@ -59,6 +59,13 @@ def build_server(root: Path | str) -> FastMCP:
         )
 
     @mcp.tool()
+    def export() -> str:
+        """Export the pyramid to a portable .torsor/llms.txt and a Mermaid module diagram in the map."""
+        result = ops.export_project(store, config)
+        tail = " + module dependency diagram" if result["diagram"] else ""
+        return f"Wrote {result['llms_txt']}{tail}"
+
+    @mcp.tool()
     def get_intent(topic: str = "") -> str:
         """Surface the architecture (patterns, tech, ADRs) and symbols relevant to a topic."""
         return ops.get_intent(store, config, topic or None)

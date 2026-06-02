@@ -70,6 +70,10 @@ class TorsorPaths:
         return self.memory_dir / "insights"
 
     @property
+    def llms_txt(self) -> Path:
+        return self.base / "llms.txt"
+
+    @property
     def index_dir(self) -> Path:
         return self.base / ".index"
 

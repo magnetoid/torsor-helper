@@ -123,6 +123,22 @@ def map(
 
 
 @app.command()
+def export(root: Path = typer.Option(Path("."), help="Project root to export.")) -> None:
+    """Export the pyramid to a portable llms.txt + a Mermaid module diagram."""
+    paths = TorsorPaths(root)
+    if not paths.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(paths)
+    store = Store(paths)
+    result = ops.export_project(store, config)
+    msg = f"Wrote {result['llms_txt']}"
+    if result["diagram"]:
+        msg += " + module dependency diagram in the repo map"
+    typer.echo(msg)
+
+
+@app.command()
 def guard(
     paths: list[str] = typer.Argument(None, help="Files to check (default: git-changed .py files)."),
     root: Path = typer.Option(Path("."), help="Project root."),
