@@ -4,7 +4,35 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
-## [Unreleased]
+## [0.2.0] — Intelligence Release (2026-06-02)
+
+Twelve improvements distilled from deep competitive research (mem0/Zep/Graphiti, Aider/Serena/SCIP, CodeScene, ArchUnit/dependency-cruiser/ast-grep, Anthropic Contextual Retrieval, FlashRank/MMR, llms.txt/DeepWiki) and hardened by an adversarial review (which killed three plausible-but-wrong ideas and sharpened the rest). All dependency-free, deterministic, and offline-testable — every torsor invariant preserved.
+
+#### 🔎 Retrieval got sharper
+- **Contextual breadcrumbs** — the indexer prepends each note's structural breadcrumb (tier · path · title) to its *embedder input* and *FTS title* (the FTS body / displayed snippet stay byte-identical), so a query for situating terms finds the note (cf. Anthropic Contextual Retrieval).
+- **Section-aware snippets** — recall returns the densest matching section (term frequency + heading bonus) instead of the first keyword hit. Shared by the index and keyword paths.
+- **Importance decay** — `hybrid_search` scales each hit by a monotonic access-count multiplier with per-tier floors (charter/architecture never decay; episodic noise sinks to its floor until recalled). Deterministic, no schema change.
+- **MMR diversification + tier-first packing + omitted marker** — near-duplicate notes are demoted via Maximal Marginal Relevance over the stored vectors (no-op when <2 vectors); ties pack toward the stabler tier; a sentinel marks budget/limit truncation.
+
+#### 🗺️ The map gained real edges
+- **AST reference edges + honest ref counts** — `cartographer.extract_edges` records resolved `(caller, name, role, module)` edges (same-module defs + `from x import y` aliases), and `Symbol.refs` is now the count of *real* references, not substring matches in comments/strings. New `symbol_edges` table, `who_references` / `module_edges` (schema v3, additive migration).
+- **Repo-fingerprint skip** — `torsor map` skips the whole scan+reindex when no `*.py` file changed (`--force` overrides); cheap to keep the map fresh.
+- **`torsor export`** — serializes the pyramid to a portable `llms.txt` and injects a GitHub-renderable **Mermaid** module-dependency diagram into the repo map.
+
+#### 🛡️ Guardrails grew up (CI-ready)
+- **`require_import`** (mandatory seams) and **`forbid_layer_import`** (layering: "files matching X may not import Y") rule kinds.
+- **Severity + machine-readable findings** — rules carry `severity` (hint/info/warning/error) + a stable `rule_id`; `torsor guard --json` emits structured findings; `--strict --severity <level>` gates CI by threshold.
+- **Drift baseline / ratchet** — `torsor guard --update-baseline` records existing debt to `.torsor/baseline.json` (committed config, keyed by `(file, rule_kind, target)` counts) so `--strict` fails only on *new* drift. Wired into the MCP `check_drift(new_only=…)` too.
+
+#### 🧭 The Coach prioritizes
+- **Churn × complexity hotspots** — `git log` churn × an AST complexity proxy surfaces the top files to refactor/test first (gracefully empty outside a git repo).
+- **ADR supersedes** — `record_decision(..., supersedes=…)` flips a prior ADR to `status: superseded`; recall and `get_intent` drop superseded decisions so stale intent stops resurfacing.
+
+#### Fixed (from the adversarial review)
+- A partial `torsor map` no longer leaves a stale full-scan fingerprint that could make a later full map falsely skip on an incomplete graph.
+- The budget-omitted recall marker now counts the full relevant pool (not just the limit-capped candidates) and is labelled budget/limit.
+
+## [0.1.0] — Foundation through Coach
 
 ### Usability & docs
 - **HTTP/team transport:** `torsor mcp --http [--host --port]` serves over streamable-http (shared/remote use); stdio remains the default.
