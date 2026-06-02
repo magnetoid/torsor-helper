@@ -63,3 +63,18 @@ def test_no_marker_when_not_truncated(tmp_path):
     store, conn = _indexed(tmp_path)
     res = hybrid_search(conn, HashingEmbedder(dim=128), TorsorConfig(), "architecture context", limit=8, max_tokens=1_000_000)
     assert not any("omitted" in h.title for h in res.hits)
+
+
+def test_omitted_marker_count_reflects_full_pool(tmp_path):
+    import re
+
+    store, conn = _indexed(tmp_path)
+    # tiny limit AND tiny budget so the marker fires and the full pool exceeds limit
+    res = hybrid_search(conn, HashingEmbedder(dim=128), TorsorConfig(), "architecture context", limit=2, max_tokens=1)
+    real = [h for h in res.hits if h.path]
+    assert res.hits[-1].path == ""  # marker present
+    m = re.search(r"… (\d+) more", res.hits[-1].title)
+    assert m
+    # count = full relevant pool minus what was shown (not the limit-capped candidate set)
+    total = conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
+    assert int(m.group(1)) == total - len(real)

@@ -54,3 +54,28 @@ def test_fingerprint_changes_with_content(tmp_path):
     (tmp_path / "app.py").write_text("def run():\n    return 9999\n")
     fp2 = cartographer.repo_fingerprint(tmp_path)
     assert fp1 != fp2
+
+
+def test_fingerprint_changes_on_same_size_edit(tmp_path):
+    # same byte size, different content — relies on nanosecond mtime (modern FS)
+    _project(tmp_path)
+    fp1 = cartographer.repo_fingerprint(tmp_path)
+    (tmp_path / "app.py").write_text("def run():\n    return 2\n")  # same length as 'return 1'
+    assert cartographer.repo_fingerprint(tmp_path) != fp1
+
+
+def test_full_map_after_partial_rescans(tmp_path):
+    # a partial map wipes other modules from the index; a later full map must NOT
+    # falsely skip and serve the incomplete graph (regression for the review finding)
+    store = _project(tmp_path)
+    (tmp_path / "other.py").write_text("def helper():\n    return 2\n")
+    ops.map_repo(store, TorsorConfig())                      # full: app.py + other.py
+    ops.map_repo(store, TorsorConfig(), paths=["app.py"])    # partial: wipes other.py from index
+    after = ops.map_repo(store, TorsorConfig())              # full again must re-scan, not skip
+    assert after["skipped"] is False
+    from torsor_helper import db
+    conn = db.connect(store.paths.index_db)
+    try:
+        assert "other.py" in db.modules(conn)  # restored
+    finally:
+        conn.close()

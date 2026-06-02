@@ -182,7 +182,11 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
         reindex(store, conn, _embedder_for(config))
         if full_scan:
             db.meta_set(conn, "map_fingerprint", fingerprint)
-            conn.commit()
+        else:
+            # A partial map wiped symbols/edges for every other module; clear the
+            # fingerprint so the next full map can't falsely skip on an incomplete graph.
+            db.meta_set(conn, "map_fingerprint", "")
+        conn.commit()
     finally:
         conn.close()
 

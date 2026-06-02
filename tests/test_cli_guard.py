@@ -69,6 +69,23 @@ def test_guard_strict_severity_threshold_met_fails(tmp_path):
     assert result.exit_code == 1  # error ≥ warning threshold → CI failure
 
 
+def test_guard_json_strict_fails_on_new(tmp_path):
+    _seed(tmp_path)
+    (tmp_path / "domain" / "svc.py").write_text("import requests\n")
+    result = runner.invoke(app, ["guard", "--root", str(tmp_path), "--json", "--strict", "domain/svc.py"])
+    assert result.exit_code == 1                      # new drift fails CI
+    assert len(json.loads(result.output)) >= 1        # ...while still emitting JSON findings
+
+
+def test_guard_json_strict_passes_when_baselined(tmp_path):
+    _seed(tmp_path)
+    (tmp_path / "domain" / "svc.py").write_text("import requests\n")
+    runner.invoke(app, ["guard", "--root", str(tmp_path), "--update-baseline", "domain/svc.py"])
+    result = runner.invoke(app, ["guard", "--root", str(tmp_path), "--json", "--strict", "domain/svc.py"])
+    assert result.exit_code == 0                       # grandfathered → CI passes
+    assert len(json.loads(result.output)) == 1         # ...but the violation is still reported in JSON
+
+
 def test_guard_baseline_grandfathers_then_fails_on_new(tmp_path):
     _seed(tmp_path)
     (tmp_path / "domain" / "svc.py").write_text("import requests\n")

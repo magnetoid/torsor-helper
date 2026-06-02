@@ -134,9 +134,11 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
 
     out = list(selected)
     if truncated:
-        dropped = len(candidates) - len(selected)
+        # count against the full relevant pool (not the limit-capped candidates)
+        # so the number isn't misleadingly small
+        dropped = len(hits) - len(selected)
         out.append(RecallHit(
-            path="", title=f"… {dropped} more omitted (budget)",
+            path="", title=f"… {dropped} more omitted (budget/limit)",
             tier=Tier.EPISODIC, score=0.0, snippet="",
         ))
     return RecallResult(query=query, hits=out, total_tokens=used)
