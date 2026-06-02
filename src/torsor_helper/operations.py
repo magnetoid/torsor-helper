@@ -151,26 +151,47 @@ def record_handoff(
     return str(path)
 
 
-def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None) -> dict:
-    symbols, edges = cartographer.scan_repo_with_edges(store.paths.root, paths)
-    rendered = cartographer.render_map(
-        symbols,
-        overview_tokens=config.budgets.bootstrap_tokens,
-        chars_per_token=config.budgets.chars_per_token,
-    )
-    for relpath, (title, body) in rendered.items():
-        target = store.paths.map_dir / relpath
-        store.write_note(target, Frontmatter(type="map", status="derived", tags=["map"]), title, body)
+def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None, force: bool = False) -> dict:
+    full_scan = paths is None
+    fingerprint = cartographer.repo_fingerprint(store.paths.root) if full_scan else None
 
     conn = db.connect(store.paths.index_db)
     try:
+        # Skip the whole scan+render+reindex when the repo is byte-for-byte
+        # unchanged since the last full map (a partial `paths` map never skips).
+        if full_scan and not force and fingerprint == db.meta_get(conn, "map_fingerprint"):
+            return {
+                "skipped": True,
+                "modules": len(db.modules(conn)),
+                "symbols": conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0],
+                "edges": conn.execute("SELECT COUNT(*) FROM symbol_edges").fetchone()[0],
+            }
+
+        symbols, edges = cartographer.scan_repo_with_edges(store.paths.root, paths)
+        rendered = cartographer.render_map(
+            symbols,
+            overview_tokens=config.budgets.bootstrap_tokens,
+            chars_per_token=config.budgets.chars_per_token,
+        )
+        for relpath, (title, body) in rendered.items():
+            target = store.paths.map_dir / relpath
+            store.write_note(target, Frontmatter(type="map", status="derived", tags=["map"]), title, body)
+
         db.replace_all_symbols(conn, symbols)
         db.replace_all_edges(conn, edges)
         reindex(store, conn, _embedder_for(config))
+        if full_scan:
+            db.meta_set(conn, "map_fingerprint", fingerprint)
+            conn.commit()
     finally:
         conn.close()
 
-    return {"modules": len({s.module for s in symbols}), "symbols": len(symbols), "edges": len(edges)}
+    return {
+        "skipped": False,
+        "modules": len({s.module for s in symbols}),
+        "symbols": len(symbols),
+        "edges": len(edges),
+    }
 
 
 def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:

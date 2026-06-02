@@ -101,7 +101,10 @@ def index(
 
 
 @app.command()
-def map(root: Path = typer.Option(Path("."), help="Project root to map.")) -> None:
+def map(
+    root: Path = typer.Option(Path("."), help="Project root to map."),
+    force: bool = typer.Option(False, "--force", help="Re-scan even if no source file changed."),
+) -> None:
     """Generate the repository symbol map under .torsor/map/."""
     paths = TorsorPaths(root)
     if not paths.base.exists():
@@ -109,8 +112,14 @@ def map(root: Path = typer.Option(Path("."), help="Project root to map.")) -> No
         raise typer.Exit(code=1)
     config = load_config(paths)
     store = Store(paths)
-    stats = ops.map_repo(store, config)
-    typer.echo(f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s).")
+    stats = ops.map_repo(store, config, force=force)
+    if stats.get("skipped"):
+        typer.echo(f"Map up to date ({stats['symbols']} symbol(s), {stats['modules']} module(s)) — nothing changed.")
+    else:
+        typer.echo(
+            f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s) "
+            f"({stats['edges']} reference edge(s))."
+        )
 
 
 @app.command()

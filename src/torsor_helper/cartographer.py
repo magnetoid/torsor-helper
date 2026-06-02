@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 from collections import Counter
 from pathlib import Path
 
@@ -157,6 +158,23 @@ def iter_source_files(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> list[Pat
             continue
         out.append(path)
     return out
+
+
+def repo_fingerprint(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> str:
+    """A cheap O(stat) digest of the repo's *.py files (relpath, mtime, size).
+
+    Lets map_repo skip the whole scan+render+reindex when nothing changed. We
+    fingerprint the WHOLE set (all-or-nothing) because refs are cross-file —
+    per-file incrementalism would serve silently-stale ref counts."""
+    root = Path(root)
+    lines: list[str] = []
+    for path in iter_source_files(root, ignore):
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        lines.append(f"{path.relative_to(root).as_posix()}:{st.st_mtime_ns}:{st.st_size}")
+    return hashlib.sha256("\n".join(sorted(lines)).encode("utf-8")).hexdigest()
 
 
 def _scan(root: Path, paths: list[str] | None, ignore: set[str]) -> tuple[list[Symbol], list[SymbolEdge]]:

@@ -48,10 +48,15 @@ def build_server(root: Path | str) -> FastMCP:
         return ops.record_handoff(store, summary, decisions, open_questions, next_steps)
 
     @mcp.tool()
-    def map_repo(paths: list[str] | None = None) -> str:
-        """(Re)generate the repository symbol map and refresh the symbol inventory."""
-        stats = ops.map_repo(store, config, paths)
-        return f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s)."
+    def map_repo(paths: list[str] | None = None, force: bool = False) -> str:
+        """(Re)generate the repository symbol map and refresh the symbol inventory. Skips when unchanged unless force."""
+        stats = ops.map_repo(store, config, paths, force=force)
+        if stats.get("skipped"):
+            return f"Map already up to date ({stats['symbols']} symbol(s), {stats['modules']} module(s))."
+        return (
+            f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s) "
+            f"({stats['edges']} reference edge(s))."
+        )
 
     @mcp.tool()
     def get_intent(topic: str = "") -> str:
