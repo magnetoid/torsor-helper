@@ -85,3 +85,13 @@ class Violation(BaseModel):
     line: int = 0
     message: str
     source: str
+
+
+class Recommendation(BaseModel):
+    kind: str          # thin | stale | unruled | uncharted | reuse | decision | learning
+    severity: str = "suggest"  # info | suggest | important
+    message: str
+    action: str = ""
+    source: str = ""
+    key: str           # stable id for dedup / dismissal / decay
+    score: float = 0.0
