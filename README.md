@@ -7,8 +7,8 @@
 **Stop re-explaining your project every session. Stop the silent architectural drift.**
 One small Python MCP server — works with *every* AI coding tool.
 
-![status](https://img.shields.io/badge/status-Phase%203%20shipped-success)
-![tests](https://img.shields.io/badge/tests-95%20passing-brightgreen)
+![status](https://img.shields.io/badge/status-Phase%204%20shipped-success)
+![tests](https://img.shields.io/badge/tests-110%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
 ![local-first](https://img.shields.io/badge/local--first-no%20API%20key-00a3a3)
@@ -67,7 +67,7 @@ Five Markdown tiers, ordered by **stability** — the broad, stable base loads f
 | `remember(content)` · `update_active(...)` | Self-editing memory the agent maintains as it works | ✅ **shipped** |
 | `handoff()` | Structured end-of-session summary → seeds the *next* session | ✅ **shipped** |
 | `get_intent(topic?)` · `map_repo()` | Surface the architecture/symbols relevant to a change | ✅ **shipped** |
-| `record_decision(...)` · `check_drift(...)` | Record ADRs that become rules; flag changes that violate intent | 🔜 Phase 4 |
+| `record_decision(...)` · `check_drift(...)` | Record ADRs that become rules; flag changes that violate intent | ✅ **shipped** |
 | `recommend(context?)` | **The Coach** — health + best-practice recommendations *(stub today)* | 🔜 Phase 6 |
 
 ### 🩺 The Coach *(designed, Phase 6)*
@@ -104,7 +104,7 @@ It's a standard **MCP stdio server**, so any MCP client works. `torsor init --cl
 - [x] **Phase 1 — Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools *(shipped)*
 - [x] **Phase 2 — Index** · SQLite (FTS5 + wiki-link graph) + local embeddings (NumPy cosine), incremental indexer, hybrid RRF recall, `torsor index` *(shipped)*
 - [x] **Phase 3 — Map** · `ast` cartographer + symbol inventory + `get_intent` / `map_repo` + `torsor map` *(shipped, 95 tests green)*
-- [ ] **Phase 4 — Guard** · ADRs-as-rules + drift detection (`check_drift`)
+- [x] **Phase 4 — Guard** · ADRs carry machine-readable rules; deterministic drift detection (`record_decision` / `check_drift`) + `torsor guard` *(shipped, 110 tests green)*
 - [ ] **Phase 5 — Consolidation** · self-improving memory + team/HTTP mode
 - [ ] **Phase 6 — Coach** · the proactive recommendations advisor
 
@@ -112,7 +112,8 @@ It's a standard **MCP stdio server**, so any MCP client works. `torsor init --cl
 
 **Today:** FastMCP · Typer · Pydantic · PyYAML · SQLite (FTS5) · NumPy · stdlib `ast` cartographer — *local-first, no API key required.* The repo map is Python-only today; multi-language (tree-sitter) is planned.
 **Optional:** `fastembed` (`pip install torsor-helper[embeddings]`) for semantic embeddings.
-**Coming:** multi-language map · drift guard (Phase 4).
+**Drift guard** is deterministic (ADR `rules:` → AST import checks + regex); a sampling-based semantic guard is a planned fast-follow.
+**Coming:** multi-language map · semantic drift guard · Phase 5 (consolidation) · Phase 6 (the Coach).
 
 ## 📚 Design & prior art
 
