@@ -101,12 +101,17 @@ torsor doctor                # sanity-check
 
 torsor-helper is a standard **MCP stdio server** — the command is `torsor mcp`. Point any MCP client at it. `torsor init --client <name>` prints exact, copy-paste config for your tool.
 
-### Claude Code — *zero config*
+### Claude Code — *one command*
+Paste this into the Claude Code terminal — it installs `torsor` and wires up the current project, then reload MCP servers:
 ```bash
-torsor init --write                 # writes/merges ./.mcp.json — Claude Code auto-detects it
-# or, explicitly:
-claude mcp add torsor-helper -- torsor mcp
+curl -fsSL https://raw.githubusercontent.com/magnetoid/torsor-helper/main/scripts/install.sh | bash
 ```
+Prefer not to pipe a script? The equivalent two commands:
+```bash
+uv tool install "git+https://github.com/magnetoid/torsor-helper"   # installs the `torsor` command
+torsor init --write                                                  # scaffold .torsor/ + write ./.mcp.json
+```
+Claude Code auto-detects torsor-helper from `.mcp.json`. To register it for **all** projects instead: `claude mcp add --scope user torsor-helper -- torsor mcp` (or `install.sh --global`).
 
 ### OpenAI Codex CLI
 Add to `~/.codex/config.toml`:
