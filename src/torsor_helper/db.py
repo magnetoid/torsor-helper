@@ -205,3 +205,12 @@ def search_symbols(conn, query, limit=10):
 
 def modules(conn):
     return [r["module"] for r in conn.execute("SELECT DISTINCT module FROM symbols ORDER BY module")]
+
+
+def top_accessed(conn, limit=5):
+    rows = conn.execute(
+        "SELECT path, access_count FROM notes WHERE access_count > 0 "
+        "ORDER BY access_count DESC, path LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [(r["path"], r["access_count"]) for r in rows]
