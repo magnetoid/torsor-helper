@@ -7,6 +7,18 @@ from pydantic import BaseModel, Field
 
 from torsor_helper.paths import TorsorPaths
 
+# Per-tier importance floor: a note's recall score is scaled by a multiplier in
+# [floor, 1.0] that rises with how often it has been recalled. Stable tiers
+# (charter/architecture) have floor 1.0 (never decay); episodic noise can sink
+# to its floor until it proves useful. Keyed by Tier.name for TOML friendliness.
+_DEFAULT_IMPORTANCE_FLOORS = {
+    "CHARTER": 1.0,
+    "ARCHITECTURE": 1.0,
+    "MAP": 0.9,
+    "ACTIVE": 0.85,
+    "EPISODIC": 0.7,
+}
+
 
 class BudgetConfig(BaseModel):
     bootstrap_tokens: int = 2000
@@ -26,6 +38,8 @@ class IndexConfig(BaseModel):
     recency_weight: float = 0.1
     graph_boost: float = 0.1
     auto_index: bool = True
+    mmr_lambda: float = 0.7  # MMR relevance/diversity trade-off (1.0 = pure relevance)
+    importance_floors: dict[str, float] = Field(default_factory=lambda: dict(_DEFAULT_IMPORTANCE_FLOORS))
 
 
 class TorsorConfig(BaseModel):

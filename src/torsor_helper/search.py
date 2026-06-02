@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 
 from torsor_helper import db
@@ -11,6 +12,16 @@ _WORD = re.compile(r"\w+")
 _TIER_WEIGHTS = {
     Tier.CHARTER: 1.5, Tier.ARCHITECTURE: 1.4, Tier.ACTIVE: 1.2, Tier.MAP: 1.1, Tier.EPISODIC: 1.0,
 }
+
+
+def _importance(tier: Tier, access_count: int, floors: dict[str, float]) -> float:
+    """Recall-frequency multiplier in [floor, 1.0]. access_count=0 → floor (no
+    cold-start suppression); rises monotonically toward 1.0 as a note proves
+    useful. Deterministic — a pure function of the stored counter, no clock."""
+    floor = floors.get(tier.name, 1.0)
+    if floor >= 1.0:
+        return 1.0
+    return floor + (1.0 - floor) * (1.0 - 1.0 / (1.0 + math.log1p(max(0, access_count))))
 
 
 def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, type_=None, kind=None) -> RecallResult:
@@ -52,9 +63,10 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
         if kind is not None and row["kind"] != kind:
             continue
         tier = Tier(row["tier"])
+        importance = _importance(tier, row["access_count"] or 0, config.index.importance_floors)
         hits.append(RecallHit(
             path=path, title=row["title"] or path, tier=tier,
-            score=score * _TIER_WEIGHTS.get(tier, 1.0),
+            score=score * _TIER_WEIGHTS.get(tier, 1.0) * importance,
             snippet=best_snippet(db.body_of(conn, path), terms),
         ))
 
