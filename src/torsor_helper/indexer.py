@@ -1,11 +1,25 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from torsor_helper import db
 from torsor_helper.store import Store
 
 
 def _embedder_identity(embedder) -> str:
     return f"{embedder.name}:{getattr(embedder, 'model', '')}:{embedder.dim}"
+
+
+def _breadcrumb(note) -> str:
+    """A structural situating prefix (tier + path tail + title) for retrieval.
+
+    Contextual-retrieval trick (cf. Anthropic): situating terms like the tier
+    name or folder live in a note's *position*, not its prose, so a query for
+    them otherwise misses. We index the breadcrumb (embed input + FTS title)
+    but never write it into the FTS body, so displayed snippets stay pristine.
+    """
+    segments = [s for s in Path(note.path).as_posix().split("/") if s][-3:]
+    return " ".join([note.tier.name.lower(), *segments, note.title])
 
 
 def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
@@ -30,9 +44,12 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
             conn, path, note.content_hash, int(note.tier),
             note.frontmatter.type, kind, note.title, note.frontmatter.updated or "",
         )
-        db.replace_fts(conn, path, note.title, note.body)
+        breadcrumb = _breadcrumb(note)
+        # FTS title carries the breadcrumb (BM25 weights it; body_of never reads
+        # it for snippets); body stays byte-identical to the source.
+        db.replace_fts(conn, path, breadcrumb, note.body)
         db.replace_edges(conn, path, store.extract_wikilinks(note.body))
-        pending.append((path, note.body))
+        pending.append((path, f"{breadcrumb}\n{note.body}"))  # breadcrumb also situates the embedding
 
     if pending:
         vectors = embedder.embed([body for _, body in pending])
