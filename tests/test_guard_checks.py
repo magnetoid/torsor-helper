@@ -43,3 +43,22 @@ def test_check_drift_applies_scoped_rules(tmp_path):
     files = {v.file for v in vs}
     assert "domain/svc.py" in files
     assert "infra.py" not in files
+
+
+def test_forbid_import_flags_from_package_import_submodule():
+    # `from torsor_helper import operations` — the dominant internal-import form.
+    rule = Rule(kind="forbid_import", target="torsor_helper.operations", source="ADR")
+    vs = violations_for_file("guard.py", "from torsor_helper import operations\n", rule)
+    assert len(vs) == 1 and vs[0].line == 1
+
+
+def test_forbid_import_flags_from_package_import_submodule_aliased():
+    rule = Rule(kind="forbid_import", target="torsor_helper.db", source="ADR")
+    vs = violations_for_file("x.py", "from torsor_helper import cartographer, db, guard\n", rule)
+    assert len(vs) == 1  # one violation per statement, flagged via the `db` name
+
+
+def test_forbid_import_module_forbidden_counts_once():
+    rule = Rule(kind="forbid_import", target="requests", source="ADR")
+    vs = violations_for_file("x.py", "from requests import get, post\n", rule)
+    assert len(vs) == 1  # module itself forbidden -> single violation, not per-name

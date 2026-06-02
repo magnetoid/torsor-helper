@@ -50,8 +50,16 @@ def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
                 if hit(alias.name):
                     out.append(_violation(rule, relpath, node.lineno, f"imports forbidden module '{alias.name}'"))
         elif isinstance(node, ast.ImportFrom):
-            if hit(node.module):
-                out.append(_violation(rule, relpath, node.lineno, f"imports from forbidden module '{node.module}'"))
+            base = node.module or ""  # None for relative `from . import x`
+            if hit(base):
+                out.append(_violation(rule, relpath, node.lineno, f"imports from forbidden module '{base}'"))
+                continue
+            # `from pkg import submod` puts the submodule in names, not in `base`.
+            for alias in node.names:
+                full = f"{base}.{alias.name}" if base else alias.name
+                if hit(full):
+                    out.append(_violation(rule, relpath, node.lineno, f"imports forbidden module '{full}'"))
+                    break  # one violation per import statement
     return out
 
 
