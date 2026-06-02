@@ -140,7 +140,20 @@ def _violation(rule: Rule, relpath: str, line: int, default_msg: str) -> Violati
     return Violation(
         rule_kind=rule.kind, target=rule.target, file=relpath, line=line,
         message=rule.message or default_msg, source=rule.source,
+        severity=rule.severity, rule_id=rule.rule_id or f"{rule.kind}:{rule.target}",
     )
+
+
+_SEVERITY_ORDER = {"hint": 0, "info": 1, "warning": 2, "error": 3}
+
+
+def strict_failures(violations, threshold: str | None = None) -> list[Violation]:
+    """Violations that should fail --strict: all of them when threshold is None
+    (back-compatible 'fail on any'), else only those at/above the threshold."""
+    if threshold is None:
+        return list(violations)
+    cutoff = _SEVERITY_ORDER.get(threshold, 0)
+    return [v for v in violations if _SEVERITY_ORDER.get(v.severity, 2) >= cutoff]
 
 
 _CHECKERS = {

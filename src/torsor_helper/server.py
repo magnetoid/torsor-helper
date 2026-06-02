@@ -77,12 +77,16 @@ def build_server(root: Path | str) -> FastMCP:
         return f"Recorded {path}"
 
     @mcp.tool()
-    def check_drift(files: list[str] | None = None) -> str:
-        """Flag changes that violate declared architectural intent (ADR rules). Defaults to git-changed files."""
+    def check_drift(files: list[str] | None = None, as_json: bool = False) -> str:
+        """Flag changes that violate declared architectural intent (ADR rules). Defaults to git-changed files. Set as_json for machine-readable findings."""
         violations = ops.check_drift(store, config, files)
+        if as_json:
+            import json
+
+            return json.dumps([v.model_dump() for v in violations])
         if not violations:
             return "No drift from declared intent detected."
-        lines = [f"- {v.file}:{v.line} — {v.message} (per {v.source})" for v in violations]
+        lines = [f"- {v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})" for v in violations]
         return f"{len(violations)} drift violation(s):\n" + "\n".join(lines)
 
     @mcp.tool()

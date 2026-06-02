@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from typer.testing import CliRunner
@@ -10,12 +11,12 @@ from torsor_helper.store import Store
 runner = CliRunner()
 
 
-def _seed(tmp_path):
+def _seed(tmp_path, severity="warning"):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     store = Store(TorsorPaths(tmp_path), clock=lambda: datetime(2026, 6, 2, 9, 0, 0))
     ops.record_decision(
         store, title="No requests in domain", context="c", decision="d",
-        rules=[{"kind": "forbid_import", "target": "requests", "scope": "domain/*.py"}],
+        rules=[{"kind": "forbid_import", "target": "requests", "scope": "domain/*.py", "severity": severity}],
     )
     (tmp_path / "domain").mkdir()
 
@@ -41,3 +42,28 @@ def test_guard_clean_reports_no_drift(tmp_path):
     result = runner.invoke(app, ["guard", "--root", str(tmp_path), "domain/ok.py"])
     assert result.exit_code == 0
     assert "no drift" in result.output.lower()
+
+
+def test_guard_json_emits_machine_readable(tmp_path):
+    _seed(tmp_path, severity="error")
+    (tmp_path / "domain" / "svc.py").write_text("import requests\n")
+    result = runner.invoke(app, ["guard", "--root", str(tmp_path), "--json", "domain/svc.py"])
+    assert result.exit_code == 0
+    data = json.loads(result.output)
+    assert {"rule_id", "severity", "file", "line", "message", "source"} <= set(data[0])
+    assert data[0]["severity"] == "error"
+    assert data[0]["rule_id"] == "forbid_import:requests"
+
+
+def test_guard_strict_severity_threshold_below_passes(tmp_path):
+    _seed(tmp_path, severity="hint")  # a hint-level rule
+    (tmp_path / "domain" / "svc.py").write_text("import requests\n")
+    result = runner.invoke(app, ["guard", "--root", str(tmp_path), "--strict", "--severity", "warning", "domain/svc.py"])
+    assert result.exit_code == 0  # hint < warning threshold → no CI failure
+
+
+def test_guard_strict_severity_threshold_met_fails(tmp_path):
+    _seed(tmp_path, severity="error")
+    (tmp_path / "domain" / "svc.py").write_text("import requests\n")
+    result = runner.invoke(app, ["guard", "--root", str(tmp_path), "--strict", "--severity", "warning", "domain/svc.py"])
+    assert result.exit_code == 1  # error ≥ warning threshold → CI failure

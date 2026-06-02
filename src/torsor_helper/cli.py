@@ -142,9 +142,15 @@ def export(root: Path = typer.Option(Path("."), help="Project root to export."))
 def guard(
     paths: list[str] = typer.Argument(None, help="Files to check (default: git-changed .py files)."),
     root: Path = typer.Option(Path("."), help="Project root."),
-    strict: bool = typer.Option(False, help="Exit non-zero if any violation is found (for CI)."),
+    strict: bool = typer.Option(False, help="Exit non-zero if a violation fails the threshold (for CI)."),
+    severity: Optional[str] = typer.Option(None, "--severity", help="Strict threshold: hint|info|warning|error. Default: fail on any."),
+    as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON findings."),
 ) -> None:
     """Check changes against declared architectural intent (ADR rules)."""
+    import json
+
+    from torsor_helper import guard as _guard
+
     tp = TorsorPaths(root)
     if not tp.base.exists():
         typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
@@ -152,13 +158,20 @@ def guard(
     config = load_config(tp)
     store = Store(tp)
     violations = ops.check_drift(store, config, paths or None)
+
+    if as_json:
+        typer.echo(json.dumps([v.model_dump() for v in violations]))
+        if strict and _guard.strict_failures(violations, severity):
+            raise typer.Exit(code=1)
+        return
+
     if not violations:
         typer.echo("No drift from declared intent detected.")
         return
     for v in violations:
-        typer.echo(f"{v.file}:{v.line} — {v.message} (per {v.source})")
+        typer.echo(f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})")
     typer.echo(f"\n{len(violations)} drift violation(s).")
-    if strict:
+    if strict and _guard.strict_failures(violations, severity):
         raise typer.Exit(code=1)
 
 

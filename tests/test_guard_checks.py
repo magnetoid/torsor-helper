@@ -64,6 +64,26 @@ def test_forbid_import_module_forbidden_counts_once():
     assert len(vs) == 1  # module itself forbidden -> single violation, not per-name
 
 
+def test_violation_carries_severity_and_rule_id():
+    rule = Rule(kind="forbid_import", target="requests", severity="error", source="ADR 2")
+    vs = violations_for_file("app.py", "import requests\n", rule)
+    assert vs[0].severity == "error"
+    assert vs[0].rule_id == "forbid_import:requests"  # default id from kind:target
+
+
+def test_strict_failures_threshold():
+    from torsor_helper.guard import strict_failures
+    from torsor_helper.models import Violation
+
+    vs = [
+        Violation(rule_kind="forbid_import", target="a", file="x.py", message="m", source="s", severity="hint"),
+        Violation(rule_kind="forbid_import", target="b", file="y.py", message="m", source="s", severity="error"),
+    ]
+    assert len(strict_failures(vs, None)) == 2          # no threshold → any violation fails
+    assert len(strict_failures(vs, "warning")) == 1     # only the error clears the bar
+    assert len(strict_failures(vs, "hint")) == 2
+
+
 def test_require_import_flags_missing_seam():
     rule = Rule(kind="require_import", target="app.auth", scope="handlers/*.py", source="ADR")
     vs = violations_for_file("handlers/x.py", "import os\n", rule)

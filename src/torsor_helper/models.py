@@ -85,6 +85,8 @@ class Rule(BaseModel):
     scope: str = "*.py"  # fnmatch glob over the posix path, relative to the repo root
     message: str = ""
     source: str = ""     # ADR/title that declared this rule (for citation)
+    severity: str = "warning"  # hint | info | warning | error
+    rule_id: str = ""    # stable id; defaults to f"{kind}:{target}"
 
 
 class Violation(BaseModel):
@@ -94,6 +96,8 @@ class Violation(BaseModel):
     line: int = 0
     message: str
     source: str
+    severity: str = "warning"
+    rule_id: str = ""
 
 
 class Recommendation(BaseModel):
