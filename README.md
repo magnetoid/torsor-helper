@@ -64,29 +64,28 @@ Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, st
 
 ## 📦 Install
 
-`torsor-helper` is a small, local-first Python package (Python ≥ 3.11). Pick one:
+`torsor-helper` is a small, local-first Python package (Python ≥ 3.11).
 
+**Available now — install the global `torsor` command straight from GitHub (no PyPI needed):**
 ```bash
-# Recommended — installs the `torsor` command globally (isolated):
-uv tool install torsor-helper        # or:  pipx install torsor-helper
-
-# Run without installing (ephemeral):
-uvx torsor-helper --help
-
-# Plain pip, into a venv:
-pip install torsor-helper
-
-# Optional: real semantic embeddings (downloads a small local model; otherwise a
-# deterministic hashing fallback keeps everything offline and working):
-uv tool install "torsor-helper[embeddings]"
+uv tool install "git+https://github.com/magnetoid/torsor-helper"
+# or:  pipx install "git+https://github.com/magnetoid/torsor-helper"
+# with semantic embeddings:  uv tool install "torsor-helper[embeddings] @ git+https://github.com/magnetoid/torsor-helper"
 ```
 
-> **From source (today, pre-PyPI):**
-> ```bash
-> git clone https://github.com/magnetoid/torsor-helper && cd torsor-helper
-> uv run torsor --help        # uv resolves the env from pyproject automatically
-> ```
-> The package is release-ready (MIT, clean wheel/sdist, CI + a secret-less Trusted-Publishing workflow). Publishing is one GitHub Release away — see [PUBLISHING.md](PUBLISHING.md).
+**Once published to PyPI** (a GitHub Release away — see [PUBLISHING.md](PUBLISHING.md)):
+```bash
+uv tool install torsor-helper     # or: pipx install torsor-helper / pip install torsor-helper
+uvx torsor-helper --help          # ephemeral, no install
+```
+
+**From a local clone (for development):**
+```bash
+git clone https://github.com/magnetoid/torsor-helper && cd torsor-helper
+uv run torsor --help              # uv resolves the env from pyproject automatically
+```
+
+> Without the `[embeddings]` extra, recall uses a deterministic offline hashing fallback — everything works with no model download and no API key.
 
 ## 🚀 Quick start
 
