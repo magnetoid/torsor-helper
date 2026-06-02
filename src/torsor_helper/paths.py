@@ -74,6 +74,12 @@ class TorsorPaths:
         return self.base / "llms.txt"
 
     @property
+    def baseline_file(self) -> Path:
+        # Committed, reviewable drift baseline — a sibling of the charter, NOT
+        # under the disposable .index/ (a baseline is source-of-truth config).
+        return self.base / "baseline.json"
+
+    @property
     def index_dir(self) -> Path:
         return self.base / ".index"
 

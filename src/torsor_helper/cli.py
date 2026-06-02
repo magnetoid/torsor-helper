@@ -142,13 +142,15 @@ def export(root: Path = typer.Option(Path("."), help="Project root to export."))
 def guard(
     paths: list[str] = typer.Argument(None, help="Files to check (default: git-changed .py files)."),
     root: Path = typer.Option(Path("."), help="Project root."),
-    strict: bool = typer.Option(False, help="Exit non-zero if a violation fails the threshold (for CI)."),
+    strict: bool = typer.Option(False, help="Exit non-zero if NEW drift fails the threshold (for CI)."),
     severity: Optional[str] = typer.Option(None, "--severity", help="Strict threshold: hint|info|warning|error. Default: fail on any."),
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON findings."),
+    update_baseline: bool = typer.Option(False, "--update-baseline", help="Record current violations as the accepted baseline (grandfather existing debt)."),
 ) -> None:
     """Check changes against declared architectural intent (ADR rules)."""
     import json
 
+    from torsor_helper import baseline as _baseline
     from torsor_helper import guard as _guard
 
     tp = TorsorPaths(root)
@@ -159,9 +161,16 @@ def guard(
     store = Store(tp)
     violations = ops.check_drift(store, config, paths or None)
 
+    if update_baseline:
+        _baseline.save(tp.baseline_file, violations)
+        typer.echo(f"Baselined {len(violations)} violation(s) → {tp.baseline_file}")
+        return
+
+    new = _baseline.new_violations(violations, _baseline.load(tp.baseline_file))
+
     if as_json:
         typer.echo(json.dumps([v.model_dump() for v in violations]))
-        if strict and _guard.strict_failures(violations, severity):
+        if strict and _guard.strict_failures(new, severity):
             raise typer.Exit(code=1)
         return
 
@@ -170,8 +179,10 @@ def guard(
         return
     for v in violations:
         typer.echo(f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})")
-    typer.echo(f"\n{len(violations)} drift violation(s).")
-    if strict and _guard.strict_failures(violations, severity):
+    baselined = len(violations) - len(new)
+    tail = f" ({baselined} baselined)" if baselined else ""
+    typer.echo(f"\n{len(violations)} drift violation(s){tail}.")
+    if strict and _guard.strict_failures(new, severity):
         raise typer.Exit(code=1)
 
 

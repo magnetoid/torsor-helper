@@ -67,3 +67,20 @@ def test_guard_strict_severity_threshold_met_fails(tmp_path):
     (tmp_path / "domain" / "svc.py").write_text("import requests\n")
     result = runner.invoke(app, ["guard", "--root", str(tmp_path), "--strict", "--severity", "warning", "domain/svc.py"])
     assert result.exit_code == 1  # error ≥ warning threshold → CI failure
+
+
+def test_guard_baseline_grandfathers_then_fails_on_new(tmp_path):
+    _seed(tmp_path)
+    (tmp_path / "domain" / "svc.py").write_text("import requests\n")
+    # record the existing violation as the accepted baseline
+    r1 = runner.invoke(app, ["guard", "--root", str(tmp_path), "--update-baseline", "domain/svc.py"])
+    assert r1.exit_code == 0
+    assert TorsorPaths(tmp_path).baseline_file.exists()
+    # strict now passes — the pre-existing debt is grandfathered
+    r2 = runner.invoke(app, ["guard", "--root", str(tmp_path), "--strict", "domain/svc.py"])
+    assert r2.exit_code == 0
+    assert "baselined" in r2.output.lower()
+    # a NEW violation in another file fails strict
+    (tmp_path / "domain" / "other.py").write_text("import requests\n")
+    r3 = runner.invoke(app, ["guard", "--root", str(tmp_path), "--strict", "domain/svc.py", "domain/other.py"])
+    assert r3.exit_code == 1

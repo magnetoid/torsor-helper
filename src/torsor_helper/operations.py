@@ -281,6 +281,14 @@ def check_drift(store, config, files=None) -> list:
     return guard.check_drift(store, files)
 
 
+def new_drift(store, config, files=None) -> list:
+    """Drift beyond the committed baseline — the genuinely-new violations."""
+    from torsor_helper import baseline as _baseline
+
+    violations = check_drift(store, config, files)
+    return _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))
+
+
 def recommend(store, config, context=None, limit=8):
     conn = _open_index(store, config)
     embedder = _embedder_for(config) if conn is not None else None
