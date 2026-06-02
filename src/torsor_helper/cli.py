@@ -21,6 +21,7 @@ app = typer.Typer(help="torsor-helper: persistent memory + architectural intent 
 def init(
     root: Path = typer.Option(Path("."), help="Project root to scaffold .torsor/ in."),
     client: Optional[str] = typer.Option(None, help=f"Print MCP config for: {', '.join(SUPPORTED_CLIENTS)}"),
+    write: bool = typer.Option(False, "--write", help="Write/merge a project .mcp.json so clients (Claude Code, Cursor, ...) auto-detect torsor-helper."),
     force: bool = typer.Option(False, help="Overwrite existing seed files."),
 ) -> None:
     """Scaffold the .torsor/ pyramid and write torsor.toml."""
@@ -33,6 +34,11 @@ def init(
     if not paths.config_file.exists() or force:
         save_config(paths, TorsorConfig())
     typer.echo(f"Initialized torsor-helper at {paths.base}")
+    if write:
+        from torsor_helper.clients import write_mcp_json
+
+        target = write_mcp_json(root, str(root.resolve()))
+        typer.echo(f"Wrote {target} — MCP clients that read .mcp.json (e.g. Claude Code) will auto-detect torsor-helper.")
     if client:
         typer.echo(f"\n# MCP config for {SUPPORTED_CLIENTS[client]}:\n")
         typer.echo(config_snippet(client, root=str(root.resolve())))
