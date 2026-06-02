@@ -3,6 +3,7 @@ from __future__ import annotations
 import re as _re
 
 from torsor_helper import cartographer, db, guard
+from torsor_helper.coach import mining as coach_mining
 from torsor_helper.coach import report as coach_report
 from torsor_helper.coach.state import CoachState
 from torsor_helper.budget import estimate_tokens, truncate_to_tokens
@@ -262,3 +263,18 @@ def dismiss_recommendation(store, key) -> None:
     state = CoachState(store.paths.index_dir / "coach_state.json")
     state.dismiss(key)
     state.save()
+
+
+def consolidate(store, config) -> dict:
+    written = coach_mining.mine_insights(store)
+    duplicates = coach_mining.find_duplicate_entries(store)
+
+    indexed = 0
+    conn = _open_index(store, config)
+    if conn is not None:
+        try:
+            indexed = reindex(store, conn, _embedder_for(config))["indexed"]
+        finally:
+            conn.close()
+
+    return {"insights": len(written), "duplicates": len(duplicates), "indexed": indexed}
