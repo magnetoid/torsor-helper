@@ -3,6 +3,8 @@ from __future__ import annotations
 import re as _re
 
 from torsor_helper import cartographer, db, guard
+from torsor_helper.coach import report as coach_report
+from torsor_helper.coach.state import CoachState
 from torsor_helper.budget import estimate_tokens, truncate_to_tokens
 from torsor_helper.config import TorsorConfig
 from torsor_helper.embeddings import get_embedder
@@ -244,3 +246,19 @@ def check_drift(store, config, files=None) -> list:
     if files is None:
         files = _git_changed(store.paths.root)
     return guard.check_drift(store, files)
+
+
+def recommend(store, config, context=None, limit=8):
+    conn = _open_index(store, config)
+    embedder = _embedder_for(config) if conn is not None else None
+    try:
+        return coach_report.assemble(store, config, context=context, limit=limit, conn=conn, embedder=embedder)
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def dismiss_recommendation(store, key) -> None:
+    state = CoachState(store.paths.index_dir / "coach_state.json")
+    state.dismiss(key)
+    state.save()
