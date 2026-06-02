@@ -126,5 +126,31 @@ def guard(
         raise typer.Exit(code=1)
 
 
+@app.command()
+def coach(
+    context: list[str] = typer.Argument(None, help="Optional context for best-practice hints (e.g. what you're building)."),
+    root: Path = typer.Option(Path("."), help="Project root."),
+    dismiss: str = typer.Option(None, help="Dismiss a recommendation by its key."),
+) -> None:
+    """Show health + best-practice recommendations (the Coach). Advisory; never blocks."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    if dismiss:
+        ops.dismiss_recommendation(store, dismiss)
+        typer.echo(f"Dismissed {dismiss}.")
+        return
+    recs = ops.recommend(store, config, " ".join(context) if context else None)
+    if not recs:
+        typer.echo("No recommendations right now — the project looks healthy.")
+        return
+    for r in recs:
+        tail = f" -> {r.action}" if r.action else ""
+        typer.echo(f"[{r.severity}/{r.kind}] {r.message}{tail}  (key: {r.key})")
+
+
 def main() -> None:
     app()

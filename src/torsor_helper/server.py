@@ -74,12 +74,16 @@ def build_server(root: Path | str) -> FastMCP:
         return f"{len(violations)} drift violation(s):\n" + "\n".join(lines)
 
     @mcp.tool()
-    def recommend(context: str = "", limit: int = 5) -> str:
-        """Health + best-practice recommendations (the Coach). Arrives in Phase 6."""
-        return (
-            "The Coach (recommendations) lands in Phase 6. Today, use `bootstrap_session` "
-            "for context and `recall` to find prior decisions/learnings."
-        )
+    def recommend(context: str = "", limit: int = 8) -> str:
+        """Health + best-practice recommendations (the Coach). Pass a context (e.g. what you're about to build) for reuse hints."""
+        recs = ops.recommend(store, config, context or None, limit=limit)
+        if not recs:
+            return "No recommendations right now — the project looks healthy."
+        lines = []
+        for r in recs:
+            tail = f" → {r.action}" if r.action else ""
+            lines.append(f"- [{r.severity}/{r.kind}] {r.message}{tail}  (key: {r.key})")
+        return "\n".join(lines)
 
     @mcp.resource("torsor://charter")
     def charter_resource() -> str:
