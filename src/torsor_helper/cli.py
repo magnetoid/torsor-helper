@@ -39,11 +39,16 @@ def init(
 
 
 @app.command()
-def mcp(root: Path = typer.Option(Path("."), help="Project root containing .torsor/.")) -> None:
-    """Run the torsor-helper MCP server over stdio."""
+def mcp(
+    root: Path = typer.Option(Path("."), help="Project root containing .torsor/."),
+    http: bool = typer.Option(False, "--http", help="Serve over HTTP (streamable-http) instead of stdio — for shared/remote/team use."),
+    host: str = typer.Option("127.0.0.1", help="Host to bind when --http."),
+    port: int = typer.Option(8000, help="Port to bind when --http."),
+) -> None:
+    """Run the torsor-helper MCP server (stdio by default; --http for a shared service)."""
     from torsor_helper.server import run
 
-    run(root)
+    run(root, transport="streamable-http" if http else "stdio", host=host, port=port)
 
 
 @app.command()

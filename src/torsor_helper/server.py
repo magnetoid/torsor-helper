@@ -109,5 +109,11 @@ def build_server(root: Path | str) -> FastMCP:
     return mcp
 
 
-def run(root: Path | str) -> None:
-    build_server(root).run()
+def run(root: Path | str, transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Run the MCP server. transport "stdio" (default) for a local agent, or
+    "streamable-http" to serve over HTTP (shared/team/remote use)."""
+    mcp = build_server(root)
+    if transport != "stdio":
+        mcp.settings.host = host
+        mcp.settings.port = port
+    mcp.run(transport=transport)
