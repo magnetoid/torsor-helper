@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 import re
 
+import numpy as np
+
 from torsor_helper import db
 from torsor_helper.budget import estimate_tokens
 from torsor_helper.models import RecallHit, RecallResult, Tier
@@ -22,6 +24,40 @@ def _importance(tier: Tier, access_count: int, floors: dict[str, float]) -> floa
     if floor >= 1.0:
         return 1.0
     return floor + (1.0 - floor) * (1.0 - 1.0 / (1.0 + math.log1p(max(0, access_count))))
+
+
+def _cos(a, b) -> float:
+    na = float(np.linalg.norm(a))
+    nb = float(np.linalg.norm(b))
+    if na == 0.0 or nb == 0.0 or a.shape != b.shape:
+        return 0.0
+    return float(np.dot(a, b) / (na * nb))
+
+
+def _mmr_order(hits, vec_by_path, lam: float):
+    """Reorder relevance-sorted hits by Maximal Marginal Relevance so near-
+    duplicate notes don't crowd out distinct ones. mmr = λ·rel − (1−λ)·maxSim.
+    No-ops (returns the input order) when fewer than 2 hits have vectors, so the
+    keyword/hashing paths are untouched. Deterministic."""
+    if sum(1 for h in hits if h.path in vec_by_path) < 2:
+        return list(hits)
+    max_score = max((h.score for h in hits), default=1.0) or 1.0
+    remaining = list(hits)
+    selected = [remaining.pop(0)]  # seed with the most relevant
+    while remaining:
+        best_i, best_val = 0, None
+        for i, h in enumerate(remaining):
+            rel = h.score / max_score
+            v = vec_by_path.get(h.path)
+            sim = 0.0
+            if v is not None:
+                sims = [_cos(v, vec_by_path[s.path]) for s in selected if s.path in vec_by_path]
+                sim = max(sims) if sims else 0.0
+            val = lam * rel - (1.0 - lam) * sim
+            if best_val is None or val > best_val:
+                best_val, best_i = val, i
+        selected.append(remaining.pop(best_i))
+    return selected
 
 
 def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, type_=None, kind=None) -> RecallResult:
@@ -70,17 +106,34 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
             snippet=best_snippet(db.body_of(conn, path), terms),
         ))
 
-    hits.sort(key=lambda h: (-h.score, h.path))
+    # Score desc; ties broken toward the more stable tier (lower value), then path,
+    # so scarce budget buys durable intent first.
+    hits.sort(key=lambda h: (-h.score, h.tier.value, h.path))
 
+    # Diversify: demote near-duplicate notes via MMR over the stored vectors.
+    vec_by_path = db.get_vectors(conn, [h.path for h in hits])
+    ordered = _mmr_order(hits, vec_by_path, config.index.mmr_lambda)
+
+    candidates = ordered[:limit]
     selected: list[RecallHit] = []
     used = 0
+    truncated = False
     cpt = config.budgets.chars_per_token
-    for hit in hits[:limit]:
+    for hit in candidates:
         cost = estimate_tokens(hit.snippet, cpt)
         if selected and used + cost > max_tokens:
+            truncated = True
             break
         selected.append(hit)
         used += cost
 
     db.bump_access(conn, [h.path for h in selected])
-    return RecallResult(query=query, hits=selected, total_tokens=used)
+
+    out = list(selected)
+    if truncated:
+        dropped = len(candidates) - len(selected)
+        out.append(RecallHit(
+            path="", title=f"… {dropped} more omitted (budget)",
+            tier=Tier.EPISODIC, score=0.0, snippet="",
+        ))
+    return RecallResult(query=query, hits=out, total_tokens=used)

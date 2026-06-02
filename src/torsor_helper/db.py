@@ -134,6 +134,16 @@ def delete_note(conn, path):
     conn.execute("DELETE FROM fts WHERE path=?", (path,))
 
 
+def get_vectors(conn, paths):
+    """Return {path: np.ndarray} for the given paths that have a stored vector."""
+    out = {}
+    for p in paths:
+        row = conn.execute("SELECT embedding FROM vectors WHERE path=?", (p,)).fetchone()
+        if row is not None:
+            out[p] = unpack(row["embedding"])
+    return out
+
+
 def cosine_search(conn, qvec, limit):
     rows = conn.execute("SELECT path, embedding FROM vectors").fetchall()
     if not rows:

@@ -26,6 +26,8 @@ def best_practice_recs(store: Store, config, context, conn, embedder, limit: int
     # 2. Relevant prior decisions / learnings from memory.
     result = hybrid_search(conn, embedder, config, context, limit=limit)
     for hit in result.hits:
+        if not hit.path:  # skip the budget-omitted sentinel marker
+            continue
         kind = _TIER_KIND.get(hit.tier)
         if kind is None:
             continue
