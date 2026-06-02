@@ -8,7 +8,7 @@
 One small Python MCP server — works with *every* AI coding tool.
 
 ![status](https://img.shields.io/badge/status-Phase%204%20shipped-success)
-![tests](https://img.shields.io/badge/tests-110%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-113%20passing-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
 ![local-first](https://img.shields.io/badge/local--first-no%20API%20key-00a3a3)
@@ -104,7 +104,7 @@ It's a standard **MCP stdio server**, so any MCP client works. `torsor init --cl
 - [x] **Phase 1 — Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools *(shipped)*
 - [x] **Phase 2 — Index** · SQLite (FTS5 + wiki-link graph) + local embeddings (NumPy cosine), incremental indexer, hybrid RRF recall, `torsor index` *(shipped)*
 - [x] **Phase 3 — Map** · `ast` cartographer + symbol inventory + `get_intent` / `map_repo` + `torsor map` *(shipped, 95 tests green)*
-- [x] **Phase 4 — Guard** · ADRs carry machine-readable rules; deterministic drift detection (`record_decision` / `check_drift`) + `torsor guard` *(shipped, 110 tests green)*
+- [x] **Phase 4 — Guard** · ADRs carry machine-readable rules; deterministic drift detection (`record_decision` / `check_drift`) + `torsor guard` *(shipped, 113 tests green)*
 - [ ] **Phase 5 — Consolidation** · self-improving memory + team/HTTP mode
 - [ ] **Phase 6 — Coach** · the proactive recommendations advisor
 
