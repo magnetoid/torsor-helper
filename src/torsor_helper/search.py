@@ -60,7 +60,7 @@ def _mmr_order(hits, vec_by_path, lam: float):
     return selected
 
 
-def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, type_=None, kind=None) -> RecallResult:
+def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, type_=None, kind=None, include_superseded=False) -> RecallResult:
     terms = [t for t in _WORD.findall(query.lower()) if t]
     if not terms:
         return RecallResult(query=query, hits=[], total_tokens=0)
@@ -97,6 +97,9 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
         if type_ is not None and row["type"] != type_:
             continue
         if kind is not None and row["kind"] != kind:
+            continue
+        # superseded decisions are stale intent — drop them unless explicitly asked
+        if not include_superseded and row["type"] == "decision" and row["status"] == "superseded":
             continue
         tier = Tier(row["tier"])
         importance = _importance(tier, row["access_count"] or 0, config.index.importance_floors)

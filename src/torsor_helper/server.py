@@ -71,9 +71,9 @@ def build_server(root: Path | str) -> FastMCP:
         return ops.get_intent(store, config, topic or None)
 
     @mcp.tool()
-    def record_decision(title: str, context: str, decision: str, consequences: str = "", rules: list[dict] | None = None) -> str:
-        """Record an Architecture Decision Record. Optional `rules` become drift-guard rules."""
-        path = ops.record_decision(store, title, context, decision, consequences, rules)
+    def record_decision(title: str, context: str, decision: str, consequences: str = "", rules: list[dict] | None = None, supersedes: str | None = None) -> str:
+        """Record an Architecture Decision Record. Optional `rules` become drift-guard rules; `supersedes` (an ADR id/slug) marks a prior ADR superseded."""
+        path = ops.record_decision(store, title, context, decision, consequences, rules, supersedes)
         return f"Recorded {path}"
 
     @mcp.tool()

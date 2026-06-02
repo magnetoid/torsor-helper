@@ -27,7 +27,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS notes (
             path TEXT PRIMARY KEY, content_hash TEXT, tier INTEGER,
             type TEXT, kind TEXT, title TEXT, updated TEXT,
-            access_count INTEGER NOT NULL DEFAULT 0
+            access_count INTEGER NOT NULL DEFAULT 0, status TEXT
         );
         CREATE TABLE IF NOT EXISTS vectors (path TEXT PRIMARY KEY, dim INTEGER, embedding BLOB);
         CREATE TABLE IF NOT EXISTS edges (src TEXT, target_slug TEXT, target_path TEXT);
@@ -43,9 +43,13 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    # Additive column migration for DBs created before `status` existed
+    # (ADD COLUMN is idempotent-guarded; a fresh DB already has it via CREATE).
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(notes)")}
+    if "status" not in cols:
+        conn.execute("ALTER TABLE notes ADD COLUMN status TEXT")
     # Always stamp the current version: tables are created additively via
-    # CREATE TABLE IF NOT EXISTS, so an upgraded DB must report the live version
-    # (a Phase-4 migration may key off this).
+    # CREATE TABLE IF NOT EXISTS, so an upgraded DB must report the live version.
     meta_set(conn, "schema_version", str(SCHEMA_VERSION))
     conn.commit()
 
@@ -74,14 +78,14 @@ def note_hashes(conn) -> dict[str, str]:
     return {r["path"]: r["content_hash"] for r in conn.execute("SELECT path, content_hash FROM notes")}
 
 
-def upsert_note(conn, path, content_hash, tier, type_, kind, title, updated):
+def upsert_note(conn, path, content_hash, tier, type_, kind, title, updated, status="active"):
     conn.execute(
-        """INSERT INTO notes(path, content_hash, tier, type, kind, title, updated)
-           VALUES(?,?,?,?,?,?,?)
+        """INSERT INTO notes(path, content_hash, tier, type, kind, title, updated, status)
+           VALUES(?,?,?,?,?,?,?,?)
            ON CONFLICT(path) DO UPDATE SET
              content_hash=excluded.content_hash, tier=excluded.tier, type=excluded.type,
-             kind=excluded.kind, title=excluded.title, updated=excluded.updated""",
-        (path, content_hash, int(tier), type_, kind, title, updated),
+             kind=excluded.kind, title=excluded.title, updated=excluded.updated, status=excluded.status""",
+        (path, content_hash, int(tier), type_, kind, title, updated, status),
     )
 
 

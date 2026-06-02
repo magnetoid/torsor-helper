@@ -43,6 +43,7 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
         db.upsert_note(
             conn, path, note.content_hash, int(note.tier),
             note.frontmatter.type, kind, note.title, note.frontmatter.updated or "",
+            note.frontmatter.status,
         )
         breadcrumb = _breadcrumb(note)
         # FTS title carries the breadcrumb (BM25 weights it; body_of never reads
