@@ -4,6 +4,7 @@ import re
 
 from torsor_helper.budget import estimate_tokens
 from torsor_helper.models import Note, RecallHit, RecallResult, Tier
+from torsor_helper.snippets import best_snippet
 
 _WORD = re.compile(r"\w+")
 
@@ -14,15 +15,6 @@ _DEFAULT_TIER_WEIGHTS = {
     Tier.MAP: 1.1,
     Tier.EPISODIC: 1.0,
 }
-
-
-def _snippet(body: str, terms: list[str], width: int = 240) -> str:
-    lowered = body.lower()
-    pos = min((lowered.find(t) for t in terms if t in lowered), default=-1)
-    if pos < 0:
-        return body[:width].strip()
-    start = max(0, pos - width // 4)
-    return body[start : start + width].strip()
 
 
 def keyword_recall(
@@ -51,7 +43,7 @@ def keyword_recall(
                 title=note.title,
                 tier=note.tier,
                 score=score,
-                snippet=_snippet(note.body, terms),
+                snippet=best_snippet(note.body, terms),
             )
         )
 

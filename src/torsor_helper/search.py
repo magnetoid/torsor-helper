@@ -5,20 +5,12 @@ import re
 from torsor_helper import db
 from torsor_helper.budget import estimate_tokens
 from torsor_helper.models import RecallHit, RecallResult, Tier
+from torsor_helper.snippets import best_snippet
 
 _WORD = re.compile(r"\w+")
 _TIER_WEIGHTS = {
     Tier.CHARTER: 1.5, Tier.ARCHITECTURE: 1.4, Tier.ACTIVE: 1.2, Tier.MAP: 1.1, Tier.EPISODIC: 1.0,
 }
-
-
-def _snippet(body: str, terms: list[str], width: int = 240) -> str:
-    low = body.lower()
-    pos = min((low.find(t) for t in terms if t in low), default=-1)
-    if pos < 0:
-        return body[:width].strip()
-    start = max(0, pos - width // 4)
-    return body[start : start + width].strip()
 
 
 def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, type_=None, kind=None) -> RecallResult:
@@ -63,7 +55,7 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
         hits.append(RecallHit(
             path=path, title=row["title"] or path, tier=tier,
             score=score * _TIER_WEIGHTS.get(tier, 1.0),
-            snippet=_snippet(db.body_of(conn, path), terms),
+            snippet=best_snippet(db.body_of(conn, path), terms),
         ))
 
     hits.sort(key=lambda h: (-h.score, h.path))
