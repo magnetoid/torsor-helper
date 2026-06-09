@@ -386,10 +386,14 @@ def consolidate(store, config) -> dict:
     # consolidate is a maintenance pass: index once, directly, so the `indexed`
     # count reflects the freshly-mined insights. (Using _open_index here would
     # reindex internally first, leaving this explicit call to report 0.)
+    from torsor_helper.coach import trend as coach_trend
+
     conn = db.connect(store.paths.index_db)
     try:
         indexed = reindex(store, conn, _embedder_for(config))["indexed"]
         top_accessed = db.top_accessed(conn, limit=3)
+        # Snapshot complexity so the Coach can report regressions *since this maintenance pass*.
+        db.save_complexity_snapshot(conn, coach_trend.current_complexity(store.paths.root))
     finally:
         conn.close()
 

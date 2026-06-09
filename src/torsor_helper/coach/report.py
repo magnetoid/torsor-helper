@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from torsor_helper import cartographer, db, deps
-from torsor_helper.coach import coupling, health, hotspots, recommender
+from torsor_helper.coach import coupling, health, hotspots, recommender, trend
 from torsor_helper.coach.state import CoachState
 from torsor_helper.models import Recommendation
 from torsor_helper.store import Store
@@ -35,6 +35,7 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
         recs += hotspots.find_hotspots(store.paths.root)
         recs += _phantom_dep_recs(store)
         recs += coupling.find_coupling_recs(store.paths.root, conn)
+        recs += trend.find_regressions(store.paths.root, conn)
     if context:
         recs += recommender.best_practice_recs(store, config, context, conn=conn, embedder=embedder, limit=limit)
 

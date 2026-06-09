@@ -9,7 +9,7 @@ import numpy as np
 
 from torsor_helper.models import Symbol
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -40,6 +40,9 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS symbol_edges (
             caller TEXT, referenced_name TEXT, role TEXT,
             module TEXT, resolved_module TEXT
+        );
+        CREATE TABLE IF NOT EXISTS complexity_snapshot (
+            file TEXT PRIMARY KEY, complexity INTEGER
         );
         """
     )
@@ -251,6 +254,20 @@ def search_symbols(conn, query, limit=10):
 
 def modules(conn):
     return [r["module"] for r in conn.execute("SELECT DISTINCT module FROM symbols ORDER BY module")]
+
+
+def save_complexity_snapshot(conn, mapping):
+    """Replace the stored per-file complexity baseline (for trend detection)."""
+    conn.execute("DELETE FROM complexity_snapshot")
+    conn.executemany(
+        "INSERT INTO complexity_snapshot(file, complexity) VALUES(?,?)",
+        [(f, int(c)) for f, c in mapping.items()],
+    )
+    conn.commit()
+
+
+def load_complexity_snapshot(conn) -> dict:
+    return {r["file"]: r["complexity"] for r in conn.execute("SELECT file, complexity FROM complexity_snapshot")}
 
 
 def top_accessed(conn, limit=5):

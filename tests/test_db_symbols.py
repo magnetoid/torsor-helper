@@ -18,7 +18,8 @@ def test_schema_version_and_symbol_tables_exist(tmp_path):
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "symbols" in tables
     assert "symbol_edges" in tables
-    assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION == 3
+    assert "complexity_snapshot" in tables
+    assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION == 4
 
 
 def test_replace_all_edges_and_who_references(tmp_path):
