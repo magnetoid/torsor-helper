@@ -99,6 +99,15 @@ def build_server(root: Path | str) -> FastMCP:
         return f"{len(violations)} drift violation(s):\n" + "\n".join(lines)
 
     @mcp.tool()
+    def check_dependencies(files: list[str] | None = None) -> str:
+        """Flag imports that resolve to no known package — possible hallucinated dependencies (slopsquatting). Offline; defaults to git-changed files."""
+        findings = ops.check_dependencies(store, config, files)
+        if not findings:
+            return "No unknown imports — every import resolves to a known package."
+        lines = [f"- {f['file']}:{f['line']} — unknown import '{f['name']}'" for f in findings]
+        return f"{len(findings)} possible hallucinated dependenc(y/ies); verify before installing:\n" + "\n".join(lines)
+
+    @mcp.tool()
     def consolidate() -> str:
         """Self-improving maintenance: mine journal entries into insight notes, reindex, report duplicates."""
         stats = ops.consolidate(store, config)

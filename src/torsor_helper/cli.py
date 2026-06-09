@@ -208,6 +208,30 @@ def guard(
 
 
 @app.command()
+def deps(
+    files: list[str] = typer.Argument(None, help="Files to check (default: git-changed .py files)."),
+    root: Path = typer.Option(Path("."), help="Project root."),
+    strict: bool = typer.Option(False, help="Exit non-zero if any unknown import is found (for CI)."),
+) -> None:
+    """Flag imports that resolve to no known package — possible hallucinated dependencies (slopsquatting). Offline."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    findings = ops.check_dependencies(store, config, files or None)
+    if not findings:
+        typer.echo("No unknown imports — every import resolves to a known package.")
+        return
+    for f in findings:
+        typer.echo(f"{f['file']}:{f['line']} — unknown import '{f['name']}' (possible hallucinated dependency)")
+    typer.echo(f"\n{len(findings)} unknown import(s). Verify each exists before installing.")
+    if strict:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def coach(
     context: list[str] = typer.Argument(None, help="Optional context for best-practice hints (e.g. what you're building)."),
     root: Path = typer.Option(Path("."), help="Project root."),

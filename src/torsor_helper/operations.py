@@ -353,6 +353,16 @@ def new_drift(store, config, files=None) -> list:
     return _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))
 
 
+def check_dependencies(store, config, files=None) -> list:
+    """Flag imports that resolve to no known package (possible slopsquatting).
+    Defaults to git-changed files; fully offline."""
+    from torsor_helper import deps as _deps
+
+    if files is None:
+        files = _git_changed(store.paths.root)
+    return _deps.unknown_imports(store.paths.root, files)
+
+
 def recommend(store, config, context=None, limit=8):
     conn = _open_index(store, config)
     embedder = _embedder_for(config) if conn is not None else None
