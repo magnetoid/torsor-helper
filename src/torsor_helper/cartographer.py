@@ -54,10 +54,16 @@ def extract_symbols(source: str, module: str) -> list[Symbol]:
 
 def _norm_module(module: str) -> str:
     """Normalize a module key to dotted form so a file relpath ("pkg/dates.py")
-    and an import target ("pkg.dates") compare equal."""
+    and an import target ("pkg.dates") compare equal. Strips a leading source-root
+    segment ("src/", "lib/") so a src-layout file ("src/pkg/mod.py") canonicalizes
+    to its import name ("pkg.mod") and cross-module edges resolve correctly."""
     if module.endswith(".py"):
         module = module[:-3]
-    return module.replace("/", ".")
+    dotted = module.replace("/", ".")
+    for root in ("src.", "lib."):
+        if dotted.startswith(root):
+            return dotted[len(root):]
+    return dotted
 
 
 def _import_aliases(tree: ast.Module) -> dict[str, str]:
