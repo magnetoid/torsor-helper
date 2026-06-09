@@ -32,14 +32,31 @@ def _norm(name: str) -> str:
 def _site_packages_top_levels(site: Path) -> set[str]:
     out: set[str] = set()
     for info in list(site.glob("*.dist-info")) + list(site.glob("*.egg-info")):
+        got = False
         tl = info / "top_level.txt"
         if tl.exists():
             for line in tl.read_text(encoding="utf-8", errors="ignore").splitlines():
                 line = line.strip()
                 if line:
                     out.add(line.split("/")[0].split(".")[0])
-        else:
-            out.add(_norm(info.name.split("-")[0]))  # fall back to the dist name
+                    got = True
+        # RECORD lists every installed path — the robust source for wheels with
+        # no top_level.txt and for PEP 420 namespace packages (no __init__.py).
+        rec = info / "RECORD"
+        if rec.exists():
+            for line in rec.read_text(encoding="utf-8", errors="ignore").splitlines():
+                path = line.split(",")[0].strip()
+                if not path or path.startswith(("/", "..")):
+                    continue
+                head = path.split("/")[0]
+                if head.endswith((".dist-info", ".data", ".egg-info")):
+                    continue
+                mod = head[:-3] if head.endswith(".py") else head.split(".")[0]
+                if mod:
+                    out.add(mod)
+                    got = True
+        if not got:
+            out.add(_norm(info.name.split("-")[0]))  # last resort: the dist name
     for p in site.iterdir():  # bare packages/modules without dist-info
         if p.is_dir() and (p / "__init__.py").exists():
             out.add(p.name)
@@ -101,8 +118,13 @@ def declared_import_names(root: Path) -> set[str]:
         specs += proj.get("dependencies", []) or []
         for extra in (proj.get("optional-dependencies", {}) or {}).values():
             specs += extra or []
+        # PEP 735 dependency groups (uv's default home for dev deps)
+        for grp in (data.get("dependency-groups", {}) or {}).values():
+            specs += [it for it in (grp or []) if isinstance(it, str)]
         poetry = (data.get("tool", {}) or {}).get("poetry", {}) or {}
         specs += list((poetry.get("dependencies", {}) or {}).keys())
+        for grp in (poetry.get("group", {}) or {}).values():
+            specs += list(((grp or {}).get("dependencies", {}) or {}).keys())
     for req in root.glob("requirements*.txt"):
         try:
             for line in req.read_text(encoding="utf-8").splitlines():
@@ -146,7 +168,9 @@ def _top_imports(text: str) -> list[tuple[str, int]]:
 def unknown_imports(root: Path, files) -> list[dict]:
     """Flag top-level absolute imports that resolve to NO known package — a
     possible hallucinated dependency (slopsquatting). Fully offline; conservative
-    (union of stdlib + installed-venv + first-party + declared)."""
+    (union of stdlib + installed-venv + first-party + declared). Advisory: this
+    checks only the top-level name, so a hallucinated *submodule* of a real
+    package (e.g. `numpy.fake`) is not caught — verify suggestions independently."""
     root = Path(root)
     known = stdlib_names() | installed_import_names(root) | first_party_names(root) | declared_import_names(root)
     out: list[dict] = []

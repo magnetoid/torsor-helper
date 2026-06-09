@@ -15,7 +15,7 @@ def _commits(root: Path) -> list[set[str]]:
     """Each commit as the set of *.py files it touched (via git log --name-only)."""
     try:
         out = subprocess.run(
-            ["git", "-C", str(root), "log", "--no-merges", "--name-only", "--pretty=format:%H"],
+            ["git", "-C", str(root), "log", "--no-merges", "--name-only", "--pretty=format:#commit#%H"],
             capture_output=True, text=True, timeout=30,
         ).stdout
     except (OSError, subprocess.SubprocessError):
@@ -26,7 +26,7 @@ def _commits(root: Path) -> list[set[str]]:
         line = line.strip()
         if not line:
             continue
-        if len(line) == 40 and all(c in "0123456789abcdef" for c in line):
+        if line.startswith("#commit#"):  # unambiguous boundary (a filename can't start with this)
             cur = set()
             commits.append(cur)
         elif cur is not None and line.endswith(".py"):
@@ -75,11 +75,15 @@ def find_coupling_recs(root: Path, conn, limit: int = 3) -> list[Recommendation]
     edges: set[tuple[str, str]] = set()
     if conn is not None:
         for m, r in db.module_edges(conn):
-            edges.add((_norm_module(m), _norm_module(r)))
+            nm, nr = _norm_module(m), _norm_module(r)
+            if nm != nr:  # ignore self-edges (a module referencing its own symbols)
+                edges.add((nm, nr))
 
     out: list[Recommendation] = []
     for a, b, co, degree in pairs:
         na, nb = _norm_module(a), _norm_module(b)
+        if na == nb:  # distinct files that collapse to one module — can't import-explain reliably
+            continue
         if (na, nb) in edges or (nb, na) in edges:
             continue  # coupling already explained by an import
         out.append(Recommendation(

@@ -56,7 +56,12 @@ def _norm_module(module: str) -> str:
     """Normalize a module key to dotted form so a file relpath ("pkg/dates.py")
     and an import target ("pkg.dates") compare equal. Strips a leading source-root
     segment ("src/", "lib/") so a src-layout file ("src/pkg/mod.py") canonicalizes
-    to its import name ("pkg.mod") and cross-module edges resolve correctly."""
+    to its import name ("pkg.mod") and cross-module edges resolve correctly.
+
+    Caveat: not injective — a repo with duplicate path-tails across the stripped
+    root (e.g. both "src/pkg/mod.py" and "pkg/mod.py") collapses both to one key,
+    which can over-count refs for same-named symbols. Such duplicate modules are
+    pathological/already-ambiguous; the common case (a single source root) is exact."""
     if module.endswith(".py"):
         module = module[:-3]
     dotted = module.replace("/", ".")

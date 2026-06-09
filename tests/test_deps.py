@@ -60,3 +60,26 @@ def test_unknown_imports_flags_only_hallucinated(tmp_path):
 def test_unknown_imports_skips_syntax_errors(tmp_path):
     (tmp_path / "bad.py").write_text("def broken(:\n")
     assert deps.unknown_imports(tmp_path, ["bad.py"]) == []
+
+
+def test_namespace_package_via_record_not_flagged(tmp_path):
+    # a wheel with NO top_level.txt (PEP 420 namespace pkg) — resolved via RECORD
+    sp = tmp_path / ".venv" / "lib" / "python3.11" / "site-packages"
+    info = sp / "azure_storage_blob-12.0.0.dist-info"
+    info.mkdir(parents=True)
+    (info / "RECORD").write_text(
+        "azure/storage/blob/__init__.py,sha256=x,10\n"
+        "azure_storage_blob-12.0.0.dist-info/RECORD,,\n"
+    )
+    assert "azure" in deps.installed_import_names(tmp_path)
+    (tmp_path / "app.py").write_text("import azure\n")
+    assert deps.unknown_imports(tmp_path, ["app.py"]) == []
+
+
+def test_pep735_dependency_groups_are_known(tmp_path):
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0"\ndependencies = []\n\n'
+        '[dependency-groups]\ndev = ["pytest>=8", "coverage"]\n'
+    )
+    names = deps.declared_import_names(tmp_path)
+    assert "pytest" in names and "coverage" in names
