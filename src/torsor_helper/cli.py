@@ -123,6 +123,27 @@ def map(
 
 
 @app.command()
+def impact(
+    symbol: str = typer.Argument(..., help="Symbol name to trace (e.g. a function/class name)."),
+    root: Path = typer.Option(Path("."), help="Project root."),
+) -> None:
+    """Show the blast radius of a symbol — who references it, across files (run `torsor map` first)."""
+    paths = TorsorPaths(root)
+    if not paths.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(paths)
+    store = Store(paths)
+    res = ops.impact(store, config, symbol)
+    if res["count"] == 0:
+        typer.echo(f"No references to {symbol!r} found (is the map current? run `torsor map`).")
+        return
+    typer.echo(f"{res['count']} reference(s) to {symbol!r}:")
+    for c in res["callers"]:
+        typer.echo(f"  {c['module']} :: {c['caller']}")
+
+
+@app.command()
 def export(root: Path = typer.Option(Path("."), help="Project root to export.")) -> None:
     """Export the pyramid to a portable llms.txt + a Mermaid module diagram."""
     paths = TorsorPaths(root)

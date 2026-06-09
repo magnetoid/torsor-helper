@@ -59,6 +59,15 @@ def build_server(root: Path | str) -> FastMCP:
         )
 
     @mcp.tool()
+    def impact(symbol: str) -> str:
+        """Blast radius of a symbol before you change it: which functions/files reference it (run map_repo first)."""
+        res = ops.impact(store, config, symbol)
+        if res["count"] == 0:
+            return f"No references to {symbol!r} found (run map_repo to refresh the symbol graph)."
+        lines = [f"- {c['module']} :: {c['caller']}" for c in res["callers"]]
+        return f"{res['count']} reference(s) to {symbol!r}:\n" + "\n".join(lines)
+
+    @mcp.tool()
     def export() -> str:
         """Export the pyramid to a portable .torsor/llms.txt and a Mermaid module diagram in the map."""
         result = ops.export_project(store, config)

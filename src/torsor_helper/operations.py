@@ -202,6 +202,35 @@ def export_project(store: Store, config: TorsorConfig) -> dict:
     return _export.export_project(store, config)
 
 
+def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
+    """Blast radius of a symbol: who references it, across files, via the
+    cartographer's resolved reference edges. Read-only over the existing index
+    (run `torsor map` first). Empty when the index/symbol is absent."""
+    empty = {"symbol": symbol, "callers": [], "count": 0}
+    if not store.paths.index_db.exists():
+        return empty
+    base = symbol.split(".")[-1]
+    conn = db.connect(store.paths.index_db)
+    try:
+        syms = db.search_symbols(conn, base, limit=50)
+        exact = [s for s in syms if s.name == symbol]
+        matches = exact or [s for s in syms if s.name.split(".")[-1] == base]
+        modules = {cartographer._norm_module(s.module) for s in matches}
+
+        callers: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+        for dotted in modules:
+            for caller, module in db.who_references(conn, dotted, base):
+                if (caller, module) not in seen:
+                    seen.add((caller, module))
+                    callers.append({"caller": caller, "module": module})
+    finally:
+        conn.close()
+
+    callers.sort(key=lambda c: (c["module"], c["caller"]))
+    return {"symbol": symbol, "callers": callers, "count": len(callers)}
+
+
 def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:
     cpt = config.budgets.chars_per_token
     total = config.budgets.bootstrap_tokens
