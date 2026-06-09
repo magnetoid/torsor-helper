@@ -8,8 +8,8 @@
 One small Python **MCP** server — works with *every* AI coding tool (Claude Code, Codex, Cursor, …).
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
-![status](https://img.shields.io/badge/release-v0.2%20intelligence-success)
-![tests](https://img.shields.io/badge/tests-215%20passing-brightgreen)
+![status](https://img.shields.io/badge/release-v0.3%20resilience-success)
+![tests](https://img.shields.io/badge/tests-235%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
@@ -21,7 +21,9 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 > **Your AI agent has amnesia.** Every new session starts from zero. Mid-session it forgets the rules you set an hour ago. It rebuilds the helper you already wrote, re-introduces the pattern you explicitly rejected, and quietly drifts from your architecture — with no audit trail. **torsor-helper** is the persistent brain that fixes this, and a **coach** that keeps nudging your project back toward health.
 
-**Contents:** [Why](#-why) · [What's new in v0.2](#-whats-new-in-v02--the-intelligence-release) · [How it works](#-how-it-works) · [Install](#-install) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Usage](#-usage) · [Team / HTTP mode](#-team--http-mode) · [What's inside](#-whats-inside) · [Status](#-status--roadmap) · [Design](#-design--prior-art)
+**Contents:** [Why](#-why) · [Every feature — what & when](#-every-feature--what-it-solves--when-to-use-it) · [What's new](#-whats-new) · [How it works](#-how-it-works) · [Install](#-install) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Usage](#-usage) · [Team / HTTP mode](#-team--http-mode) · [What's inside](#-whats-inside) · [Status](#-status--roadmap) · [Design](#-design--prior-art)
+
+> **New here / vibe-coding a startup?** Jump to [**Every feature — what it solves & when to use it**](#-every-feature--what-it-solves--when-to-use-it) for a plain-language guide to which tool helps with what.
 
 ## 💡 Why
 
@@ -62,7 +64,68 @@ Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, st
        ╱────────────────────╲
 ```
 
-## ✨ What's new in v0.2 — the intelligence release
+## 🧰 Every feature — what it solves & when to use it
+
+New to torsor (or to vibe-coding in general)? This is the plain-language map: **what each feature is, the pain it kills, and when you'd reach for it.** Everything is an MCP tool your agent calls *and* a CLI command you can run yourself.
+
+### 🧠 Memory & continuity — *"my agent forgets everything"*
+| Feature | What it does | Reach for it when… |
+|---|---|---|
+| **Charter / pyramid** (`.torsor/`) | Plain-Markdown files holding your project's purpose, architecture, decisions, and current state. | **Set up once.** Fill `charter.md` + `architecture/` so every session starts from the same truth. |
+| `bootstrap_session()` | A budgeted summary of the whole project, loaded at the start of a chat. | **Every new session** — the first thing the agent should call so it's not a blank slate. |
+| `recall(query)` | Hybrid semantic + keyword search over all your memory and notes. | The agent asks *"have we decided X?"* / *"how does auth work here?"* before writing code. |
+| `remember(content)` · `update_active(...)` | The agent writes down what it learns / the current focus. | After a decision, a gotcha, or finishing a chunk — so the next session inherits it. |
+| `handoff()` | A structured end-of-session summary that seeds the next session. | **End of a work session**, before you close the chat. |
+| `torsor consolidate` | Distills scattered journal notes into clean per-topic insight files. | **Weekly-ish housekeeping** — keeps memory from turning into noise. |
+
+### 🗺️ Understanding the codebase — *"the agent doesn't see how files connect"*
+| Feature | What it does | Reach for it when… |
+|---|---|---|
+| `torsor map` | Builds a symbol map (functions/classes) **+ real reference edges** ("who calls what"). | **After big changes** (it auto-skips when nothing changed). Powers everything below. |
+| `get_intent(topic)` | Surfaces the architecture + relevant existing symbols for a topic. | Before building a feature — *"what already exists around payments?"* |
+| `torsor impact <symbol>` | Lists every caller of a symbol, across files — the **blast radius**. | **Before you let the agent change/rename a function** — see what breaks first. |
+| `torsor export` | Writes a portable `llms.txt` + a GitHub-rendered **Mermaid** module diagram. | Onboarding a teammate/another tool, or you want an at-a-glance architecture picture. |
+
+### 🛡️ Keeping your architecture — *"it quietly drifts from the plan"*
+| Feature | What it does | Reach for it when… |
+|---|---|---|
+| `record_decision(...)` (ADRs) | Records an Architecture Decision — optionally with machine-readable **rules**. | You make a load-bearing call (*"the domain layer may not import the web layer"*). |
+| `torsor guard` | Flags code that violates your ADR rules (`forbid_import`, layering, required seams…). | **Before every commit / in CI** (`--strict`). Catches drift the moment it appears. |
+| `guard --update-baseline` | Grandfathers existing violations so `--strict` fails only on **new** drift. | **Adopting torsor on an existing/messy repo** — turn on CI without a wall of red. |
+| `record_decision(..., supersedes=…)` | Marks an old ADR superseded so stale intent stops resurfacing in recall. | You change your mind — the new decision replaces the old cleanly. |
+
+### 📦 Supply-chain safety — *"the AI imported a package that doesn't exist"*
+| Feature | What it does | Reach for it when… |
+|---|---|---|
+| `torsor deps` | Flags imports that match **no** stdlib / installed / declared / first-party package — a possible **hallucinated dependency** ("slopsquatting"). | **Before `pip install`-ing what the agent suggested.** ~5–20% of AI imports don't exist; some are malware bait. Fully offline. |
+
+### 🧭 The Coach — *"tell me what to fix, don't make me hunt"*
+Run `torsor coach` (or it's pushed at session start). It's advisory, ranked, and **decays so it never nags**:
+| Coach signal | What it tells you | Why it matters |
+|---|---|---|
+| `thin` / `stale` / `uncharted` | Your charter is still a template / active context is stale / modules aren't mapped. | Keeps the memory layer actually filled in and current. |
+| `reuse` | *"`format_date()` already exists — reuse it instead of rewriting."* | Kills AI's #1 habit: duplicating code that already exists. |
+| `hotspot` | The files with the most churn × complexity — **fix/test these first**. | Tells you *where* the risk concentrates, not just that risk exists. |
+| `coupling` | Two files always change together but nothing links them — a **hidden dependency**. | Surfaces architecture the import graph can't see. |
+| `regression` | A file's complexity **rose since your last `consolidate`** — review before it ossifies. | "New findings only" — alerts on what got *worse*, not absolute badness. |
+| `phantom_dep` | An import resolves to no known package (see `torsor deps`). | Early warning on hallucinated dependencies. |
+
+> **Rule of thumb:** start a session → `bootstrap_session`; before building → `recall` / `get_intent`; before changing a symbol → `impact`; before installing a suggested package → `deps`; before committing → `guard`; end of session → `handoff`; weekly → `consolidate` + skim `coach`.
+
+## ✨ What's new
+
+### v0.3 — the resilience release *(supply-chain + blast-radius + hidden coupling)*
+
+Four research-driven features (from deep research into [documented vibe-coding failure modes](docs/superpowers/specs/2026-06-10-torsor-v0.3-resilience-design.md) — hallucinated deps, cross-file cascades, hidden coupling, review fatigue), each hardened by adversarial review:
+
+| | Feature | Kills the failure mode | Try it |
+|---|---|---|---|
+| 📦 | **Slopsquatting guard** | AI imports a non-existent package (USENIX '25: ~5–21% don't exist) | `torsor deps` |
+| 🔎 | **Impact analysis** | Changing a symbol silently cascades across files | `torsor impact <symbol>` |
+| 🔗 | **Temporal-coupling recs** | Hidden dependencies the import graph can't see | `torsor coach` |
+| 📉 | **Complexity-trend regressions** | Review fatigue — alert only on what got *worse* | `torsor coach` after `consolidate` |
+
+### v0.2 — the intelligence release
 
 Twelve improvements distilled from deep research into the best memory / repo-map / architecture-guard / code-health tools, then hardened by an adversarial review. All **dependency-free, deterministic, and offline-testable** — every invariant intact.
 
@@ -167,10 +230,12 @@ torsor init --client windsurf   # or: claude-desktop · vscode · gemini · clin
 | `torsor doctor` | Verify the project is healthy |
 | `torsor index [--full]` | Build/refresh the derived search index |
 | `torsor map [--force]` | Generate the repository symbol map + reference edges (skips when unchanged; `--force` to re-scan) |
+| `torsor impact <symbol>` | Show the blast radius of a symbol — who references it, across files |
 | `torsor export` | Write a portable `llms.txt` + a Mermaid module-dependency diagram into the map |
+| `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
-| `torsor coach [context] [--dismiss <key>]` | Show health + best-practice + **hotspot** recommendations |
-| `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, report duplicates |
+| `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** recommendations |
+| `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, snapshot complexity, report duplicates |
 
 ### MCP tools (what the agent calls)
 
@@ -180,10 +245,10 @@ torsor init --client windsurf   # or: claude-desktop · vscode · gemini · clin
 | `recall(query)` | Hybrid search over memory + wiki (vector + FTS5, fused via RRF) |
 | `remember(content)` · `update_active(...)` | Self-editing memory the agent maintains as it works |
 | `handoff()` | Structured end-of-session summary → seeds the next session |
-| `get_intent(topic?)` · `map_repo(force?)` | Surface the architecture + symbols relevant to a change (superseded ADRs excluded) |
+| `get_intent(topic?)` · `map_repo(force?)` · `impact(symbol)` | Surface architecture + symbols relevant to a change; show a symbol's caller blast radius |
 | `record_decision(..., supersedes?)` · `check_drift(..., as_json?, new_only?)` | Record ADRs (that become rules); flag changes that violate intent |
-| `export()` | Portable `llms.txt` + Mermaid module diagram for tools that don't speak MCP |
-| `recommend(context?)` · `consolidate()` | The Coach's recommendations (health · reuse · hotspots); self-improving maintenance |
+| `check_dependencies(files?)` · `export()` | Flag hallucinated imports (slopsquatting); portable `llms.txt` + Mermaid diagram |
+| `recommend(context?)` · `consolidate()` | The Coach (health · reuse · hotspots · coupling · regressions · phantom-deps); self-improving maintenance |
 
 ### A typical loop
 1. **Once:** `torsor init --write`, fill in `charter.md` + `architecture/`, commit `.torsor/`.
@@ -218,17 +283,17 @@ src/torsor_helper/
 ├─ recall.py        # keyword fallback           search.py    # hybrid RRF + importance decay + MMR
 ├─ snippets.py      # section-aware snippets      cartographer.py  # stdlib-ast symbols + reference edges
 ├─ guard.py         # ADR rules → drift detection baseline.py  # committed drift baseline (ratchet)
-├─ export.py        # llms.txt + Mermaid diagram
-├─ coach/           # health · recommender · report · state · mining · hotspots   (the Coach)
-├─ operations.py    # orchestration (the tested core)
+├─ export.py        # llms.txt + Mermaid diagram  deps.py      # offline slopsquatting guard
+├─ coach/           # health · recommender · report · state · mining · hotspots · coupling · trend
+├─ operations.py    # orchestration incl. impact() (the tested core)
 ├─ server.py        # FastMCP adapter            cli.py       # Typer CLI
 ```
 
-Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` run. **215 tests, lint-clean**, every feature offline-testable.
+Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` / `torsor deps` run. **235 tests, lint-clean**, every feature offline-testable.
 
 ## 📍 Status & roadmap
 
-**v0.2 shipped — 215 tests, lint-clean, dogfooded.** The 6-phase foundation plus the 12-improvement intelligence release.
+**v0.3 shipped — 235 tests, lint-clean, dogfooded.** The 6-phase foundation, the 12-improvement intelligence release, and the 4-feature resilience release.
 
 **Foundation (v0.1):**
 - [x] **Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools
@@ -245,7 +310,13 @@ Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs who
 - [x] **Guard** · layering/seam rule kinds · severity + `--json` · committed drift baseline (CI ratchet)
 - [x] **Coach** · churn×complexity hotspots · ADR supersedes
 
-**Planned fast-follows (v0.3):** temporal-coupling edges (files that change together) · complexity-trend "new findings only" coach view · multi-language map (tree-sitter) · sampling-based *semantic* drift guard.
+**Resilience release (v0.3):**
+- [x] **Supply chain** · offline slopsquatting guard (`torsor deps`) — flag hallucinated dependencies
+- [x] **Blast radius** · impact analysis (`torsor impact`) — who-references a symbol across files
+- [x] **Hidden coupling** · temporal-coupling coach recs from git co-change
+- [x] **Never-nag** · complexity-trend "new findings only" regressions
+
+**Planned fast-follows (v0.4):** multi-language map (tree-sitter) for JS/TS · sampling-based *semantic* drift guard · weaving `impact`/`deps` warnings into `check_drift` and pre-commit flows.
 
 ## 🧪 Built with
 
@@ -257,7 +328,7 @@ Full design + every phase plan live in [`docs/superpowers/`](docs/superpowers/) 
 
 ## 🤝 Contributing & releasing
 
-`uv run --extra dev pytest` (215 tests) · `uv run --with ruff ruff check src tests`. Releasing: see [PUBLISHING.md](PUBLISHING.md).
+`uv run --extra dev pytest` (235 tests) · `uv run --with ruff ruff check src tests`. Releasing: see [PUBLISHING.md](PUBLISHING.md).
 
 ## License
 

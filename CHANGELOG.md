@@ -4,6 +4,19 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
+## [0.3.0] — Resilience Release (2026-06-10)
+
+Four research-driven features targeting documented vibe-coding failure modes (USENIX '25 slopsquatting; "Lost in the Middle"; GitClear duplication; CSA/Veracode security surveys; flow-debt & Truck-Factor papers), each hardened by adversarial review. All local-first, deterministic, offline-testable.
+
+- **📦 Slopsquatting guard (`torsor deps` + `check_dependencies` MCP tool + Coach `phantom_dep`):** flags top-level imports that resolve to no known package — possible hallucinated dependencies. "Known" = stdlib + the project's own `.venv` (via dist-info `top_level.txt`/`RECORD`, incl. PEP 420 namespace packages) + first-party repo modules + declared deps (pyproject incl. PEP 735 `[dependency-groups]` + poetry groups + requirements, with a dist→import alias table). Fully offline; conservative (zero false positives across torsor's own 89 files); advisory (top-level only — submodule hallucinations aren't caught).
+- **🔎 Impact analysis (`torsor impact <symbol>` + `impact()` MCP tool):** lists every caller of a symbol across files (blast radius), via the v0.2 reference edges — so the agent sees what breaks before regenerating a symbol.
+- **🔗 Temporal-coupling recommendations (Coach `coupling`):** mines git history for file pairs that change together far more than chance (degree = co-changes / min(changes), skipping merge/sweep commits) and recommends documenting the hidden dependency for pairs not already linked by an import edge.
+- **📉 Complexity-trend regressions (Coach `regression` + `consolidate` snapshot):** reports only files whose complexity rose meaningfully (≥5 absolute AND ≥25% relative) since the last `consolidate` snapshot — regression-since-baseline instead of absolute-badness nagging. New `complexity_snapshot` table (SCHEMA_VERSION 3→4, additive).
+
+#### Fixed
+- **`_norm_module` src-layout reconciliation:** a symbol in `src/proj/core.py` (module `src.proj.core`) and an import resolving to `proj.core` never matched, so impact analysis — and v0.2 cross-module ref counts / Mermaid — silently missed every cross-module edge on `src/`-layout repos. `_norm_module` now strips a leading `src.`/`lib.` source-root segment so both sides canonicalize equally (documented non-injective caveat for pathological duplicate-path-tail repos).
+- Coupling self-edges excluded and the git-log commit parser hardened with a `#commit#` sentinel (no 40-hex-filename ambiguity).
+
 ## [0.2.0] — Intelligence Release (2026-06-02)
 
 Twelve improvements distilled from deep competitive research (mem0/Zep/Graphiti, Aider/Serena/SCIP, CodeScene, ArchUnit/dependency-cruiser/ast-grep, Anthropic Contextual Retrieval, FlashRank/MMR, llms.txt/DeepWiki) and hardened by an adversarial review (which killed three plausible-but-wrong ideas and sharpened the rest). All dependency-free, deterministic, and offline-testable — every torsor invariant preserved.
