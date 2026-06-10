@@ -2,7 +2,7 @@
 
 # 🧭 torsor-helper
 
-### The memory & coaching layer for AI coding agents.
+### Memory · guardrails · coaching — for AI coding agents.
 
 **Stop re-explaining your project every session. Stop the silent architectural drift.**
 One small Python **MCP** server — works with *every* AI coding tool (Claude Code, Codex, Cursor, …).
@@ -19,7 +19,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 ---
 
-> **Your AI agent has amnesia.** Every new session starts from zero. Mid-session it forgets the rules you set an hour ago. It rebuilds the helper you already wrote, re-introduces the pattern you explicitly rejected, and quietly drifts from your architecture — with no audit trail. **torsor-helper** is the persistent brain that fixes this, and a **coach** that keeps nudging your project back toward health.
+> **Your AI agent has amnesia.** Every new session starts from zero. Mid-session it forgets the rules you set an hour ago. It rebuilds the helper you already wrote, re-introduces the pattern you explicitly rejected, quietly drifts from your architecture — and sometimes imports a package that doesn't even exist. **torsor-helper** is the persistent **brain** that fixes the forgetting, a **guardrail** that catches the drift, and a **coach** that keeps nudging your project back toward health — all local-first, no API key.
 
 **Contents:** [Why](#-why) · [Every feature — what & when](#-every-feature--what-it-solves--when-to-use-it) · [What's new](#-whats-new) · [How it works](#-how-it-works) · [Install](#-install) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Usage](#-usage) · [Team / HTTP mode](#-team--http-mode) · [What's inside](#-whats-inside) · [Status](#-status--roadmap) · [Design](#-design--prior-art)
 
@@ -35,8 +35,9 @@ AI coding agents are brilliant in the moment and forgetful over time:
 | 🔭 **Context Myopia** | Optimizes for what's *recent*, not *important*. | Stability-ordered tiers + hybrid recall; **importance decay** + **MMR diversity** so durable, distinct memory floats up |
 | 🏛️ **Lost Architectural Intent** | Layering/naming rules stop being followed; rejected patterns return. | ADRs-as-rules + `check_drift`; **layering/seam rules**, a **CI baseline**, and **ADR supersedes** |
 | ♻️ **Duplication & drift** | Rebuilds code that already exists ([~8× more duplication](https://www.builder.io/m/explainers/vibe-coding-limitations)). | Symbol map with **real reference edges** + the Coach's `reuse` & **hotspot** recs |
+| 📦 **Phantom deps & blind edits** | Imports packages that don't exist ([slopsquatting](https://www.usenix.org/conference/usenixsecurity25/presentation/spracklen)); one regenerated symbol silently breaks far-off callers. | Offline `deps` check + `impact` blast-radius (who-calls-what edges) |
 
-Most tools fix *one* of these. **torsor-helper combines four ideas no one else puts together** — a pyramidal wiki, an external semantic memory, a symbol-level repo map, and a drift guard — plus a **Coach** that proactively recommends fixes over time. See [What's new in v0.2](#-whats-new-in-v02--the-intelligence-release).
+Most tools fix *one* of these. **torsor-helper combines four ideas no one else puts together** — a pyramidal wiki, an external semantic memory, a symbol-level repo map, and a drift guard — plus a **Coach** that proactively recommends fixes over time. See [What's new](#-whats-new).
 
 <sub>**Why "torsor"?** A *torsor* is a space that looks like a group but has **no fixed origin** — you can only measure *differences* between points. That's exactly drift detection: your architecture is the reference frame, drift is the measured delta.</sub>
 
