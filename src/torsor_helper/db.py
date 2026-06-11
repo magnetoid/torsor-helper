@@ -17,6 +17,11 @@ def connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
+    # Recall is a writer (reindex + access bumps), and the MCP server and CLI
+    # can run concurrently — WAL + a generous busy timeout prevent
+    # "database is locked" failures under that contention.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     _create_schema(conn)
     return conn
 
@@ -107,17 +112,42 @@ def body_of(conn, path):
     return row["body"] if row else ""
 
 
+def _note_paths(conn) -> list[str]:
+    return [r["path"] for r in conn.execute("SELECT path FROM notes ORDER BY path")]
+
+
+def _resolve_slug(paths: list[str], slug: str) -> str | None:
+    """First (sorted) note whose path ends in `<slug>.md` — literal matching, so
+    LIKE wildcards in slugs ('_', '%') can't match the wrong note."""
+    exact, suffix = f"{slug}.md", f"/{slug}.md"
+    for p in paths:
+        if p == exact or p.endswith(suffix):
+            return p
+    return None
+
+
 def replace_edges(conn, src, slugs):
     conn.execute("DELETE FROM edges WHERE src=?", (src,))
+    paths = _note_paths(conn)
     for slug in slugs:
-        target = conn.execute(
-            "SELECT path FROM notes WHERE path = ? OR path LIKE ? LIMIT 1",
-            (f"{slug}.md", f"%/{slug}.md"),
-        ).fetchone()
         conn.execute(
             "INSERT INTO edges(src, target_slug, target_path) VALUES(?,?,?)",
-            (src, slug, target["path"] if target else None),
+            (src, slug, _resolve_slug(paths, slug)),
         )
+
+
+def reresolve_edges(conn) -> None:
+    """Second resolution pass over ALL edges: insert-time resolution only sees
+    notes already upserted, so links to notes indexed later (or created later)
+    would otherwise stay NULL forever — and links to deleted notes stay stale."""
+    paths = _note_paths(conn)
+    resolved: dict[str, str | None] = {}
+    for row in conn.execute("SELECT rowid, target_slug, target_path FROM edges").fetchall():
+        slug = row["target_slug"]
+        if slug not in resolved:
+            resolved[slug] = _resolve_slug(paths, slug)
+        if row["target_path"] != resolved[slug]:
+            conn.execute("UPDATE edges SET target_path=? WHERE rowid=?", (resolved[slug], row["rowid"]))
 
 
 def neighbors(conn, path):

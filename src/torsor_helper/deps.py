@@ -178,7 +178,8 @@ def unknown_imports(root: Path, files) -> list[dict]:
     for f in files:
         path = (root / f) if not Path(f).is_absolute() else Path(f)
         try:
-            text = path.read_text(encoding="utf-8")
+            # utf-8-sig: a BOM would make ast.parse fail and the file silently pass
+            text = path.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             continue
         try:

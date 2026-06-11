@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from torsor_helper import db
-from torsor_helper.cartographer import _norm_module
+from torsor_helper.cartographer import norm_module
 from torsor_helper.store import Store
 
 _MERMAID_HEADING = "## Module dependencies"
@@ -76,10 +76,10 @@ def render_module_mermaid(conn) -> str:
     collapsed from the resolved symbol edges. Only edges between known repo
     modules are drawn (external imports and self-edges dropped). Empty string
     when there are no such edges."""
-    known = {_norm_module(m) for m in db.modules(conn)}
+    known = {norm_module(m) for m in db.modules(conn)}
     pairs = set()
     for module, resolved in db.module_edges(conn):
-        src, dst = _norm_module(module), _norm_module(resolved)
+        src, dst = norm_module(module), norm_module(resolved)
         if src in known and dst in known and src != dst:
             pairs.add((src, dst))
     if not pairs:

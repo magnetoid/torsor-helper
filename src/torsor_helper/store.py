@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime
+import warnings
+from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Iterator
 
 import yaml
+from pydantic import ValidationError
 
 from torsor_helper.models import Frontmatter, Note, Tier
 from torsor_helper.paths import TorsorPaths
 
 _WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
-_FM_BLOCK = re.compile(r"^---\n(.*?)\n---\n?(.*)$", re.DOTALL)
+_FM_BLOCK = re.compile(r"^---[ \t]*\n(.*?)^---[ \t]*\n?(.*)$", re.DOTALL | re.MULTILINE)
 _H1 = re.compile(r"^\s*#\s+(.+?)\s*$", re.MULTILINE)
 
 
@@ -28,13 +30,28 @@ class Store:
     # ---- static parsing helpers ----
     @staticmethod
     def parse_frontmatter(text: str) -> tuple[Frontmatter, str]:
+        # Markdown is hand-editable by design, so frontmatter must be parsed
+        # best-effort: a malformed note degrades to type="note", never raises
+        # (one bad note must not take down indexing/recall for the project).
         match = _FM_BLOCK.match(text)
         if not match:
             return Frontmatter(type="note"), text
-        meta = yaml.safe_load(match.group(1)) or {}
-        if "type" not in meta:
+        try:
+            meta = yaml.safe_load(match.group(1)) or {}
+        except yaml.YAMLError:
+            return Frontmatter(type="note"), text
+        if not isinstance(meta, dict):
+            return Frontmatter(type="note"), match.group(2)
+        for key in ("created", "updated"):
+            # YAML turns an unquoted `created: 2026-06-01` into a date object
+            if isinstance(meta.get(key), (date, datetime)):
+                meta[key] = meta[key].isoformat()
+        if not isinstance(meta.get("type"), str):
             meta["type"] = "note"
-        return Frontmatter.model_validate(meta), match.group(2)
+        try:
+            return Frontmatter.model_validate(meta), match.group(2)
+        except ValidationError:
+            return Frontmatter(type="note"), match.group(2)
 
     @staticmethod
     def serialize(frontmatter: Frontmatter, title: str, body: str) -> str:
@@ -127,7 +144,12 @@ class Store:
         for md in sorted(self.paths.base.rglob("*.md")):
             if index in md.resolve().parents:
                 continue
-            yield self.read_note(md)
+            try:
+                note = self.read_note(md)
+            except (OSError, UnicodeDecodeError) as exc:
+                warnings.warn(f"skipping unreadable note {md}: {exc}")
+                continue
+            yield note
 
     def append_journal(self, content: str, kind: str, links: list[str]) -> Path:
         now = self.clock()

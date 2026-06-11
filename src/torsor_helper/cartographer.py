@@ -52,7 +52,7 @@ def extract_symbols(source: str, module: str) -> list[Symbol]:
     return out
 
 
-def _norm_module(module: str) -> str:
+def norm_module(module: str) -> str:
     """Normalize a module key to dotted form so a file relpath ("pkg/dates.py")
     and an import target ("pkg.dates") compare equal. Strips a leading source-root
     segment ("src/", "lib/") so a src-layout file ("src/pkg/mod.py") canonicalizes
@@ -71,21 +71,51 @@ def _norm_module(module: str) -> str:
     return dotted
 
 
-def _import_aliases(tree: ast.Module) -> dict[str, str]:
+_norm_module = norm_module  # back-compat alias
+
+
+def absolute_from_module(node: ast.ImportFrom, module: str) -> str:
+    """Resolve an ImportFrom's base module to absolute dotted form, using the
+    importing module's path (relpath or dotted) to resolve relative imports.
+    `from . import x` / `from .sub import x` in "pkg/mod.py" resolve against
+    "pkg"; absolute imports pass through unchanged."""
+    base = node.module or ""
+    if not node.level:
+        return base
+    parts = norm_module(module).split(".")[:-1]  # the file's package ("__init__" is a module name too)
+    climb = node.level - 1
+    if climb > len(parts):
+        return base  # climbs past the repo root — leave as written
+    if climb:
+        parts = parts[: len(parts) - climb]
+    prefix = ".".join(parts)
+    if base and prefix:
+        return f"{prefix}.{base}"
+    return base or prefix
+
+
+def _import_aliases(tree: ast.Module, module: str) -> dict[str, str]:
     """Map each imported name to the module it resolves to (best-effort).
 
     `from pkg.dates import format_date` → {format_date: "pkg.dates"} (the module
-    we imported FROM — always real). `import pkg.dates as d` → {d: "pkg.dates"}.
+    we imported FROM — always real). `import pkg.dates as d` → {d: "pkg.dates"},
+    but a no-asname `import pkg.dates` binds only the top name: {pkg: "pkg"}.
+    Relative imports resolve against `module`'s package.
     """
     aliases: dict[str, str] = {}
     for node in tree.body:
         if isinstance(node, ast.Import):
             for a in node.names:
-                aliases[a.asname or a.name.split(".")[0]] = a.name
+                if a.asname:
+                    aliases[a.asname] = a.name
+                else:
+                    top = a.name.split(".")[0]
+                    aliases[top] = top
         elif isinstance(node, ast.ImportFrom):
-            base = node.module or ""
+            base = absolute_from_module(node, module)
             for a in node.names:
-                aliases[a.asname or a.name] = base
+                if base:
+                    aliases[a.asname or a.name] = base
     return aliases
 
 
@@ -96,6 +126,11 @@ def _owners(tree: ast.Module):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             yield node.name, node
         elif isinstance(node, ast.ClassDef):
+            # bases, decorators and class keywords (metaclass=...) live on the
+            # ClassDef itself, not in its body — without these, `class Foo(Base)`
+            # records no edge for Base and impact() misses every subclass.
+            for expr in (*node.decorator_list, *node.bases, *node.keywords):
+                yield node.name, expr
             for member in node.body:
                 if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     yield f"{node.name}.{member.name}", member
@@ -118,12 +153,15 @@ def extract_edges(source: str, module: str) -> list[SymbolEdge]:
         n.name for n in tree.body
         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
     }
-    aliases = _import_aliases(tree)
+    aliases = _import_aliases(tree, module)
 
     def resolve(name: str) -> str | None:
+        # Always return the canonical dotted form — consumers (who_references,
+        # module_edges) must never see a mix of relpaths and dotted names.
         if name in top_defs:
-            return module
-        return aliases.get(name)
+            return norm_module(module)
+        target = aliases.get(name)
+        return norm_module(target) if target else None
 
     edges: list[SymbolEdge] = []
 
@@ -200,7 +238,9 @@ def _scan(root: Path, paths: list[str] | None, ignore: set[str]) -> tuple[list[S
     for file in files:
         file = Path(file)
         try:
-            src = file.read_text(encoding="utf-8")
+            # utf-8-sig: a BOM (common from Windows editors) is a SyntaxError to
+            # ast.parse and would silently drop the file from the map.
+            src = file.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             continue
         try:
@@ -214,11 +254,13 @@ def _scan(root: Path, paths: list[str] | None, ignore: set[str]) -> tuple[list[S
     # (normalized target module, referenced name). Honest — never counts comments
     # or strings, unlike the old substring heuristic.
     counts: Counter[tuple[str, str]] = Counter(
-        (_norm_module(e.resolved_module), e.referenced_name) for e in edges if e.resolved_module
+        (norm_module(e.resolved_module), e.referenced_name) for e in edges if e.resolved_module
     )
     for sym in symbols:
-        base = sym.name.split(".")[-1]
-        sym.refs = counts.get((_norm_module(sym.module), base), 0)
+        if "." in sym.name:
+            sym.refs = 0  # methods score 0 by design (ADR 0004) — resolution only targets top-level names
+            continue
+        sym.refs = counts.get((norm_module(sym.module), sym.name), 0)
     return symbols, edges
 
 

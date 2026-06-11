@@ -5,6 +5,7 @@ import fnmatch
 import re
 from pathlib import Path
 
+from torsor_helper.cartographer import absolute_from_module
 from torsor_helper.models import Rule, Violation
 from torsor_helper.store import Store
 
@@ -18,7 +19,10 @@ def load_rules(store: Store) -> list[Rule]:
 
     rules: list[Rule] = []
     for path in notes:
-        note = store.read_note(path)
+        try:
+            note = store.read_note(path)
+        except (OSError, UnicodeDecodeError):
+            continue  # malformed note: skip, never fatal (same contract as malformed rules)
         raw = getattr(note.frontmatter, "rules", None)
         if not isinstance(raw, list):
             continue
@@ -50,7 +54,10 @@ def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
                 if hit(alias.name):
                     out.append(_violation(rule, relpath, node.lineno, f"imports forbidden module '{alias.name}'"))
         elif isinstance(node, ast.ImportFrom):
-            base = node.module or ""  # None for relative `from . import x`
+            # Level-aware: `from . import server` inside the package is the
+            # idiomatic way to write a forbidden import — resolve it to absolute
+            # dotted form so relative imports can't bypass the rule.
+            base = absolute_from_module(node, relpath)
             if hit(base):
                 out.append(_violation(rule, relpath, node.lineno, f"imports from forbidden module '{base}'"))
                 continue
@@ -63,8 +70,9 @@ def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
     return out
 
 
-def _imported_modules(tree: ast.Module) -> list[tuple[str, int]]:
-    """All imported module strings with their line numbers, including the
+def _imported_modules(tree: ast.Module, relpath: str) -> list[tuple[str, int]]:
+    """All imported module strings (absolute dotted form, relative imports
+    resolved against `relpath`) with their line numbers, including the
     `from pkg import submod` submodule form (mirrors _forbid_import resolution)."""
     out: list[tuple[str, int]] = []
     for node in ast.walk(tree):
@@ -72,7 +80,7 @@ def _imported_modules(tree: ast.Module) -> list[tuple[str, int]]:
             for alias in node.names:
                 out.append((alias.name, node.lineno))
         elif isinstance(node, ast.ImportFrom):
-            base = node.module or ""
+            base = absolute_from_module(node, relpath)
             if base:
                 out.append((base, node.lineno))
             for alias in node.names:
@@ -88,7 +96,7 @@ def _require_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
     except SyntaxError:
         return []
     target = rule.target
-    present = any(m == target or m.startswith(target + ".") for m, _ in _imported_modules(tree))
+    present = any(m == target or m.startswith(target + ".") for m, _ in _imported_modules(tree, relpath))
     if present:
         return []
     return [_violation(rule, relpath, 0, f"required import '{target}' is missing")]
@@ -113,7 +121,7 @@ def _forbid_layer_import(relpath: str, text: str, rule: Rule) -> list[Violation]
                 if pattern.search(alias.name):
                     out.append(_violation(rule, relpath, node.lineno, f"layer import '{alias.name}' is forbidden here"))
         elif isinstance(node, ast.ImportFrom):
-            base = node.module or ""
+            base = absolute_from_module(node, relpath)
             candidates = ([base] if base else []) + [
                 (f"{base}.{alias.name}" if base else alias.name) for alias in node.names
             ]
@@ -181,7 +189,8 @@ def check_drift(store: Store, files) -> list[Violation]:
         path = Path(raw)
         abs_path = path if path.is_absolute() else root / path
         try:
-            text = abs_path.read_text(encoding="utf-8")
+            # utf-8-sig: a BOM would make ast.parse fail and the file silently pass
+            text = abs_path.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             continue
         try:
