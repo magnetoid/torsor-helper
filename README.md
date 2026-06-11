@@ -232,11 +232,39 @@ args = ["mcp"]
 { "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
 ```
 
-### Everything else
-The same `mcpServers` block works for **Windsurf, Cline, Roo, Trae, Kiro, Warp, Claude Desktop, Gemini CLI, VS Code/Copilot** — only the config file location differs. Get the exact snippet with:
-```bash
-torsor init --client windsurf   # or: claude-desktop · vscode · gemini · cline · roo · trae · kiro · warp
+### VS Code / GitHub Copilot
+VS Code uses its own `servers` shape in **`.vscode/mcp.json`** (or Command Palette → *MCP: Add Server*). `torsor init --client vscode` prints it:
+```json
+{ "servers": { "torsor-helper": { "type": "stdio", "command": "torsor", "args": ["mcp"] } } }
 ```
+
+### Google Antigravity
+Agent panel → settings → **MCP Servers** → *Manage* opens `mcp_config.json` — paste the standard block (`torsor init --client antigravity`):
+```json
+{ "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
+```
+
+### Everything else — one command prints your client's exact config + where it goes
+```bash
+torsor init --client <name>
+```
+
+| Client | `--client` | Config goes in |
+|---|---|---|
+| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` (Settings → Cascade → MCP) |
+| Trae | `trae` | AI chat → Settings → MCP → Add manually |
+| Cline / Roo Code | `cline` / `roo` | extension → MCP Servers → Configure |
+| Claude Desktop | `claude-desktop` | `claude_desktop_config.json` (Settings → Developer) |
+| Gemini CLI | `gemini` | `~/.gemini/settings.json` or project `.gemini/settings.json` |
+| GitHub Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` (or `/mcp add` in the CLI) |
+| Zed | `zed` | `settings.json` (`context_servers` shape — snippet handles it) |
+| JetBrains AI / Junie | `jetbrains` | Settings → Tools → AI Assistant → MCP → Add |
+| Continue | `continue` | `.continue/config.yaml` (YAML shape — snippet handles it) |
+| OpenCode | `opencode` | `opencode.json` (its own `mcp` shape — snippet handles it) |
+| Amp | `amp` | VS Code `settings.json` under `amp.mcpServers` |
+| Goose | `goose` | `~/.config/goose/config.yaml` (or `goose configure`) |
+| Kiro | `kiro` | `.kiro/settings/mcp.json` |
+| Warp | `warp` | Settings → AI → Manage MCP servers |
 
 > **Note:** the config uses `command: "torsor"`, which requires the `torsor` command on your PATH (`uv tool install` / `pipx install`). Running ephemerally instead? Use `"command": "uvx", "args": ["torsor-helper", "mcp"]`.
 
@@ -247,6 +275,7 @@ torsor init --client windsurf   # or: claude-desktop · vscode · gemini · clin
 | Command | What it does |
 |---|---|
 | `torsor init [--write] [--client <name>]` | Scaffold `.torsor/`; `--write` emits `.mcp.json`; `--client` prints that client's config |
+| `torsor --version` | Print the installed torsor-helper version |
 | `torsor mcp [--http --host --port]` | Run the MCP server (stdio by default; `--http` for a shared service) |
 | `torsor doctor` | Verify the project is healthy |
 | `torsor index [--full]` | Build/refresh the derived search index |

@@ -7,7 +7,7 @@ import typer
 
 from torsor_helper import db
 from torsor_helper import operations as ops
-from torsor_helper.clients import SUPPORTED_CLIENTS, config_snippet
+from torsor_helper.clients import SUPPORTED_CLIENTS, config_location, config_snippet
 from torsor_helper.config import TorsorConfig, load_config, save_config
 from torsor_helper.embeddings import get_embedder
 from torsor_helper.indexer import reindex
@@ -15,6 +15,24 @@ from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
 
 app = typer.Typer(help="torsor-helper: persistent memory + architectural intent over MCP.")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        from torsor_helper import __version__
+
+        typer.echo(f"torsor-helper {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False, "--version", help="Show the torsor-helper version and exit.",
+        callback=_version_callback, is_eager=True,
+    ),
+) -> None:
+    """torsor-helper: persistent memory + architectural intent over MCP."""
 
 
 @app.command()
@@ -40,7 +58,9 @@ def init(
         target = write_mcp_json(root, str(root.resolve()))
         typer.echo(f"Wrote {target} — MCP clients that read .mcp.json (e.g. Claude Code) will auto-detect torsor-helper.")
     if client:
-        typer.echo(f"\n# MCP config for {SUPPORTED_CLIENTS[client]}:\n")
+        location = config_location(client)
+        where = f" — goes in: {location}" if location else ""
+        typer.echo(f"\n# MCP config for {SUPPORTED_CLIENTS[client]}{where}\n")
         typer.echo(config_snippet(client, root=str(root.resolve())))
 
 
