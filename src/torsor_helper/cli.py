@@ -167,6 +167,29 @@ def export(root: Path = typer.Option(Path("."), help="Project root to export."))
 
 
 @app.command()
+def rules(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    write: Optional[Path] = typer.Option(None, "--write", help="Write/refresh a managed rules block in this file (e.g. AGENTS.md or CLAUDE.md). Idempotent."),
+) -> None:
+    """Print a compact agent-rules digest (charter principles + ADR rules) — paste it into AGENTS.md/CLAUDE.md so agents follow the rules without spending tool-call tokens."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    if write is not None:
+        target = ops.write_rules_block(store, config, write)
+        typer.echo(f"Wrote rules block → {target} (re-run after recording new ADRs)")
+        return
+    digest = ops.agent_rules(store, config)
+    if not digest:
+        typer.echo("No rules to export yet — fill the charter's principles or record ADRs with rules.")
+        return
+    typer.echo(digest)
+
+
+@app.command()
 def guard(
     paths: list[str] = typer.Argument(None, help="Files to check (default: git-changed .py files)."),
     root: Path = typer.Option(Path("."), help="Project root."),

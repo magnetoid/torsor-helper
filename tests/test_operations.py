@@ -130,3 +130,26 @@ def test_check_drift_when_torsor_root_is_nested_in_git_repo(tmp_path):
 
     vs = ops.check_drift(store, TorsorConfig())  # files=None → git-changed discovery
     assert any(v.file == "app.py" for v in vs)
+
+
+def test_agent_rules_digest_has_principles_and_adr_rules(tmp_path):
+    store = _store(tmp_path)
+    _adr_forbidding_requests(store)
+    digest = ops.agent_rules(store, TorsorConfig())
+    assert "Non-negotiable principles" in digest
+    assert "forbid_import" in digest and "`requests`" in digest
+    from torsor_helper.budget import estimate_tokens
+    assert estimate_tokens(digest, TorsorConfig().budgets.chars_per_token) <= 600
+
+
+def test_write_rules_block_is_idempotent(tmp_path):
+    store = _store(tmp_path)
+    _adr_forbidding_requests(store)
+    target = tmp_path / "AGENTS.md"
+    target.write_text("# My agents file\n\nKeep this prose.\n")
+    ops.write_rules_block(store, TorsorConfig(), target)
+    once = target.read_text()
+    assert "Keep this prose." in once and "torsor:rules" in once
+    ops.write_rules_block(store, TorsorConfig(), target)  # refresh must replace, not append
+    assert target.read_text().count("<!-- torsor:rules -->") == 1
+    assert target.read_text().count("forbid_import") == once.count("forbid_import")

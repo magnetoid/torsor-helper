@@ -75,3 +75,15 @@ def test_mcp_http_loopback_does_not_warn(tmp_path, monkeypatch):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http"])
     assert "no authentication" not in result.output
+
+
+def test_rules_prints_digest_and_writes_managed_block(tmp_path):
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["rules", "--root", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "Non-negotiable principles" in result.output
+
+    target = tmp_path / "AGENTS.md"
+    result = runner.invoke(app, ["rules", "--root", str(tmp_path), "--write", str(target)])
+    assert result.exit_code == 0, result.output
+    assert target.exists() and "torsor:rules" in target.read_text()

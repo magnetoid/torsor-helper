@@ -202,6 +202,67 @@ def export_project(store: Store, config: TorsorConfig) -> dict:
     return _export.export_project(store, config)
 
 
+_RULES_START = "<!-- torsor:rules -->"
+_RULES_END = "<!-- /torsor:rules -->"
+
+
+def _charter_section(body: str, heading: str) -> str:
+    """Lines under `## <heading>` up to the next H2 (empty string if absent)."""
+    match = _re.search(rf"^##\s+{_re.escape(heading)}\s*$\n(.*?)(?=^##\s|\Z)", body, _re.MULTILINE | _re.DOTALL)
+    return match.group(1).strip() if match else ""
+
+
+def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int = 600) -> str:
+    """A compact, token-budgeted digest of the project's standing constraints —
+    charter principles + machine-readable ADR rules — for agent prompt files
+    (AGENTS.md / CLAUDE.md). Rules the agent sees at prompt time cost zero
+    tool-call tokens per session, and the guard still enforces them in CI."""
+    sections: list[str] = []
+
+    if store.paths.charter.exists():
+        principles = _charter_section(store.read_note(store.paths.charter).body, "Non-negotiable principles")
+        if principles:
+            sections.append(f"### Non-negotiable principles\n{principles}")
+
+    rules = guard.load_rules(store)
+    if rules:
+        lines = []
+        for r in rules:
+            scope = f" in `{r.scope}`" if r.scope and r.scope != "*.py" else ""
+            message = f" — {r.message}" if r.message else ""
+            lines.append(f"- {r.kind}: `{r.target}`{scope}{message} (per {r.source})")
+        sections.append(
+            "### Architecture rules (machine-enforced — `torsor guard` flags violations)\n" + "\n".join(lines)
+        )
+
+    if not sections:
+        return ""
+    digest = "## Project rules (torsor-helper)\n\n" + "\n\n".join(sections)
+    return truncate_to_tokens(digest, max_tokens, config.budgets.chars_per_token)
+
+
+def write_rules_block(store: Store, config: TorsorConfig, target) -> str:
+    """Write/refresh the digest as a marker-delimited block in `target`
+    (AGENTS.md, CLAUDE.md, …). Idempotent — re-running replaces the block."""
+    from pathlib import Path
+
+    digest = agent_rules(store, config)
+    block = f"{_RULES_START}\n{digest}\n{_RULES_END}"
+    target = Path(target)
+    if target.exists():
+        text = target.read_text(encoding="utf-8")
+        if _RULES_START in text and _RULES_END in text:
+            pre, rest = text.split(_RULES_START, 1)
+            post = rest.split(_RULES_END, 1)[1]
+            new = pre + block + post
+        else:
+            new = text.rstrip() + "\n\n" + block + "\n"
+    else:
+        new = block + "\n"
+    target.write_text(new, encoding="utf-8")
+    return str(target)
+
+
 def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
     """Blast radius of a symbol: who references it, across files, via the
     cartographer's resolved reference edges. Read-only over the existing index

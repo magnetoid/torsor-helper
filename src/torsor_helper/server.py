@@ -80,6 +80,12 @@ def build_server(root: Path | str) -> FastMCP:
         return ops.get_intent(store, config, topic or None)
 
     @mcp.tool()
+    def get_rules() -> str:
+        """Compact digest of the project's standing constraints (charter principles + ADR rules). Load once per session — cheaper than rediscovering the rules by trial and error."""
+        digest = ops.agent_rules(store, config)
+        return digest or "No rules declared yet — fill the charter's principles or record ADRs with rules."
+
+    @mcp.tool()
     def record_decision(title: str, context: str, decision: str, consequences: str = "", rules: list[dict] | None = None, supersedes: str | None = None) -> str:
         """Record an Architecture Decision Record. Optional `rules` become drift-guard rules; `supersedes` (an ADR id/slug) marks a prior ADR superseded."""
         path = ops.record_decision(store, title, context, decision, consequences, rules, supersedes)
