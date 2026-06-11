@@ -32,7 +32,8 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS notes (
             path TEXT PRIMARY KEY, content_hash TEXT, tier INTEGER,
             type TEXT, kind TEXT, title TEXT, updated TEXT,
-            access_count INTEGER NOT NULL DEFAULT 0, status TEXT
+            access_count INTEGER NOT NULL DEFAULT 0, status TEXT,
+            mtime_ns INTEGER, size INTEGER
         );
         CREATE TABLE IF NOT EXISTS vectors (path TEXT PRIMARY KEY, dim INTEGER, embedding BLOB);
         CREATE TABLE IF NOT EXISTS edges (src TEXT, target_slug TEXT, target_path TEXT);
@@ -54,8 +55,9 @@ def _create_schema(conn: sqlite3.Connection) -> None:
     # Additive column migration for DBs created before `status` existed
     # (ADD COLUMN is idempotent-guarded; a fresh DB already has it via CREATE).
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(notes)")}
-    if "status" not in cols:
-        conn.execute("ALTER TABLE notes ADD COLUMN status TEXT")
+    for col, decl in (("status", "TEXT"), ("mtime_ns", "INTEGER"), ("size", "INTEGER")):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE notes ADD COLUMN {col} {decl}")
     # Always stamp the current version: tables are created additively via
     # CREATE TABLE IF NOT EXISTS, so an upgraded DB must report the live version.
     meta_set(conn, "schema_version", str(SCHEMA_VERSION))
@@ -86,14 +88,32 @@ def note_hashes(conn) -> dict[str, str]:
     return {r["path"]: r["content_hash"] for r in conn.execute("SELECT path, content_hash FROM notes")}
 
 
-def upsert_note(conn, path, content_hash, tier, type_, kind, title, updated, status="active"):
+def note_stats(conn) -> dict[str, dict]:
+    """{path: {content_hash, mtime_ns, size}} — the indexer's skip-screen inputs."""
+    return {
+        r["path"]: {"content_hash": r["content_hash"], "mtime_ns": r["mtime_ns"], "size": r["size"]}
+        for r in conn.execute("SELECT path, content_hash, mtime_ns, size FROM notes")
+    }
+
+
+def note_count(conn) -> int:
+    return conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
+
+
+def update_note_stat(conn, path, mtime_ns, size):
+    conn.execute("UPDATE notes SET mtime_ns=?, size=? WHERE path=?", (mtime_ns, size, path))
+
+
+def upsert_note(conn, path, content_hash, tier, type_, kind, title, updated, status="active",
+                mtime_ns=None, size=None):
     conn.execute(
-        """INSERT INTO notes(path, content_hash, tier, type, kind, title, updated, status)
-           VALUES(?,?,?,?,?,?,?,?)
+        """INSERT INTO notes(path, content_hash, tier, type, kind, title, updated, status, mtime_ns, size)
+           VALUES(?,?,?,?,?,?,?,?,?,?)
            ON CONFLICT(path) DO UPDATE SET
              content_hash=excluded.content_hash, tier=excluded.tier, type=excluded.type,
-             kind=excluded.kind, title=excluded.title, updated=excluded.updated, status=excluded.status""",
-        (path, content_hash, int(tier), type_, kind, title, updated, status),
+             kind=excluded.kind, title=excluded.title, updated=excluded.updated, status=excluded.status,
+             mtime_ns=excluded.mtime_ns, size=excluded.size""",
+        (path, content_hash, int(tier), type_, kind, title, updated, status, mtime_ns, size),
     )
 
 

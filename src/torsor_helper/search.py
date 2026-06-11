@@ -67,6 +67,11 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
 
     k = config.index.rrf_k
     pool = max(limit * 4, 20)
+    if type_ is not None or kind is not None:
+        # Filters are applied after RRF fusion; with a selective filter, matches
+        # ranked below the unfiltered top pool would be unreachable (empty result
+        # despite good matches). Widen the candidate pool to the whole corpus.
+        pool = max(pool, db.note_count(conn))
     qvec = embedder.embed([query])[0]
     vec_ranked = db.cosine_search(conn, qvec, pool)
     fts_ranked = db.fts_search(conn, query, pool)

@@ -83,3 +83,50 @@ def test_bootstrap_weaves_recommendations_digest(tmp_path):
     out = ops.bootstrap_session(store, TorsorConfig())
     assert "## Recommendations" in out
     assert "seed template" in out.lower()  # the thin hygiene nudge
+
+
+def _adr_forbidding_requests(store):
+    (store.paths.decisions_dir / "0090-no-requests.md").write_text(
+        "---\ntype: decision\nrules:\n  - kind: forbid_import\n    target: requests\n    scope: '*.py'\n---\n\n# ADR\n\nb\n"
+    )
+
+
+def test_guard_run_baseline_ratchet(tmp_path):
+    store = _store(tmp_path)
+    config = TorsorConfig()
+    _adr_forbidding_requests(store)
+    (tmp_path / "old.py").write_text("import requests\n")
+
+    result = ops.guard_run(store, config, ["old.py"], update_baseline=True)
+    assert result["updated_baseline"] and result["baselined"] == 1
+
+    # grandfathered violation alone: strict passes
+    result = ops.guard_run(store, config, ["old.py"], strict=True)
+    assert result["failed"] is False and result["new"] == []
+
+    # a NEW violation in another file: strict fails
+    (tmp_path / "new.py").write_text("import requests\n")
+    result = ops.guard_run(store, config, ["old.py", "new.py"], strict=True)
+    assert result["failed"] is True
+    assert len(result["new"]) == 1 and result["baselined"] == 1
+
+
+def test_check_drift_when_torsor_root_is_nested_in_git_repo(tmp_path):
+    import subprocess
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True)
+
+    git("init")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "Test")
+
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    store = Store(TorsorPaths(sub), clock=CLOCK)
+    store.scaffold()
+    _adr_forbidding_requests(store)
+    (sub / "app.py").write_text("import requests\n")  # untracked change, path sub/app.py at toplevel
+
+    vs = ops.check_drift(store, TorsorConfig())  # files=None → git-changed discovery
+    assert any(v.file == "app.py" for v in vs)

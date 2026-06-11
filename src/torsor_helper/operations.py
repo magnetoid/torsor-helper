@@ -325,18 +325,40 @@ def record_decision(store, title, context, decision, consequences="", rules=None
 
 def _git_changed(root) -> list[str]:
     import subprocess
+    from pathlib import Path
+
     try:
+        toplevel = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
         changed = subprocess.run(
             ["git", "-C", str(root), "diff", "--name-only", "HEAD"],
             capture_output=True, text=True, timeout=10,
         ).stdout.split()
         untracked = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "--others", "--exclude-standard"],
+            # --full-name: toplevel-relative like `diff --name-only`, regardless
+            # of where inside the repo the torsor root sits
+            ["git", "-C", str(root), "ls-files", "--others", "--exclude-standard", "--full-name"],
             capture_output=True, text=True, timeout=10,
         ).stdout.split()
     except (OSError, subprocess.SubprocessError):
         return []
-    return [f for f in (changed + untracked) if f.endswith(".py")]
+    if not toplevel:
+        return []
+    # git paths are relative to the repo TOPLEVEL, not to the torsor root —
+    # re-anchor them (and drop files outside the root) so a .torsor/ living in
+    # a subdirectory of the git repo doesn't silently check the wrong paths.
+    top, base = Path(toplevel), Path(root).resolve()
+    out: list[str] = []
+    for f in changed + untracked:
+        if not f.endswith(".py"):
+            continue
+        try:
+            out.append((top / f).relative_to(base).as_posix())
+        except ValueError:
+            continue  # outside the torsor root — not ours to check
+    return out
 
 
 def check_drift(store, config, files=None) -> list:
@@ -351,6 +373,23 @@ def new_drift(store, config, files=None) -> list:
 
     violations = check_drift(store, config, files)
     return _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))
+
+
+def guard_run(store, config, files=None, *, update_baseline=False, strict=False, severity=None) -> dict:
+    """The single guard orchestration both adapters share: check drift, apply
+    the baseline ratchet, and decide strict failure — so the MCP tool and the
+    CLI command can't diverge in behavior."""
+    from torsor_helper import baseline as _baseline
+
+    violations = check_drift(store, config, files)
+    if update_baseline:
+        _baseline.save(store.paths.baseline_file, violations)
+        return {"violations": violations, "new": [], "baselined": len(violations),
+                "failed": False, "updated_baseline": True}
+    new = _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))
+    failed = bool(strict and guard.strict_failures(new, severity))
+    return {"violations": violations, "new": new, "baselined": len(violations) - len(new),
+            "failed": failed, "updated_baseline": False}
 
 
 def check_dependencies(store, config, files=None) -> list:
