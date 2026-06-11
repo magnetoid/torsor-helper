@@ -10,7 +10,14 @@
   <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700&display=swap" rel="stylesheet" />
+  <script>
+    /* set theme before first paint to avoid a flash */
+    document.documentElement.dataset.theme =
+      localStorage.getItem("theme") ||
+      (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  </script>
   <link rel="stylesheet" href="css/style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>☁️</text></svg>" />
 </head>
@@ -43,6 +50,7 @@
         <a href="#about">About</a>
         <a href="#faq">FAQ</a>
       </nav>
+      <button class="theme-toggle" aria-label="Switch color theme" title="Switch theme">☾</button>
       <a href="#contact" class="btn btn--small" data-magnetic>Start a project <span class="btn__arrow">→</span></a>
       <button class="nav__burger" aria-label="Open menu" aria-expanded="false">
         <span></span><span></span>
@@ -51,6 +59,7 @@
   </header>
 
   <div class="mobile-menu" aria-hidden="true">
+    <button class="theme-toggle" aria-label="Switch color theme" title="Switch theme">☾</button>
     <a href="#work">Work</a>
     <a href="#services">Services</a>
     <a href="#process">Process</a>

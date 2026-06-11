@@ -38,12 +38,18 @@ scrolling if the CDNs are unreachable, and all motion is disabled under
 
 ## Design decisions (based on 2026 trend research)
 
-- **Dark mode as identity** — near-black base with an animated aurora gradient
-  and film-grain overlay, not just an inverted light theme.
+- **Dark mode as identity, light mode as an equal** — near-black base with
+  an animated aurora gradient and film-grain overlay; a full light theme
+  ships too (sun/moon toggle in the nav, remembers the visitor's choice,
+  defaults to their OS preference). Product mockups stay dark in light
+  mode so they read as real product screenshots.
+- **Type system** — `Clash Display` (headlines) + `Satoshi` (body) from
+  Fontshare, with `Instrument Serif` italic accents and `JetBrains Mono`
+  for data; system fallbacks throughout.
 - **Active bento grid** — service tiles reveal extra detail chips and a
   cursor-tracking spotlight on hover.
-- **Serif-italic kinetic accents** — `Instrument Serif` italics inside
-  `Space Grotesk` display type; hero lines animate in with masked rise-up.
+- **Serif-italic kinetic accents** — `Instrument Serif` italics inside the
+  display type; the hero headline animates in char-by-char with GSAP.
 - **Case-study-first selling** — each product gets a CSS-drawn live "mockup"
   (dashboard, order list, chat + thought graph, agent terminal) instead of
   stock screenshots, plus concrete outcome bullets.

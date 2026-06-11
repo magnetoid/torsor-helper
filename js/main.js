@@ -37,6 +37,22 @@
     });
   }
 
+  /* ── theme toggle ────────────────────────────────────── */
+  const rootEl = document.documentElement;
+  const themeButtons = document.querySelectorAll(".theme-toggle");
+  const applyTheme = (t) => {
+    rootEl.dataset.theme = t;
+    themeButtons.forEach((b) => { b.textContent = t === "light" ? "☀" : "☾"; });
+  };
+  applyTheme(rootEl.dataset.theme || "dark");
+  themeButtons.forEach((b) =>
+    b.addEventListener("click", () => {
+      const next = rootEl.dataset.theme === "light" ? "dark" : "light";
+      applyTheme(next);
+      try { localStorage.setItem("theme", next); } catch (_) { /* private mode */ }
+    })
+  );
+
   /* ── nav scroll state ────────────────────────────────── */
   const nav = document.querySelector(".nav");
   const onScroll = () => nav.classList.toggle("is-scrolled", window.scrollY > 24);
@@ -235,7 +251,8 @@
         if (Math.hypot(dxm, dym) < 180) { p.x += dxm * 0.0035; p.y += dym * 0.0035; }
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(160, 170, 255, 0.55)";
+        ctx.fillStyle = rootEl.dataset.theme === "light"
+          ? "rgba(86, 96, 220, 0.5)" : "rgba(160, 170, 255, 0.55)";
         ctx.fill();
       }
       for (let i = 0; i < points.length; i++) {
@@ -245,7 +262,9 @@
           if (d < LINK) {
             ctx.beginPath();
             ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-            ctx.strokeStyle = `rgba(122, 124, 255, ${(1 - d / LINK) * 0.16})`;
+            ctx.strokeStyle = rootEl.dataset.theme === "light"
+              ? `rgba(86, 96, 220, ${(1 - d / LINK) * 0.14})`
+              : `rgba(122, 124, 255, ${(1 - d / LINK) * 0.16})`;
             ctx.lineWidth = 1;
             ctx.stroke();
           }
