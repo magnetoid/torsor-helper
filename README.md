@@ -24,6 +24,8 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 **Contents:** [Why](#-why) · [Every feature — what & when](#-every-feature--what-it-solves--when-to-use-it) · [What's new](#-whats-new) · [How it works](#-how-it-works) · [Install](#-install) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Usage](#-usage) · [Team / HTTP mode](#-team--http-mode) · [What's inside](#-whats-inside) · [Status](#-status--roadmap) · [Design](#-design--prior-art)
 
 > **New here / vibe-coding a startup?** Jump to [**Every feature — what it solves & when to use it**](#-every-feature--what-it-solves--when-to-use-it) for a plain-language guide to which tool helps with what.
+>
+> 📚 **Step-by-step guides:** [**How to install**](docs/how-to-install.md) — every install path + setup for all 20 supported clients · [**How to use**](docs/how-to-use.md) — the day-to-day workflow, ADR rules, CI, and the full CLI/MCP reference.
 
 ## ⏱️ The 30-second version
 
@@ -161,7 +163,7 @@ Twelve improvements distilled from deep research into the best memory / repo-map
 
 ## 📦 Install
 
-`torsor-helper` is a small, local-first Python package (Python ≥ 3.11).
+`torsor-helper` is a small, local-first Python package (Python ≥ 3.11). *(Full walkthrough incl. troubleshooting: [docs/how-to-install.md](docs/how-to-install.md).)*
 
 **Available now — install the global `torsor` command straight from GitHub (no PyPI needed):**
 ```bash
@@ -269,6 +271,8 @@ torsor init --client <name>
 > **Note:** the config uses `command: "torsor"`, which requires the `torsor` command on your PATH (`uv tool install` / `pipx install`). Running ephemerally instead? Use `"command": "uvx", "args": ["torsor-helper", "mcp"]`.
 
 ## 🛠️ Usage
+
+*(Full day-to-day guide — first hour, daily loop, rule kinds, CI recipes, FAQ: [docs/how-to-use.md](docs/how-to-use.md).)*
 
 ### CLI
 
