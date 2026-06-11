@@ -178,27 +178,25 @@ def guard(
     """Check changes against declared architectural intent (ADR rules)."""
     import json
 
-    from torsor_helper import baseline as _baseline
-    from torsor_helper import guard as _guard
-
     tp = TorsorPaths(root)
     if not tp.base.exists():
         typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
         raise typer.Exit(code=1)
     config = load_config(tp)
     store = Store(tp)
-    violations = ops.check_drift(store, config, paths or None)
+    result = ops.guard_run(
+        store, config, paths or None,
+        update_baseline=update_baseline, strict=strict, severity=severity,
+    )
+    violations = result["violations"]
 
     if update_baseline:
-        _baseline.save(tp.baseline_file, violations)
         typer.echo(f"Baselined {len(violations)} violation(s) → {tp.baseline_file}")
         return
 
-    new = _baseline.new_violations(violations, _baseline.load(tp.baseline_file))
-
     if as_json:
         typer.echo(json.dumps([v.model_dump() for v in violations]))
-        if strict and _guard.strict_failures(new, severity):
+        if result["failed"]:
             raise typer.Exit(code=1)
         return
 
@@ -207,10 +205,9 @@ def guard(
         return
     for v in violations:
         typer.echo(f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})")
-    baselined = len(violations) - len(new)
-    tail = f" ({baselined} baselined)" if baselined else ""
+    tail = f" ({result['baselined']} baselined)" if result["baselined"] else ""
     typer.echo(f"\n{len(violations)} drift violation(s){tail}.")
-    if strict and _guard.strict_failures(new, severity):
+    if result["failed"]:
         raise typer.Exit(code=1)
 
 

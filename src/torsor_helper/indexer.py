@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 from torsor_helper import db
@@ -36,20 +37,38 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
     if db.meta_get(conn, "indexed_schema") != str(db.SCHEMA_VERSION):
         full = True
 
-    existing = db.note_hashes(conn)
+    existing = db.note_stats(conn)
     seen: set[str] = set()
     pending: list[tuple[str, str]] = []  # (path, body) to embed
 
-    for note in store.iter_notes():
-        path = str(note.path)
+    for md in store.iter_note_paths():
+        path = str(md)
         seen.add(path)
-        if not full and existing.get(path) == note.content_hash:
+        try:
+            st = md.stat()
+        except OSError:
+            continue
+        row = existing.get(path)
+        # Stat pre-screen: an unchanged (mtime, size) means an unchanged file —
+        # skip the read + YAML parse + hash entirely. At a few thousand notes
+        # this is the difference between O(stat) and O(read+parse) per recall.
+        if not full and row and row["mtime_ns"] == st.st_mtime_ns and row["size"] == st.st_size:
+            continue
+        try:
+            note = store.read_note(md)
+        except (OSError, UnicodeDecodeError) as exc:
+            warnings.warn(f"skipping unreadable note {md}: {exc}")
+            continue
+        if not full and row and row["content_hash"] == note.content_hash:
+            # touched but identical (e.g. rewrite of the same content): refresh
+            # the stat columns so the pre-screen works next time, skip re-embed
+            db.update_note_stat(conn, path, st.st_mtime_ns, st.st_size)
             continue
         kind = getattr(note.frontmatter, "kind", None)
         db.upsert_note(
             conn, path, note.content_hash, int(note.tier),
             note.frontmatter.type, kind, note.title, note.frontmatter.updated or "",
-            note.frontmatter.status,
+            note.frontmatter.status, mtime_ns=st.st_mtime_ns, size=st.st_size,
         )
         breadcrumb = _breadcrumb(note)
         # FTS title carries the breadcrumb (BM25 weights it; body_of never reads

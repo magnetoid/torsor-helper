@@ -137,13 +137,19 @@ class Store:
             content_hash=self.content_hash(text),
         )
 
-    def iter_notes(self) -> Iterator[Note]:
+    def iter_note_paths(self) -> Iterator[Path]:
+        """All note files in the pyramid (excluding the disposable index), in
+        sorted order — without reading them (cheap stat-level iteration)."""
         if not self.paths.base.exists():
             return
         index = self.paths.index_dir.resolve()
         for md in sorted(self.paths.base.rglob("*.md")):
             if index in md.resolve().parents:
                 continue
+            yield md
+
+    def iter_notes(self) -> Iterator[Note]:
+        for md in self.iter_note_paths():
             try:
                 note = self.read_note(md)
             except (OSError, UnicodeDecodeError) as exc:

@@ -127,3 +127,28 @@ def test_connect_enables_wal_and_busy_timeout(tmp_path):
     conn = db.connect(tmp_path / "i.db")
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA busy_timeout").fetchone()[0] >= 5000
+
+
+def test_reindex_skips_unchanged_notes_without_reading(tmp_path, monkeypatch):
+    store, conn = _setup(tmp_path)
+    reindex(store, conn, HashingEmbedder(dim=64))
+    reads = []
+    orig = store.read_note
+    monkeypatch.setattr(store, "read_note", lambda p: (reads.append(p), orig(p))[1])
+    stats = reindex(store, conn, HashingEmbedder(dim=64))
+    assert stats["indexed"] == 0
+    assert reads == []  # stat pre-screen: unchanged notes are never even read
+
+
+def test_reindex_rewrite_with_same_content_skips_reembed(tmp_path):
+    import os
+
+    store, conn = _setup(tmp_path)
+    reindex(store, conn, HashingEmbedder(dim=64))
+    charter = store.paths.charter
+    charter.write_text(charter.read_text(encoding="utf-8"), encoding="utf-8")  # touch, same bytes
+    os.utime(charter, ns=(1, 1))  # force a different mtime
+    stats = reindex(store, conn, HashingEmbedder(dim=64))
+    assert stats["indexed"] == 0  # hash check still skips; stat columns refreshed
+    stats = reindex(store, conn, HashingEmbedder(dim=64))
+    assert stats["indexed"] == 0
