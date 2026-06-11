@@ -25,6 +25,18 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 > **New here / vibe-coding a startup?** Jump to [**Every feature — what it solves & when to use it**](#-every-feature--what-it-solves--when-to-use-it) for a plain-language guide to which tool helps with what.
 
+## ⏱️ The 30-second version
+
+| When | You (or your agent) do | What it buys you |
+|---|---|---|
+| **Once per project** | `torsor init --write`, fill `charter.md` + your architecture rules, commit `.torsor/` | Every future session starts from the same truth — no more re-explaining the project |
+| **Once per project** | `torsor rules --write AGENTS.md` (or `CLAUDE.md`) | Your rules ride along in the agent's prompt file — **zero tool-call tokens** to follow them |
+| **Every session** | agent calls `bootstrap_session()` first, `handoff()` last | No blank-slate starts; the next session resumes where this one stopped |
+| **While coding** | agent calls `recall()` / `get_intent()` / `impact()` before changing things | Finds prior decisions and existing code instead of re-inventing or breaking it |
+| **Before commit / in CI** | `torsor guard --strict` · `torsor deps` | Catches architectural drift and hallucinated packages the moment they appear |
+| **Weekly-ish** | `torsor coach` · `torsor consolidate` | Hotspot/coupling nudges; journal noise distilled into clean insights |
+
+
 ## 💡 Why
 
 AI coding agents are brilliant in the moment and forgetful over time:
@@ -182,6 +194,14 @@ torsor doctor                # sanity-check
 
 `torsor init` creates the `.torsor/` pyramid (commit it — it's your project's memory). `--write` drops a `.mcp.json` so MCP clients that read it (**Claude Code** especially) auto-detect torsor-helper. That's it — your agent now has memory.
 
+Then put your standing rules where the agent reads them for free:
+
+```bash
+torsor rules --write AGENTS.md     # or CLAUDE.md — refresh any time you record a new ADR
+```
+
+`torsor rules` distills your charter's non-negotiable principles plus every machine-readable ADR rule into a compact (~600-token, budget-capped) digest, written into a managed block in your agent's prompt file. The agent sees the constraints **at prompt time — no tool calls, no rediscovery, no burned context** — and `torsor guard` still enforces the same rules deterministically in CI. Re-running replaces the block, never duplicates it.
+
 ## 🔌 Connect your agent (Claude Code, Codex, Cursor, …)
 
 torsor-helper is a standard **MCP stdio server** — the command is `torsor mcp`. Point any MCP client at it. `torsor init --client <name>` prints exact, copy-paste config for your tool.
@@ -233,6 +253,7 @@ torsor init --client windsurf   # or: claude-desktop · vscode · gemini · clin
 | `torsor map [--force]` | Generate the repository symbol map + reference edges (skips when unchanged; `--force` to re-scan) |
 | `torsor impact <symbol>` | Show the blast radius of a symbol — who references it, across files |
 | `torsor export` | Write a portable `llms.txt` + a Mermaid module-dependency diagram into the map |
+| `torsor rules [--write <file>]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write` maintains a managed block in `AGENTS.md`/`CLAUDE.md` — prompt-time rules at zero tool-call cost |
 | `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
 | `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** recommendations |
@@ -248,11 +269,12 @@ torsor init --client windsurf   # or: claude-desktop · vscode · gemini · clin
 | `handoff()` | Structured end-of-session summary → seeds the next session |
 | `get_intent(topic?)` · `map_repo(force?)` · `impact(symbol)` | Surface architecture + symbols relevant to a change; show a symbol's caller blast radius |
 | `record_decision(..., supersedes?)` · `check_drift(..., as_json?, new_only?)` | Record ADRs (that become rules); flag changes that violate intent |
+| `get_rules()` | The standing constraints (principles + ADR rules) as one compact digest — load once per session |
 | `check_dependencies(files?)` · `export()` | Flag hallucinated imports (slopsquatting); portable `llms.txt` + Mermaid diagram |
 | `recommend(context?)` · `consolidate()` | The Coach (health · reuse · hotspots · coupling · regressions · phantom-deps); self-improving maintenance |
 
 ### A typical loop
-1. **Once:** `torsor init --write`, fill in `charter.md` + `architecture/`, commit `.torsor/`.
+1. **Once:** `torsor init --write`, fill in `charter.md` + `architecture/`, commit `.torsor/`; `torsor rules --write AGENTS.md` so the rules live in the prompt.
 2. **Each session:** the agent calls `bootstrap_session()` → gets your charter, architecture, active state, recent memory, and a hygiene nudge or two.
 3. **While working:** it `recall()`s prior decisions, `get_intent()` before changes, and `remember()`s what it learns.
 4. **Before a commit:** `check_drift()` flags anything that violates your ADR rules.
