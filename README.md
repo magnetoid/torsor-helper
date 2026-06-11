@@ -392,4 +392,5 @@ Full design + every phase plan live in [`docs/superpowers/`](docs/superpowers/) 
 
 ---
 
-<div align="center"><sub>Built with the <a href="https://claude.com/claude-code">Claude Code</a> superpowers workflow — brainstorm → spec → plan → TDD → review.</sub></div>
+<div align="center"><sub>Author: <a href="https://mtiosavljevic.com">Marko Tiosavljevic</a> · <a href="https://imbamarketing.com">Imba Marketing</a></sub><br>
+<sub>Built with the <a href="https://claude.com/claude-code">Claude Code</a> superpowers workflow — brainstorm → spec → plan → TDD → review.</sub></div>
