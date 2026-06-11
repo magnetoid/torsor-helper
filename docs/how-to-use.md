@@ -51,6 +51,27 @@ A disposable SQLite index (FTS5 + local vectors + link graph) is derived from th
 5. **Session end** — `handoff(summary=..., next_steps=...)` writes the note the next session resumes from. This is the single highest-value habit.
 6. **Weekly-ish** — `torsor coach` for recommendations, `torsor consolidate` to distill the journal into per-topic insight notes.
 
+## Instant guardrails: best-practice packs
+
+Don't want to write rules from scratch? Adopt a curated pack — the consensus of major style guides and default linter rules (PEP 8/ruff/bandit, ESLint/typescript-eslint recommended, Uber Go guide, clippy), weighted toward mistakes AI agents are *documented* to make (swallowed exceptions, XSS sinks, `as any`, leftover debug output, hardcoded secrets, `todo!()` stubs):
+
+```bash
+torsor practices                      # auto-detect languages, list the packs
+torsor practices python --apply       # record the pack as an ADR (guard now enforces its rules)
+torsor guard --update-baseline        # grandfather pre-existing violations once
+torsor rules --write AGENTS.md        # put the principles in the prompt
+```
+
+Packs: `python` · `javascript` · `typescript` (includes the JS pack) · `go` · `rust` · `agent` (language-agnostic AI-hygiene: secrets, commented-out code, untagged TODOs, …). Each pack is one ADR — edit or supersede it like any other decision. Severity policy: only near-zero-false-positive patterns are `error`; noisier ones ship as `warning`/`hint` so `--strict --severity error` stays trustworthy.
+
+## Saving tokens: the primer
+
+```bash
+torsor primer --write AGENTS.md       # or CLAUDE.md; --tokens 800 by default
+```
+
+Writes a budgeted, managed block — what the project is, how it's architected, the key modules, plus token-efficiency habits (recall before re-reading files, impact instead of repo-grep, bootstrap once). Content the agent reads at prompt time costs **zero discovery tool-calls per session**. Re-run after big changes; it replaces the block, never duplicates. Coexists with the `torsor rules` block in the same file.
+
 ## Keeping your architecture: ADRs → rules → guard
 
 ADRs carry machine-readable `rules:` in their frontmatter. Four rule kinds:
@@ -126,6 +147,9 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `torsor impact <symbol>` | Who references a symbol, across files |
 | `torsor export` | `llms.txt` + Mermaid module diagram |
 | `torsor rules [--write <file>]` | Compact rules digest; `--write` maintains a managed block in AGENTS.md/CLAUDE.md |
+| `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs as guard-enforced ADRs |
+| `torsor primer [--write <file>] [--tokens N]` | Token-saving prompt-time project primer (managed block) |
+| `torsor update [--print-only]` | Self-update the CLI (detects uv tool / pipx / pip) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | ADR-rule drift check with CI ratchet |
 | `torsor deps [files…] [--strict]` | Offline hallucinated-dependency check |
 | `torsor coach [context] [--dismiss <key>]` | Recommendations |
@@ -144,6 +168,7 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `get_intent(topic?)` | Before building a feature |
 | `map_repo(force?)` / `impact(symbol)` | After big changes / before touching a shared symbol |
 | `record_decision(title, context, decision, consequences?, rules?, supersedes?)` | On load-bearing choices |
+| `get_primer(max_tokens?)` / `list_practices(lang?)` / `adopt_practices(lang)` | Orientation without exploration; instant guardrail packs |
 | `check_drift(files?, as_json?, new_only?)` | Before commits |
 | `check_dependencies(files?)` | After adding imports |
 | `export()` / `recommend(context?)` / `consolidate()` | Periodically |
