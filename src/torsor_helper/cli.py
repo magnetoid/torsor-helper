@@ -85,6 +85,31 @@ def mcp(
 
 
 @app.command()
+def update(
+    print_only: bool = typer.Option(False, "--print-only", help="Show the upgrade command without running it."),
+) -> None:
+    """Update the torsor CLI itself (detects uv tool / pipx / pip installs)."""
+    import subprocess
+
+    from torsor_helper import updater
+
+    method = updater.detect_install_method()
+    cmd = updater.update_command(method)
+    if cmd is None:
+        typer.echo(updater.manual_hint(method))
+        return
+    typer.echo(f"Detected install method: {method}")
+    typer.echo("$ " + " ".join(cmd))
+    if print_only:
+        return
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        typer.echo("Update failed — run the command above manually.", err=True)
+        raise typer.Exit(code=result.returncode)
+    typer.echo("Updated. Check with: torsor --version")
+
+
+@app.command()
 def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) -> None:
     """Verify a torsor-helper project is healthy."""
     paths = TorsorPaths(root)
@@ -207,6 +232,51 @@ def rules(
         typer.echo("No rules to export yet — fill the charter's principles or record ADRs with rules.")
         return
     typer.echo(digest)
+
+
+@app.command()
+def practices(
+    language: Optional[str] = typer.Argument(None, help="python · javascript · typescript · go · rust · agent (default: auto-detect from the repo)."),
+    apply: bool = typer.Option(False, "--apply", help="Adopt the pack: record an ADR whose rules `torsor guard` enforces."),
+    root: Path = typer.Option(Path("."), help="Project root."),
+) -> None:
+    """List or adopt curated, research-backed best-practice packs (consensus style-guide + linter rules, weighted toward documented AI-coding failure modes)."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    if apply:
+        if not language:
+            typer.echo("Pass a language to adopt, e.g. `torsor practices python --apply`.", err=True)
+            raise typer.Exit(code=1)
+        result = ops.adopt_practices(store, config, language)
+        typer.echo(result["message"])
+        if not result["adopted"]:
+            raise typer.Exit(code=1)
+        return
+    typer.echo(ops.list_practices(store, config, language))
+
+
+@app.command()
+def primer(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    write: Optional[Path] = typer.Option(None, "--write", help="Write/refresh a managed primer block in this file (e.g. AGENTS.md or CLAUDE.md). Idempotent."),
+    tokens: int = typer.Option(800, "--tokens", help="Token budget for the primer."),
+) -> None:
+    """Token-saver: print a budgeted prompt-time project primer (charter + architecture + repo map + token-efficiency habits) — content in the prompt file costs zero discovery tool-calls per session."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    if write is not None:
+        target = ops.write_primer_block(store, config, write, max_tokens=tokens)
+        typer.echo(f"Wrote primer block → {target} (re-run after big changes or `torsor map`)")
+        return
+    typer.echo(ops.project_primer(store, config, max_tokens=tokens))
 
 
 @app.command()

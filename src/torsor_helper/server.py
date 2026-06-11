@@ -86,6 +86,22 @@ def build_server(root: Path | str) -> FastMCP:
         return digest or "No rules declared yet — fill the charter's principles or record ADRs with rules."
 
     @mcp.tool()
+    def get_primer(max_tokens: int = 800) -> str:
+        """Token-saver: a budgeted project primer (charter + architecture + repo map + token-efficient tool habits). Load once instead of exploring — or better, `torsor primer --write AGENTS.md` makes it free at prompt time."""
+        return ops.project_primer(store, config, max_tokens=max_tokens)
+
+    @mcp.tool()
+    def list_practices(language: str = "") -> str:
+        """List the curated best-practice pack for a language (python · javascript · typescript · go · rust · agent). Empty language auto-detects from the repo."""
+        return ops.list_practices(store, config, language or None)
+
+    @mcp.tool()
+    def adopt_practices(language: str) -> str:
+        """Adopt a curated best-practice pack: records an ADR whose machine-readable rules `torsor guard` then enforces. Refresh the prompt block after with `torsor rules --write`."""
+        result = ops.adopt_practices(store, config, language)
+        return result["message"]
+
+    @mcp.tool()
     def record_decision(title: str, context: str, decision: str, consequences: str = "", rules: list[dict] | None = None, supersedes: str | None = None) -> str:
         """Record an Architecture Decision Record. Optional `rules` become drift-guard rules; `supersedes` (an ADR id/slug) marks a prior ADR superseded."""
         path = ops.record_decision(store, title, context, decision, consequences, rules, supersedes)

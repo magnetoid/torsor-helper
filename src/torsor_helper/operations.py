@@ -241,19 +241,18 @@ def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int = 600) ->
     return truncate_to_tokens(digest, max_tokens, config.budgets.chars_per_token)
 
 
-def write_rules_block(store: Store, config: TorsorConfig, target) -> str:
-    """Write/refresh the digest as a marker-delimited block in `target`
-    (AGENTS.md, CLAUDE.md, …). Idempotent — re-running replaces the block."""
+def _write_managed_block(target, start: str, end: str, content: str) -> str:
+    """Write/refresh a marker-delimited block in `target` (AGENTS.md,
+    CLAUDE.md, …). Idempotent — re-running replaces the block, never duplicates."""
     from pathlib import Path
 
-    digest = agent_rules(store, config)
-    block = f"{_RULES_START}\n{digest}\n{_RULES_END}"
+    block = f"{start}\n{content}\n{end}"
     target = Path(target)
     if target.exists():
         text = target.read_text(encoding="utf-8")
-        if _RULES_START in text and _RULES_END in text:
-            pre, rest = text.split(_RULES_START, 1)
-            post = rest.split(_RULES_END, 1)[1]
+        if start in text and end in text:
+            pre, rest = text.split(start, 1)
+            post = rest.split(end, 1)[1]
             new = pre + block + post
         else:
             new = text.rstrip() + "\n\n" + block + "\n"
@@ -261,6 +260,51 @@ def write_rules_block(store: Store, config: TorsorConfig, target) -> str:
         new = block + "\n"
     target.write_text(new, encoding="utf-8")
     return str(target)
+
+
+def write_rules_block(store: Store, config: TorsorConfig, target) -> str:
+    return _write_managed_block(target, _RULES_START, _RULES_END, agent_rules(store, config))
+
+
+_PRIMER_START = "<!-- torsor:primer -->"
+_PRIMER_END = "<!-- /torsor:primer -->"
+
+_TOKEN_PLAYBOOK = """### Work token-efficiently
+- Call `bootstrap_session()` ONCE at session start — never re-call it mid-session.
+- Before reading files to "understand the project", try `recall(query)` / `get_intent(topic)` — prior decisions and the symbol map are already indexed.
+- Use `impact(symbol)` instead of repo-wide grep to find callers.
+- Don't re-derive what's in this primer; it is current as of the last `torsor primer --write`.
+- `remember()` decisions and `handoff()` at session end so the next session skips rediscovery entirely."""
+
+
+def project_primer(store: Store, config: TorsorConfig, *, max_tokens: int = 800) -> str:
+    """Token-saver: a budgeted, prompt-time project primer (what this is, how
+    it's shaped, where things live, and token-efficient tool habits). Content
+    an agent reads in the prompt file costs zero discovery tool-calls per
+    session — the cheapest tokens are the ones never spent."""
+    cpt = config.budgets.chars_per_token
+    sections: list[str] = []
+
+    for label, path, frac in [
+        ("What this project is", store.paths.charter, 0.30),
+        ("How it's architected", store.paths.system_patterns, 0.30),
+        ("Repo map (key modules)", store.paths.map_overview, 0.20),
+    ]:
+        if path.exists():
+            body = store.read_note(path).body.strip()
+            text = truncate_to_tokens(body, int(max_tokens * frac), cpt)
+            if text.strip():
+                sections.append(f"### {label}\n{text}")
+
+    sections.append(_TOKEN_PLAYBOOK)
+    primer = "## Project primer (torsor-helper)\n\n" + "\n\n".join(sections)
+    return truncate_to_tokens(primer, max_tokens, cpt)
+
+
+def write_primer_block(store: Store, config: TorsorConfig, target, *, max_tokens: int = 800) -> str:
+    return _write_managed_block(
+        target, _PRIMER_START, _PRIMER_END, project_primer(store, config, max_tokens=max_tokens)
+    )
 
 
 def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
@@ -384,6 +428,60 @@ def record_decision(store, title, context, decision, consequences="", rules=None
     return str(target)
 
 
+# Extensions the default git-changed discovery feeds to guard/deps. Non-Python
+# files only ever match forbid_pattern rules scoped to them (AST checkers and
+# the deps check no-op gracefully on non-Python sources).
+_SOURCE_EXTS = (".py", ".pyi", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".go", ".rs")
+
+
+def list_practices(store, config, language=None) -> str:
+    """Render the curated best-practice pack(s): one language, or every pack
+    detected in the repo when language is None."""
+    from torsor_helper import practices as _practices
+
+    if language is None:
+        detected = _practices.detect_languages(store.paths.root)
+        if not detected:
+            return "No supported languages detected. Available packs: " + ", ".join(
+                _practices.available_languages()
+            )
+        return "\n\n".join(_practices.render(lang) for lang in detected)
+    try:
+        return _practices.render(language)
+    except KeyError:
+        return f"Unknown pack {language!r}. Available: " + ", ".join(_practices.available_languages())
+
+
+def adopt_practices(store, config, language) -> dict:
+    """Adopt a best-practice pack: records ONE ADR carrying the pack's
+    machine-readable rules (guard enforces them) + prose principles."""
+    from torsor_helper import practices as _practices
+
+    try:
+        payload = _practices.adr_payload(language)
+    except KeyError:
+        return {
+            "adopted": False,
+            "message": f"Unknown pack {language!r}. Available: "
+                       + ", ".join(_practices.available_languages()),
+        }
+    slug = _slug(payload["title"])
+    if store.paths.decisions_dir.exists():
+        for existing in store.paths.decisions_dir.glob("*.md"):
+            if slug in existing.stem:
+                return {"adopted": False, "message": f"Already adopted: {existing} (edit or supersede it instead)."}
+    path = record_decision(store, **payload)
+    return {
+        "adopted": True,
+        "path": path,
+        "message": (
+            f"Adopted the {language} pack → {path}\n"
+            "Next: `torsor guard --update-baseline` to grandfather existing code, "
+            "then `torsor rules --write AGENTS.md` to refresh the prompt block."
+        ),
+    }
+
+
 def _git_changed(root) -> list[str]:
     import subprocess
     from pathlib import Path
@@ -413,7 +511,7 @@ def _git_changed(root) -> list[str]:
     top, base = Path(toplevel), Path(root).resolve()
     out: list[str] = []
     for f in changed + untracked:
-        if not f.endswith(".py"):
+        if not f.endswith(_SOURCE_EXTS):
             continue
         try:
             out.append((top / f).relative_to(base).as_posix())

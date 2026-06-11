@@ -110,6 +110,7 @@ In your agent, ask it to call `bootstrap_session()` — you should get back your
 ## 6. Upgrade / uninstall
 
 ```bash
+torsor update                          # detects uv tool / pipx / pip and runs the right upgrade
 uv tool upgrade torsor-helper          # or: pipx upgrade torsor-helper
 uv tool uninstall torsor-helper        # or: pipx uninstall torsor-helper
 ```

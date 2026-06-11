@@ -88,6 +88,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 |---|---|---|
 | **Charter / pyramid** (`.torsor/`) | Plain-Markdown files holding your project's purpose, architecture, decisions, and current state. | **Set up once.** Fill `charter.md` + `architecture/` so every session starts from the same truth. |
 | `bootstrap_session()` | A budgeted summary of the whole project, loaded at the start of a chat. | **Every new session** — the first thing the agent should call so it's not a blank slate. |
+| `torsor primer --write` | **Token saver:** writes a budgeted project primer + token-efficiency habits into AGENTS.md/CLAUDE.md, so orientation costs zero tool calls. | **Once, then after big changes** — the cheapest tokens are the ones never spent. |
 | `recall(query)` | Hybrid semantic + keyword search over all your memory and notes. | The agent asks *"have we decided X?"* / *"how does auth work here?"* before writing code. |
 | `remember(content)` · `update_active(...)` | The agent writes down what it learns / the current focus. | After a decision, a gotcha, or finishing a chunk — so the next session inherits it. |
 | `handoff()` | A structured end-of-session summary that seeds the next session. | **End of a work session**, before you close the chat. |
@@ -105,6 +106,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 | Feature | What it does | Reach for it when… |
 |---|---|---|
 | `record_decision(...)` (ADRs) | Records an Architecture Decision — optionally with machine-readable **rules**. | You make a load-bearing call (*"the domain layer may not import the web layer"*). |
+| `torsor practices --apply` | Adopts a **curated, research-backed best-practice pack** for your language (consensus linter/style rules, weighted toward documented AI failure modes) as one ADR the guard enforces. | **Project start**, or the first time you turn guardrails on — instant rules without writing them yourself. |
 | `torsor guard` | Flags code that violates your ADR rules (`forbid_import`, layering, required seams…). | **Before every commit / in CI** (`--strict`). Catches drift the moment it appears. |
 | `guard --update-baseline` | Grandfathers existing violations so `--strict` fails only on **new** drift. | **Adopting torsor on an existing/messy repo** — turn on CI without a wall of red. |
 | `record_decision(..., supersedes=…)` | Marks an old ADR superseded so stale intent stops resurfacing in recall. | You change your mind — the new decision replaces the old cleanly. |
@@ -286,6 +288,9 @@ torsor init --client <name>
 | `torsor map [--force]` | Generate the repository symbol map + reference edges (skips when unchanged; `--force` to re-scan) |
 | `torsor impact <symbol>` | Show the blast radius of a symbol — who references it, across files |
 | `torsor export` | Write a portable `llms.txt` + a Mermaid module-dependency diagram into the map |
+| `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs (python · javascript · typescript · go · rust · agent) — `--apply` records an ADR the guard enforces |
+| `torsor primer [--write <file>] [--tokens N]` | **Token saver:** budgeted prompt-time project primer (charter + architecture + map + token-efficiency habits) — zero discovery tool-calls per session |
+| `torsor update [--print-only]` | Update the torsor CLI itself (detects uv tool / pipx / pip installs) |
 | `torsor rules [--write <file>]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write` maintains a managed block in `AGENTS.md`/`CLAUDE.md` — prompt-time rules at zero tool-call cost |
 | `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
@@ -303,6 +308,7 @@ torsor init --client <name>
 | `get_intent(topic?)` · `map_repo(force?)` · `impact(symbol)` | Surface architecture + symbols relevant to a change; show a symbol's caller blast radius |
 | `record_decision(..., supersedes?)` · `check_drift(..., as_json?, new_only?)` | Record ADRs (that become rules); flag changes that violate intent |
 | `get_rules()` | The standing constraints (principles + ADR rules) as one compact digest — load once per session |
+| `get_primer(max_tokens?)` · `list_practices(lang?)` · `adopt_practices(lang)` | Token-saving project primer; list/adopt curated best-practice packs as guard-enforced ADRs |
 | `check_dependencies(files?)` · `export()` | Flag hallucinated imports (slopsquatting); portable `llms.txt` + Mermaid diagram |
 | `recommend(context?)` · `consolidate()` | The Coach (health · reuse · hotspots · coupling · regressions · phantom-deps); self-improving maintenance |
 
