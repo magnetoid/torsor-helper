@@ -103,6 +103,18 @@ em.serif.glow {
   50% { transform: translate(2%,-3%); } 75% { transform: translate(-2%,-2%); }
 }
 
+/* ── scroll progress bar ────────────────────────────────── */
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 2.5px;
+  background: var(--grad);
+  transform: scaleX(0);
+  transform-origin: left;
+  z-index: 200;
+  pointer-events: none;
+}
+
 /* ── custom cursor ──────────────────────────────────────── */
 
 .cursor { display: none; }
@@ -229,6 +241,14 @@ em.serif.glow {
   padding-top: 7rem; padding-bottom: 4rem;
   position: relative;
 }
+.constellation {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(120% 100% at 50% 40%, #000 40%, transparent 85%);
+  mask-image: radial-gradient(120% 100% at 50% 40%, #000 40%, transparent 85%);
+}
+.hero .container { position: relative; }
 .hero__badge {
   display: inline-flex; align-items: center; gap: 0.6em;
   font-family: var(--font-mono); font-size: 0.78rem;
@@ -788,6 +808,36 @@ em.serif.glow {
   .case { grid-template-columns: 1fr; }
   .case--flip .case__visual { order: 1; }
   .case--flip .case__info { order: 2; }
+}
+
+/* ── GSAP mode ──────────────────────────────────────────── */
+
+/* when GSAP drives animation, neutralize the CSS fallbacks
+   so elements aren't double-animated or stuck hidden */
+.gsap-on .reveal { opacity: 1; transform: none; transition: none; }
+.gsap-on .hero__line { overflow: visible; }
+.gsap-on .hero__title { perspective: 700px; }
+
+.char { display: inline-block; transform-origin: 50% 100%; }
+
+/* gradient text must be applied per-char: transforms on children
+   break background-clip rendering on the parent */
+em.serif.glow .char {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* tilt is applied via CSS vars so it can't fight GSAP's inline
+   scroll transforms: case visuals tilt their inner mockup,
+   standalone cards tilt themselves */
+[data-tilt] .mockup { transition: transform 0.35s var(--ease); }
+[data-tilt].is-tilting .mockup {
+  transform: perspective(900px) rotateX(var(--tiltX, 0deg)) rotateY(var(--tiltY, 0deg));
+}
+.bento__card.is-tilting, .quote.is-tilting, .cta__card.is-tilting {
+  transform: perspective(900px) rotateX(var(--tiltX, 0deg)) rotateY(var(--tiltY, 0deg));
 }
 
 /* ── reduced motion ─────────────────────────────────────── */
