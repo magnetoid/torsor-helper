@@ -87,3 +87,17 @@ def test_rules_prints_digest_and_writes_managed_block(tmp_path):
     result = runner.invoke(app, ["rules", "--root", str(tmp_path), "--write", str(target)])
     assert result.exit_code == 0, result.output
     assert target.exists() and "torsor:rules" in target.read_text()
+
+
+def test_version_flag_prints_version():
+    from torsor_helper import __version__
+
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert f"torsor-helper {__version__}" in result.output
+
+
+def test_init_client_snippet_includes_config_location(tmp_path):
+    result = runner.invoke(app, ["init", "--root", str(tmp_path), "--client", "vscode"])
+    assert result.exit_code == 0, result.output
+    assert "goes in:" in result.output and ".vscode/mcp.json" in result.output

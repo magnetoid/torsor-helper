@@ -24,6 +24,8 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 **Contents:** [Why](#-why) · [Every feature — what & when](#-every-feature--what-it-solves--when-to-use-it) · [What's new](#-whats-new) · [How it works](#-how-it-works) · [Install](#-install) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Usage](#-usage) · [Team / HTTP mode](#-team--http-mode) · [What's inside](#-whats-inside) · [Status](#-status--roadmap) · [Design](#-design--prior-art)
 
 > **New here / vibe-coding a startup?** Jump to [**Every feature — what it solves & when to use it**](#-every-feature--what-it-solves--when-to-use-it) for a plain-language guide to which tool helps with what.
+>
+> 📚 **Step-by-step guides:** [**How to install**](docs/how-to-install.md) — every install path + setup for all 20 supported clients · [**How to use**](docs/how-to-use.md) — the day-to-day workflow, ADR rules, CI, and the full CLI/MCP reference.
 
 ## ⏱️ The 30-second version
 
@@ -161,7 +163,7 @@ Twelve improvements distilled from deep research into the best memory / repo-map
 
 ## 📦 Install
 
-`torsor-helper` is a small, local-first Python package (Python ≥ 3.11).
+`torsor-helper` is a small, local-first Python package (Python ≥ 3.11). *(Full walkthrough incl. troubleshooting: [docs/how-to-install.md](docs/how-to-install.md).)*
 
 **Available now — install the global `torsor` command straight from GitHub (no PyPI needed):**
 ```bash
@@ -232,21 +234,52 @@ args = ["mcp"]
 { "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
 ```
 
-### Everything else
-The same `mcpServers` block works for **Windsurf, Cline, Roo, Trae, Kiro, Warp, Claude Desktop, Gemini CLI, VS Code/Copilot** — only the config file location differs. Get the exact snippet with:
-```bash
-torsor init --client windsurf   # or: claude-desktop · vscode · gemini · cline · roo · trae · kiro · warp
+### VS Code / GitHub Copilot
+VS Code uses its own `servers` shape in **`.vscode/mcp.json`** (or Command Palette → *MCP: Add Server*). `torsor init --client vscode` prints it:
+```json
+{ "servers": { "torsor-helper": { "type": "stdio", "command": "torsor", "args": ["mcp"] } } }
 ```
+
+### Google Antigravity
+Agent panel → settings → **MCP Servers** → *Manage* opens `mcp_config.json` — paste the standard block (`torsor init --client antigravity`):
+```json
+{ "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
+```
+
+### Everything else — one command prints your client's exact config + where it goes
+```bash
+torsor init --client <name>
+```
+
+| Client | `--client` | Config goes in |
+|---|---|---|
+| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` (Settings → Cascade → MCP) |
+| Trae | `trae` | AI chat → Settings → MCP → Add manually |
+| Cline / Roo Code | `cline` / `roo` | extension → MCP Servers → Configure |
+| Claude Desktop | `claude-desktop` | `claude_desktop_config.json` (Settings → Developer) |
+| Gemini CLI | `gemini` | `~/.gemini/settings.json` or project `.gemini/settings.json` |
+| GitHub Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` (or `/mcp add` in the CLI) |
+| Zed | `zed` | `settings.json` (`context_servers` shape — snippet handles it) |
+| JetBrains AI / Junie | `jetbrains` | Settings → Tools → AI Assistant → MCP → Add |
+| Continue | `continue` | `.continue/config.yaml` (YAML shape — snippet handles it) |
+| OpenCode | `opencode` | `opencode.json` (its own `mcp` shape — snippet handles it) |
+| Amp | `amp` | VS Code `settings.json` under `amp.mcpServers` |
+| Goose | `goose` | `~/.config/goose/config.yaml` (or `goose configure`) |
+| Kiro | `kiro` | `.kiro/settings/mcp.json` |
+| Warp | `warp` | Settings → AI → Manage MCP servers |
 
 > **Note:** the config uses `command: "torsor"`, which requires the `torsor` command on your PATH (`uv tool install` / `pipx install`). Running ephemerally instead? Use `"command": "uvx", "args": ["torsor-helper", "mcp"]`.
 
 ## 🛠️ Usage
+
+*(Full day-to-day guide — first hour, daily loop, rule kinds, CI recipes, FAQ: [docs/how-to-use.md](docs/how-to-use.md).)*
 
 ### CLI
 
 | Command | What it does |
 |---|---|
 | `torsor init [--write] [--client <name>]` | Scaffold `.torsor/`; `--write` emits `.mcp.json`; `--client` prints that client's config |
+| `torsor --version` | Print the installed torsor-helper version |
 | `torsor mcp [--http --host --port]` | Run the MCP server (stdio by default; `--http` for a shared service) |
 | `torsor doctor` | Verify the project is healthy |
 | `torsor index [--full]` | Build/refresh the derived search index |
@@ -359,4 +392,5 @@ Full design + every phase plan live in [`docs/superpowers/`](docs/superpowers/) 
 
 ---
 
-<div align="center"><sub>Built with the <a href="https://claude.com/claude-code">Claude Code</a> superpowers workflow — brainstorm → spec → plan → TDD → review.</sub></div>
+<div align="center"><sub>Author: <a href="https://mtiosavljevic.com">Marko Tiosavljevic</a> · <a href="https://imbamarketing.com">Imba Marketing</a></sub><br>
+<sub>Built with the <a href="https://claude.com/claude-code">Claude Code</a> superpowers workflow — brainstorm → spec → plan → TDD → review.</sub></div>
