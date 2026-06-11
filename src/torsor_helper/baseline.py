@@ -6,11 +6,13 @@ from pathlib import Path
 
 from torsor_helper.models import Violation
 
-# The baseline grandfathers pre-existing drift so `--strict` fails only on NEW
-# violations. It is keyed on (file, rule_kind, target) and COUNTS per tuple —
-# no fuzzy snippet-hash (which could let a genuinely-new violation silently
-# inherit an old hash). It lives at .torsor/baseline.json: committed, reviewable
-# config, NOT under the disposable .index/. Only `--update-baseline` writes it.
+# The baseline grandfathers pre-existing drift so `--strict` fails only when a
+# file's violation COUNT per (file, rule_kind, target) grows — no fuzzy
+# snippet-hash (which could let a genuinely-new violation silently inherit an
+# old hash). Count semantics mean fixing one grandfathered violation frees a
+# slot for a new one of the same kind in the same file (ADR 0005 trade-off).
+# It lives at .torsor/baseline.json: committed, reviewable config, NOT under
+# the disposable .index/. Only `--update-baseline` writes it.
 
 
 def _key(v: Violation) -> tuple[str, str, str]:

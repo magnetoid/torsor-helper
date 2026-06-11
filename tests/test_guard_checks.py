@@ -129,3 +129,54 @@ def test_require_import_only_applies_in_scope(tmp_path):
     files = {v.file for v in check_drift(store, ["handlers/h.py", "util.py"])}
     assert "handlers/h.py" in files
     assert "util.py" not in files
+
+
+def test_forbid_import_resolves_relative_imports():
+    # `from . import server` inside the package is the idiomatic way an agent
+    # writes the forbidden import — it must not bypass the rule.
+    rule = Rule(kind="forbid_import", target="torsor_helper.server", source="ADR 2")
+    assert len(violations_for_file("src/torsor_helper/operations.py", "from . import server\n", rule)) == 1
+    assert len(violations_for_file("src/torsor_helper/operations.py", "from .server import run\n", rule)) == 1
+    # the same statement in a *different* package must NOT match
+    assert violations_for_file("src/other/x.py", "from .server import run\n", rule) == []
+
+
+def test_require_import_not_satisfied_by_unrelated_relative_import():
+    rule = Rule(kind="require_import", target="audit", source="ADR")
+    # `from .audit import log` in pkg/ resolves to pkg.audit, not top-level audit
+    assert len(violations_for_file("pkg/x.py", "from .audit import log\n", rule)) == 1
+
+
+def test_require_import_satisfied_by_relative_import():
+    rule = Rule(kind="require_import", target="torsor_helper.auth", source="ADR")
+    assert violations_for_file("src/torsor_helper/x.py", "from . import auth\n", rule) == []
+
+
+def test_forbid_layer_import_resolves_relative_imports():
+    rule = Rule(kind="forbid_layer_import", target=r"features\.b(\.|$)", scope="features/a/*.py", source="ADR")
+    assert len(violations_for_file("features/a/x.py", "from ..b import api\n", rule)) == 1
+
+
+def test_check_drift_reads_bom_files(tmp_path):
+    store = Store(TorsorPaths(tmp_path), clock=CLOCK)
+    store.scaffold()
+    adr = store.paths.decisions_dir / "0002-no-requests.md"
+    adr.write_text(
+        "---\ntype: decision\nrules:\n  - kind: forbid_import\n    target: requests\n    scope: '*.py'\n---\n\n# ADR\n\nb\n"
+    )
+    (tmp_path / "bom.py").write_text("\ufeffimport requests\n", encoding="utf-8")
+    vs = check_drift(store, ["bom.py"])
+    assert any(v.file == "bom.py" for v in vs)
+
+
+def test_check_drift_survives_malformed_decision_note(tmp_path):
+    store = Store(TorsorPaths(tmp_path), clock=CLOCK)
+    store.scaffold()
+    good = store.paths.decisions_dir / "0002-no-requests.md"
+    good.write_text(
+        "---\ntype: decision\nrules:\n  - kind: forbid_import\n    target: requests\n    scope: '*.py'\n---\n\n# ADR\n\nb\n"
+    )
+    (store.paths.decisions_dir / "0003-broken.md").write_bytes(b"\xff\xfe not utf-8")
+    (tmp_path / "app.py").write_text("import requests\n")
+    vs = check_drift(store, ["app.py"])  # must not raise; good rules still apply
+    assert any(v.file == "app.py" for v in vs)

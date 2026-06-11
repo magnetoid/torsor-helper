@@ -54,6 +54,13 @@ def mcp(
     """Run the torsor-helper MCP server (stdio by default; --http for a shared service)."""
     from torsor_helper.server import run
 
+    if http and host not in ("127.0.0.1", "localhost", "::1"):
+        typer.echo(
+            "WARNING: the HTTP transport has no authentication. Binding to a non-loopback "
+            f"host ({host}) exposes read/write access to this project's memory to anyone who "
+            "can reach the port. Put it behind a reverse proxy with auth, or use an SSH tunnel.",
+            err=True,
+        )
     run(root, transport="streamable-http" if http else "stdio", host=host, port=port)
 
 

@@ -34,3 +34,9 @@ def test_scan_repo_explicit_paths(tmp_path):
     _make_repo(tmp_path)
     syms = scan_repo(tmp_path, paths=["app.py"])
     assert {s.module for s in syms} == {"app.py"}
+
+
+def test_scan_handles_utf8_bom(tmp_path):
+    (tmp_path / "bom.py").write_text("\ufeffdef f():\n    pass\n", encoding="utf-8")
+    syms = scan_repo(tmp_path)
+    assert any(s.name == "f" for s in syms)

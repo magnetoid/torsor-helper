@@ -64,3 +64,66 @@ def test_reindex_records_type_and_kind(tmp_path):
     row = db.note_row(conn, str(journal))
     assert row["type"] == "journal"
     assert db.neighbors(conn, str(journal)) == [str(store.paths.charter)]
+
+
+def test_reindex_survives_malformed_and_undecodable_notes(tmp_path):
+    import warnings
+
+    store, conn = _setup(tmp_path)
+    bad_dir = store.paths.journal_dir
+    bad_dir.mkdir(parents=True, exist_ok=True)
+    (bad_dir / "bad-yaml.md").write_text("---\nfoo: [unclosed\n---\n\nstill text\n")
+    (bad_dir / "bad-date.md").write_text("---\ntype: note\ncreated: 2026-06-01\n---\n\n# D\n\nbody\n")
+    (bad_dir / "bad-bytes.md").write_bytes(b"\xff\xfe not utf-8")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        stats = reindex(store, conn, HashingEmbedder(dim=64))
+    assert stats["indexed"] >= 8  # one bad note must not brick the whole index
+
+
+def test_reindex_full_when_index_schema_changes(tmp_path):
+    store, conn = _setup(tmp_path)
+    reindex(store, conn, HashingEmbedder(dim=64))
+    db.meta_set(conn, "indexed_schema", "3")  # simulate a DB built by an older torsor
+    conn.commit()
+    stats = reindex(store, conn, HashingEmbedder(dim=64))
+    assert stats["indexed"] == stats["total"]  # format change forces one full rebuild
+    assert db.meta_get(conn, "indexed_schema") == str(db.SCHEMA_VERSION)
+
+
+def test_wikilink_edges_resolve_regardless_of_index_order(tmp_path):
+    store, conn = _setup(tmp_path)
+    a = store.paths.journal_dir / "aaa.md"
+    z = store.paths.journal_dir / "zzz.md"
+    a.parent.mkdir(parents=True, exist_ok=True)
+    a.write_text("---\ntype: note\n---\n\n# A\n\nsee [[zzz]]\n")
+    z.write_text("---\ntype: note\n---\n\n# Z\n\nzzz body\n")
+    reindex(store, conn, HashingEmbedder(dim=64))
+    # aaa sorts before zzz, so insert-time resolution alone would miss this edge
+    assert db.neighbors(conn, str(a)) == [str(z)]
+
+
+def test_wikilink_edges_heal_when_target_created_later(tmp_path):
+    store, conn = _setup(tmp_path)
+    a = store.paths.journal_dir / "aaa.md"
+    a.parent.mkdir(parents=True, exist_ok=True)
+    a.write_text("---\ntype: note\n---\n\n# A\n\nsee [[zzz]]\n")
+    reindex(store, conn, HashingEmbedder(dim=64))
+    assert db.neighbors(conn, str(a)) == []
+    z = store.paths.journal_dir / "zzz.md"
+    z.write_text("---\ntype: note\n---\n\n# Z\n\nzzz body\n")
+    reindex(store, conn, HashingEmbedder(dim=64))  # incremental: aaa itself unchanged
+    assert db.neighbors(conn, str(a)) == [str(z)]
+
+
+def test_slug_resolution_is_literal_not_like_pattern(tmp_path):
+    conn = db.connect(tmp_path / "i.db")
+    db.upsert_note(conn, "notes/myXnote.md", "h", 4, "note", None, "t", "")
+    db.replace_edges(conn, "src.md", ["my_note"])  # '_' must not act as a wildcard
+    assert db.neighbors(conn, "src.md") == []
+
+
+def test_connect_enables_wal_and_busy_timeout(tmp_path):
+    conn = db.connect(tmp_path / "i.db")
+    assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    assert conn.execute("PRAGMA busy_timeout").fetchone()[0] >= 5000

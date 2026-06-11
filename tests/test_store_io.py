@@ -73,3 +73,18 @@ def test_write_note_does_not_mutate_caller_frontmatter(tmp_path):
     # the caller's object must remain un-stamped
     assert fm.created is None
     assert fm.updated is None
+
+
+def test_iter_notes_skips_unreadable_files(tmp_path):
+    import pytest
+
+    paths = TorsorPaths(tmp_path)
+    store = Store(paths, clock=CLOCK)
+    store.scaffold()
+    bad = paths.journal_dir / "bad.md"
+    bad.parent.mkdir(parents=True, exist_ok=True)
+    bad.write_bytes(b"\xff\xfe not utf-8 \xff")
+    with pytest.warns(UserWarning, match="bad.md"):
+        notes = list(store.iter_notes())
+    assert notes  # the seeded notes still come through
+    assert all(n.path != bad for n in notes)

@@ -30,6 +30,12 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
     if db.meta_get(conn, "embedder") not in (None, identity):
         full = True
 
+    # If the index *format* changed since this DB was last built (e.g. what goes
+    # into the FTS title or the embedding input), unchanged content hashes would
+    # keep stale rows forever — force one full rebuild per schema bump.
+    if db.meta_get(conn, "indexed_schema") != str(db.SCHEMA_VERSION):
+        full = True
+
     existing = db.note_hashes(conn)
     seen: set[str] = set()
     pending: list[tuple[str, str]] = []  # (path, body) to embed
@@ -63,6 +69,11 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
             db.delete_note(conn, path)
             deleted += 1
 
+    # Heal wikilink edges whose target was indexed after the linking note
+    # (insert-order dependence) or has been deleted since.
+    db.reresolve_edges(conn)
+
     db.meta_set(conn, "embedder", identity)
+    db.meta_set(conn, "indexed_schema", str(db.SCHEMA_VERSION))
     conn.commit()
     return {"indexed": len(pending), "deleted": deleted, "total": len(seen)}

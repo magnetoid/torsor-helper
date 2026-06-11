@@ -56,3 +56,22 @@ def test_end_to_end_remember_then_bootstrap(tmp_path):
     ops.remember(store, "Picked FastMCP", kind="decision", links=[])
     out = ops.bootstrap_session(store, load_config(paths))
     assert "Picked FastMCP" in out
+
+
+def test_mcp_http_warns_on_non_loopback_host(tmp_path, monkeypatch):
+    import torsor_helper.server as server_mod
+
+    monkeypatch.setattr(server_mod, "run", lambda *a, **k: None)
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http", "--host", "0.0.0.0"])
+    assert result.exit_code == 0, result.output
+    assert "no authentication" in result.output
+
+
+def test_mcp_http_loopback_does_not_warn(tmp_path, monkeypatch):
+    import torsor_helper.server as server_mod
+
+    monkeypatch.setattr(server_mod, "run", lambda *a, **k: None)
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http"])
+    assert "no authentication" not in result.output

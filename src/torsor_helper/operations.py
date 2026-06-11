@@ -215,7 +215,7 @@ def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
         syms = db.search_symbols(conn, base, limit=50)
         exact = [s for s in syms if s.name == symbol]
         matches = exact or [s for s in syms if s.name.split(".")[-1] == base]
-        modules = {cartographer._norm_module(s.module) for s in matches}
+        modules = {cartographer.norm_module(s.module) for s in matches}
 
         callers: list[dict] = []
         seen: set[tuple[str, str]] = set()

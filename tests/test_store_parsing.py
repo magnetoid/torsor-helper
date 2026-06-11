@@ -40,3 +40,34 @@ def test_tier_for_path(tmp_path):
     assert Store.tier_for_path(paths, paths.map_overview) is Tier.MAP
     assert Store.tier_for_path(paths, paths.active_context) is Tier.ACTIVE
     assert Store.tier_for_path(paths, paths.journal_file("2026-06-01")) is Tier.EPISODIC
+
+
+def test_parse_frontmatter_tolerates_unquoted_date():
+    # A human editing Markdown writes `created: 2026-06-01`; YAML parses that as
+    # a date object — it must coerce, never crash the indexing pipeline.
+    text = "---\ntype: note\ncreated: 2026-06-01\n---\n\n# T\n\nbody\n"
+    fm, body = Store.parse_frontmatter(text)
+    assert fm.created == "2026-06-01"
+    assert "body" in body
+
+
+def test_parse_frontmatter_tolerates_invalid_yaml():
+    fm, _ = Store.parse_frontmatter("---\nfoo: [unclosed\n---\n\n# T\n\nbody\n")
+    assert fm.type == "note"
+
+
+def test_parse_frontmatter_tolerates_scalar_frontmatter():
+    fm, body = Store.parse_frontmatter("---\njust a string\n---\n\n# T\n\nbody\n")
+    assert fm.type == "note"
+    assert "# T" in body
+
+
+def test_parse_frontmatter_tolerates_invalid_field_types():
+    fm, _ = Store.parse_frontmatter("---\ntype: note\ntags: 7\n---\n\nbody\n")
+    assert fm.type == "note"  # degrades, never raises
+
+
+def test_parse_frontmatter_handles_empty_block():
+    fm, body = Store.parse_frontmatter("---\n---\n\n# T\n\nbody\n")
+    assert fm.type == "note"
+    assert "---" not in body
