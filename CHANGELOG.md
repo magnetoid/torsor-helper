@@ -4,6 +4,10 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
+## [Unreleased]
+
+- **🔎 Fuzzy + frecency finder (`torsor find <query>` + `find_files` MCP tool):** fast, offline navigation over the repo's files **and** torsor's mapped symbols — greedy subsequence fuzzy matching with consecutive/boundary bonuses, smart-case, and strong basename preference, plus `literal` and `regex` modes. Files rank by match quality × **frecency** (a new `path_access` table: count + a monotonic per-find recency counter, deterministic — no wall-clock; SCHEMA_VERSION 4→5, additive); symbols by a small `refs` boost. Inspired by [dmtrKovalenko/fff](https://github.com/dmtrKovalenko/fff) — adopts its fuzzy+frecency *ideas* in pure Python while keeping torsor per-call/stateless/offline (no daemon, no Rust; run fff alongside for fff-grade speed on huge repos).
+
 ## [0.3.0] — Resilience Release (2026-06-10)
 
 Four research-driven features targeting documented vibe-coding failure modes (USENIX '25 slopsquatting; "Lost in the Middle"; GitClear duplication; CSA/Veracode security surveys; flow-debt & Truck-Factor papers), each hardened by adversarial review. All local-first, deterministic, offline-testable.

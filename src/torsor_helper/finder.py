@@ -138,6 +138,8 @@ def _frecency_boost(entry, clock: int) -> float:
 def find(store, config, query, *, mode="fuzzy", limit=20, include_files=True, include_symbols=True):
     """Fuzzy/literal/regex search over repo files + mapped symbols, ranked by
     match quality and (for files) frecency. Bumps frecency for returned files."""
+    if not query or not query.strip():
+        return []
     root = store.paths.root
     conn = db.connect(store.paths.index_db) if store.paths.index_db.exists() else None
     results: list[dict] = []

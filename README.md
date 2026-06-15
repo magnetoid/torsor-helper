@@ -9,7 +9,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
 ![status](https://img.shields.io/badge/release-v0.3%20resilience-success)
-![tests](https://img.shields.io/badge/tests-235%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-308%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
@@ -100,6 +100,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 | `torsor map` | Builds a symbol map (functions/classes) **+ real reference edges** ("who calls what"). | **After big changes** (it auto-skips when nothing changed). Powers everything below. |
 | `get_intent(topic)` | Surfaces the architecture + relevant existing symbols for a topic. | Before building a feature — *"what already exists around payments?"* |
 | `torsor impact <symbol>` | Lists every caller of a symbol, across files — the **blast radius**. | **Before you let the agent change/rename a function** — see what breaks first. |
+| `torsor find <query>` | **Fuzzy, frecency-ranked** search over files **and** mapped symbols (literal/regex too). | *"jump me to the file/function that does X"* — fast navigation without exact names. |
 | `torsor export` | Writes a portable `llms.txt` + a GitHub-rendered **Mermaid** module diagram. | Onboarding a teammate/another tool, or you want an at-a-glance architecture picture. |
 
 ### 🛡️ Keeping your architecture — *"it quietly drifts from the plan"*
@@ -287,6 +288,7 @@ torsor init --client <name>
 | `torsor index [--full]` | Build/refresh the derived search index |
 | `torsor map [--force]` | Generate the repository symbol map + reference edges (skips when unchanged; `--force` to re-scan) |
 | `torsor impact <symbol>` | Show the blast radius of a symbol — who references it, across files |
+| `torsor find <query> [--mode] [--files-only/--symbols-only]` | Fuzzy + frecency search over files and mapped symbols (fuzzy/literal/regex) |
 | `torsor export` | Write a portable `llms.txt` + a Mermaid module-dependency diagram into the map |
 | `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs (python · javascript · typescript · go · rust · agent) — `--apply` records an ADR the guard enforces |
 | `torsor primer [--write <file>] [--tokens N]` | **Token saver:** budgeted prompt-time project primer (charter + architecture + map + token-efficiency habits) — zero discovery tool-calls per session |
@@ -306,6 +308,7 @@ torsor init --client <name>
 | `remember(content)` · `update_active(...)` | Self-editing memory the agent maintains as it works |
 | `handoff()` | Structured end-of-session summary → seeds the next session |
 | `get_intent(topic?)` · `map_repo(force?)` · `impact(symbol)` | Surface architecture + symbols relevant to a change; show a symbol's caller blast radius |
+| `find_files(query, mode?)` | Fuzzy, frecency-ranked search over repo files + mapped symbols (fuzzy/literal/regex) |
 | `record_decision(..., supersedes?)` · `check_drift(..., as_json?, new_only?)` | Record ADRs (that become rules); flag changes that violate intent |
 | `get_rules()` | The standing constraints (principles + ADR rules) as one compact digest — load once per session |
 | `get_primer(max_tokens?)` · `list_practices(lang?)` · `adopt_practices(lang)` | Token-saving project primer; list/adopt curated best-practice packs as guard-enforced ADRs |
