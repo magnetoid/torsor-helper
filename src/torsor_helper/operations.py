@@ -202,6 +202,15 @@ def export_project(store: Store, config: TorsorConfig) -> dict:
     return _export.export_project(store, config)
 
 
+def find_targets(store: Store, config: TorsorConfig, query: str, *, mode: str = "fuzzy",
+                 limit: int = 20, include_files: bool = True, include_symbols: bool = True) -> list:
+    """Fuzzy/literal/regex find over repo files + mapped symbols, frecency-ranked."""
+    from torsor_helper import finder
+
+    return finder.find(store, config, query, mode=mode, limit=limit,
+                       include_files=include_files, include_symbols=include_symbols)
+
+
 _RULES_START = "<!-- torsor:rules -->"
 _RULES_END = "<!-- /torsor:rules -->"
 

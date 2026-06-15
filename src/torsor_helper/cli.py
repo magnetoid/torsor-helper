@@ -196,6 +196,36 @@ def impact(
 
 
 @app.command()
+def find(
+    query: str = typer.Argument(..., help="Fuzzy query for files and mapped symbols."),
+    root: Path = typer.Option(Path("."), help="Project root."),
+    mode: str = typer.Option("fuzzy", help="Match mode: fuzzy | literal | regex."),
+    limit: int = typer.Option(20, help="Max results."),
+    files_only: bool = typer.Option(False, "--files-only", help="Only repo files."),
+    symbols_only: bool = typer.Option(False, "--symbols-only", help="Only mapped symbols."),
+) -> None:
+    """Fuzzy, frecency-ranked search over the repo's files and mapped symbols."""
+    paths = TorsorPaths(root)
+    if not paths.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(paths)
+    store = Store(paths)
+    res = ops.find_targets(
+        store, config, query, mode=mode, limit=limit,
+        include_files=not symbols_only, include_symbols=not files_only,
+    )
+    if not res:
+        typer.echo(f"No matches for {query!r}.")
+        return
+    for r in res:
+        if r["type"] == "file":
+            typer.echo(f"  {r['path']}")
+        else:
+            typer.echo(f"  {r['module']}:{r['line']}  {r['name']} ({r['kind']})")
+
+
+@app.command()
 def export(root: Path = typer.Option(Path("."), help="Project root to export.")) -> None:
     """Export the pyramid to a portable llms.txt + a Mermaid module diagram."""
     paths = TorsorPaths(root)

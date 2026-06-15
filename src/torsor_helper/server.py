@@ -68,6 +68,20 @@ def build_server(root: Path | str) -> FastMCP:
         return f"{res['count']} reference(s) to {symbol!r}:\n" + "\n".join(lines)
 
     @mcp.tool()
+    def find_files(query: str, mode: str = "fuzzy", limit: int = 20) -> str:
+        """Fuzzy, frecency-ranked search over the repo's files and mapped symbols — jump to the right file/symbol fast. mode: fuzzy|literal|regex. Run map_repo first for symbol results."""
+        res = ops.find_targets(store, config, query, mode=mode, limit=limit)
+        if not res:
+            return f"No matches for {query!r}."
+        lines = []
+        for r in res:
+            if r["type"] == "file":
+                lines.append(f"- {r['path']}")
+            else:
+                lines.append(f"- {r['module']}:{r['line']}  {r['name']} ({r['kind']})")
+        return "\n".join(lines)
+
+    @mcp.tool()
     def export() -> str:
         """Export the pyramid to a portable .torsor/llms.txt and a Mermaid module diagram in the map."""
         result = ops.export_project(store, config)

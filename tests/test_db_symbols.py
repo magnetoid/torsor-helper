@@ -19,7 +19,7 @@ def test_schema_version_and_symbol_tables_exist(tmp_path):
     assert "symbols" in tables
     assert "symbol_edges" in tables
     assert "complexity_snapshot" in tables
-    assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION == 4
+    assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION == 5
 
 
 def test_replace_all_edges_and_who_references(tmp_path):

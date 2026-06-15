@@ -9,7 +9,7 @@ import numpy as np
 
 from torsor_helper.models import Symbol
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -49,6 +49,9 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE TABLE IF NOT EXISTS complexity_snapshot (
             file TEXT PRIMARY KEY, complexity INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS path_access (
+            path TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, last_seen INTEGER NOT NULL DEFAULT 0
         );
         """
     )
@@ -304,6 +307,36 @@ def search_symbols(conn, query, limit=10):
 
 def modules(conn):
     return [r["module"] for r in conn.execute("SELECT DISTINCT module FROM symbols ORDER BY module")]
+
+
+def all_symbols(conn):
+    """Lightweight dicts for every mapped symbol — for fuzzy-scoring by the finder."""
+    rows = conn.execute("SELECT name, kind, signature, module, line, refs FROM symbols").fetchall()
+    return [dict(r) for r in rows]
+
+
+def find_clock(conn) -> int:
+    return int(meta_get(conn, "find_clock") or 0)
+
+
+def bump_path_access(conn, paths):
+    """Record that these files were surfaced by a find — frecency signal. The
+    recency stamp is a monotonic per-find counter (deterministic, no clock)."""
+    if not paths:
+        return
+    clock = find_clock(conn) + 1
+    meta_set(conn, "find_clock", str(clock))
+    for p in paths:
+        conn.execute(
+            "INSERT INTO path_access(path, count, last_seen) VALUES(?,1,?) "
+            "ON CONFLICT(path) DO UPDATE SET count=count+1, last_seen=?",
+            (p, clock, clock),
+        )
+    conn.commit()
+
+
+def path_access_map(conn) -> dict:
+    return {r["path"]: (r["count"], r["last_seen"]) for r in conn.execute("SELECT path, count, last_seen FROM path_access")}
 
 
 def save_complexity_snapshot(conn, mapping):
