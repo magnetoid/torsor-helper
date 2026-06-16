@@ -7,19 +7,15 @@ Publishing** (OIDC) — **no API tokens are stored anywhere**.
 
 ## One-time setup (you must do this — it needs your PyPI account)
 
-1. **Create the GitHub `pypi` environment** (once):
-   GitHub repo → *Settings → Environments → New environment* → name it `pypi`.
-   (Optionally add a required reviewer for extra safety.)
+**Register the Trusted Publisher on PyPI** (once):
+Go to <https://pypi.org/manage/account/publishing/> → *Add a new pending publisher* and enter exactly:
+- **PyPI Project Name:** `torsor-helper`
+- **Owner:** `magnetoid`
+- **Repository name:** `torsor-helper`
+- **Workflow name:** `publish.yml`
+- **Environment name:** *(leave blank — the workflow uses no deployment environment)*
 
-2. **Register the Trusted Publisher on PyPI** (once):
-   Go to <https://pypi.org/manage/account/publishing/> → *Add a new pending publisher* and enter exactly:
-   - **PyPI Project Name:** `torsor-helper`
-   - **Owner:** `magnetoid`
-   - **Repository name:** `torsor-helper`
-   - **Workflow name:** `publish.yml`
-   - **Environment name:** `pypi`
-
-   This authorizes the repo's `publish.yml` workflow to upload `torsor-helper` with no secrets.
+This authorizes the repo's `publish.yml` workflow to upload `torsor-helper` with no secrets. (If you'd rather use a GitHub `pypi` environment for protection rules, add `environment: pypi` back to `publish.yml` and set the Environment name field to `pypi` here — both must match.)
 
 ## Cutting a release (repeatable)
 
