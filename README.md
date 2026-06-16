@@ -9,7 +9,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
 ![status](https://img.shields.io/badge/release-v0.3%20resilience-success)
-![tests](https://img.shields.io/badge/tests-321%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-324%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
@@ -163,17 +163,32 @@ torsor recipes
 These are exact, deterministic answers the agent asks for over and over — prime candidates to run on a cheap model (next). It's *frequency tracking*, not a stale answer cache: the lookups stay exact-by-construction; torsor just learns which ones recur.
 
 ### 3. Route cheap vs smart models — `torsor models`
-Declare which model does the basic deterministic work and which one thinks. torsor publishes the routing policy into your agent's prompt file (and as the `get_model_policy` MCP tool); your harness/agent routes by it.
+Declare which model does the basic deterministic work and which one thinks.
 ```bash
 torsor models --cheap claude-haiku-4-5 --smart claude-opus-4-8
 torsor models                      # show current tiers + the policy
-torsor models --write AGENTS.md    # inject a managed "Model routing" block into the prompt file
 ```
 The published policy, in plain terms:
 - **Cheap model** → deterministic torsor lookups + command replays (`recall` · `get_intent` · `find_files` · `impact` · `get_rules` · `check_drift` · `check_dependencies` · `map_repo` · `consolidate` · `list_commands`). They return exact answers — no reasoning, no frontier model needed.
 - **Smart model** → judgement & creation: designing architecture, writing/refactoring code, making decisions.
 
-> **Put together:** the cheap model handles the dozens of recurring exact-answer lookups; the frontier model is reserved for genuine reasoning; and the command book + memory mean *neither* model re-derives what torsor already knows. That's the token — and dollar — saving. torsor only **declares** the policy; routing is done by your orchestrator (e.g. Claude Code subagents, a multi-model router).
+**App-agnostic — torsor only *declares* the policy; your tool *routes* by it, three universal ways:**
+
+| Your app/harness | How it consumes the policy |
+|---|---|
+| **Any MCP client** (Claude Code, Cursor, Codex, Windsurf, Cline, …) | Calls the `get_model_policy()` tool (`as_json` for a parseable form) |
+| **Any agent that reads a rules file** (AGENTS.md / CLAUDE.md / .cursorrules / …) | `torsor models --write AGENTS.md` injects a managed "Model routing" block the agent follows |
+| **Any programmatic router / custom orchestrator** | `torsor models --json` (or `--write policy.json`) emits machine-readable JSON your code routes on |
+
+```bash
+torsor models --write AGENTS.md        # Markdown block — any prompt-reading agent
+torsor models --json                   # machine-readable — pipe into any router
+torsor models --write model-policy.json # …or write the JSON to a file
+```
+
+> **What torsor can and can't do:** it makes the exact answers cheap to fetch and *publishes* the routing policy in these portable forms. Whether a cheap model is actually used depends on your app supporting more than one model — a custom router or Claude Code subagents can route automatically; a single-model chat just gets the policy as guidance. Either way, the **command book + memory** already cut re-derivation regardless of model.
+
+> **Put together:** the cheap model handles the dozens of recurring exact-answer lookups; the frontier model is reserved for genuine reasoning; and the command book + memory mean *neither* model re-derives what torsor already knows. That's the token — and dollar — saving.
 
 ## ✨ What's new
 
@@ -355,7 +370,7 @@ torsor init --client <name>
 | `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, snapshot complexity, report duplicates |
 | `torsor commands [--add 'name=cmd'] [--run name]` | Record & replay project commands (test/build/lint) so agents don't re-derive them |
 | `torsor recipes` | The deterministic lookups you run most — candidates to route to the cheap model |
-| `torsor models [--cheap … --smart …] [--write AGENTS.md]` | Set the cheap/smart model policy and publish it into the agent's prompt file |
+| `torsor models [--cheap … --smart …] [--write AGENTS.md\|policy.json] [--json]` | Set the cheap/smart model policy; publish it as a prompt block, JSON, or via MCP — app-agnostic |
 
 ### MCP tools (what the agent calls)
 
@@ -372,7 +387,7 @@ torsor init --client <name>
 | `get_primer(max_tokens?)` · `list_practices(lang?)` · `adopt_practices(lang)` | Token-saving project primer; list/adopt curated best-practice packs as guard-enforced ADRs |
 | `check_dependencies(files?)` · `export()` | Flag hallucinated imports (slopsquatting); portable `llms.txt` + Mermaid diagram |
 | `record_command(...)` · `list_commands()` · `recipes()` | The learned command book + the most-repeated deterministic lookups (token thrift) |
-| `get_model_policy()` | The cheap/smart model-routing policy to follow — do basic lookups on the cheap model |
+| `get_model_policy(as_json?)` | The cheap/smart model-routing policy to follow — do basic lookups on the cheap model (`as_json` for a parseable form) |
 | `recommend(context?)` · `consolidate()` | The Coach (health · reuse · hotspots · coupling · regressions · phantom-deps); self-improving maintenance |
 
 ### A typical loop

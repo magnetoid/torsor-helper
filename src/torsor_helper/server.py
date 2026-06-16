@@ -124,8 +124,12 @@ def build_server(root: Path | str) -> FastMCP:
         )
 
     @mcp.tool()
-    def get_model_policy() -> str:
-        """The project's model-routing policy (token thrift): which work to run on the cheap model vs the smart model. Follow it — do deterministic torsor lookups on the cheap model, reserve the smart model for design/code/decisions."""
+    def get_model_policy(as_json: bool = False) -> str:
+        """The project's model-routing policy (token thrift): which work to run on the cheap model vs the smart model. Follow it — do deterministic torsor lookups on the cheap model, reserve the smart model for design/code/decisions. as_json for a machine-readable form a router can parse."""
+        if as_json:
+            import json
+
+            return json.dumps(ops.model_policy_json(store, config))
         return ops.model_policy(store, config)
 
     @mcp.tool()

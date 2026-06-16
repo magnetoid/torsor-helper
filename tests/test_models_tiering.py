@@ -50,6 +50,39 @@ def test_write_model_policy_is_idempotent(tmp_path):
     assert text.count("<!-- torsor:models -->") == 1  # block replaced, not duplicated
 
 
+def test_model_policy_json_shape(tmp_path):
+    store = _store(tmp_path)
+    cfg = TorsorConfig()
+    cfg.models.cheap = "ha"
+    cfg.models.smart = "op"
+    pol = ops.model_policy_json(store, cfg)
+    assert pol["cheap"] == "ha" and pol["smart"] == "op"
+    assert "recall" in pol["route"]["cheap"]
+    assert isinstance(pol["route"]["smart"], list) and pol["route"]["smart"]
+
+
+def test_cli_models_json_print(tmp_path):
+    import json
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["models", "--root", str(tmp_path), "--cheap", "ha", "--smart", "op"])
+    r = runner.invoke(app, ["models", "--root", str(tmp_path), "--json"])
+    assert r.exit_code == 0
+    data = json.loads(r.output)
+    assert data["cheap"] == "ha" and "recall" in data["route"]["cheap"]
+
+
+def test_cli_models_write_json_by_extension(tmp_path):
+    import json
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["models", "--root", str(tmp_path), "--cheap", "ha"])
+    r = runner.invoke(app, ["models", "--root", str(tmp_path), "--write", "model-policy.json"])
+    assert r.exit_code == 0
+    data = json.loads((tmp_path / "model-policy.json").read_text(encoding="utf-8"))
+    assert data["cheap"] == "ha" and "smart" in data["route"]
+
+
 def test_cli_models_set_show_write(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     r = runner.invoke(app, ["models", "--root", str(tmp_path), "--cheap", "haikutest", "--smart", "opustest"])

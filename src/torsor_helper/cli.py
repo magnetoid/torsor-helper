@@ -486,9 +486,12 @@ def models(
     cheap: Optional[str] = typer.Option(None, help="Model id for basic, deterministic work (torsor lookups, command replays)."),
     smart: Optional[str] = typer.Option(None, help="Model id for thinking & construction (design, code, decisions)."),
     fast: Optional[str] = typer.Option(None, help="Optional mid-tier model id."),
-    write: Optional[Path] = typer.Option(None, "--write", help="Inject a managed 'Model routing' block into a prompt file (e.g. AGENTS.md). Idempotent."),
+    write: Optional[Path] = typer.Option(None, "--write", help="Publish the policy to a file: a *.md/AGENTS.md/CLAUDE.md target gets a Markdown block (any agent reads it); a *.json target gets machine-readable JSON (any router reads it)."),
+    json_out: bool = typer.Option(False, "--json", help="Print the machine-readable policy (for piping into any harness's router)."),
 ) -> None:
-    """Set cheap/smart model tiers and publish the routing policy (token thrift)."""
+    """Set cheap/smart model tiers and publish the routing policy (token thrift). App-agnostic: any MCP client, any agent rules file, or any programmatic router can consume it."""
+    import json as _json
+
     tp = TorsorPaths(root)
     if not tp.base.exists():
         typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
@@ -506,8 +509,15 @@ def models(
         typer.echo("Updated [models] in torsor.toml.")
     if write is not None:
         target = write if write.is_absolute() else root / write
-        ops.write_model_policy(store, config, target)
-        typer.echo(f"Wrote Model-routing block to {target}.")
+        if str(target).endswith(".json"):
+            target.write_text(_json.dumps(ops.model_policy_json(store, config), indent=2) + "\n", encoding="utf-8")
+            typer.echo(f"Wrote machine-readable model policy to {target} (for programmatic routers).")
+        else:
+            ops.write_model_policy(store, config, target)
+            typer.echo(f"Wrote Model-routing block to {target} (any agent that reads this file follows it).")
+        return
+    if json_out:
+        typer.echo(_json.dumps(ops.model_policy_json(store, config), indent=2))
         return
     typer.echo(f"cheap: {config.models.cheap or '(unset)'}")
     typer.echo(f"smart: {config.models.smart or '(unset)'}")

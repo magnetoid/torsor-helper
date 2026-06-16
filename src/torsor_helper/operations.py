@@ -364,6 +364,20 @@ def model_policy(store: Store, config: TorsorConfig) -> str:
     return "\n".join(lines)
 
 
+def model_policy_json(store: Store, config: TorsorConfig) -> dict:
+    """Machine-readable model-routing policy for programmatic routers (any harness,
+    not just prompt-reading agents). The Markdown form (`model_policy`) is for
+    agents that read a rules file; this is for code that picks the model itself."""
+    return {
+        "cheap": config.models.cheap,
+        "smart": config.models.smart,
+        "fast": config.models.fast,
+        "route": {"cheap": list(_CHEAP_OPS), "smart": list(_SMART_WORK)},
+        "note": "Run the 'cheap' ops + command replays on the cheap model; reserve 'smart' "
+                "for design/code/decisions. torsor declares the policy; the harness routes.",
+    }
+
+
 def write_model_policy(store: Store, config: TorsorConfig, target) -> str:
     return _write_managed_block(target, _MODELS_START, _MODELS_END, model_policy(store, config))
 
