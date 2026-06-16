@@ -424,6 +424,27 @@ def consolidate(root: Path = typer.Option(Path("."), help="Project root.")) -> N
 
 
 @app.command()
+def recipes(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    limit: int = typer.Option(10, help="Max recipes to show."),
+) -> None:
+    """Show the deterministic torsor lookups you run most — prime candidates to route to the cheap model."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    store = Store(tp)
+    recs = ops.recipes(store, limit)
+    if not recs:
+        typer.echo("No recorded operations yet — use torsor for a while, then check back.")
+        return
+    typer.echo("Most-repeated torsor lookups (route these to the cheap model — see `torsor models`):")
+    for r in recs:
+        arg = f" {r['args']!r}" if r["args"] else ""
+        typer.echo(f"  {r['hits']}×  {r['op']}{arg}")
+
+
+@app.command()
 def commands(
     root: Path = typer.Option(Path("."), help="Project root."),
     add: Optional[str] = typer.Option(None, "--add", help="Record a command as 'name=command' (e.g. --add 'test=uv run pytest')."),

@@ -105,7 +105,7 @@ def test_find_populates_frecency(tmp_path):
 
 def test_path_access_roundtrip_and_schema(tmp_path):
     conn = db.connect(tmp_path / "i.db")
-    assert db.SCHEMA_VERSION == 5
+    assert db.SCHEMA_VERSION == 6
     db.bump_path_access(conn, ["a.py", "b.py"])
     db.bump_path_access(conn, ["a.py"])
     access = db.path_access_map(conn)

@@ -100,6 +100,14 @@ def build_server(root: Path | str) -> FastMCP:
         return digest or "No rules declared yet — fill the charter's principles or record ADRs with rules."
 
     @mcp.tool()
+    def recipes(limit: int = 10) -> str:
+        """The deterministic torsor lookups called most often — the recurring work to run on the cheap model (see get_model_policy)."""
+        recs = ops.recipes(store, limit)
+        if not recs:
+            return "No recorded operations yet."
+        return "\n".join(f"- {r['hits']}× {r['op']}" + (f" {r['args']!r}" if r["args"] else "") for r in recs)
+
+    @mcp.tool()
     def record_command(name: str, command: str, note: str = "") -> str:
         """Record a project command (test/build/lint/run/deploy) so it's never re-derived. Persisted to the committed command book and shown in the primer."""
         ops.record_command(store, name, command, note)

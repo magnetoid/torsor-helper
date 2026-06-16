@@ -9,7 +9,7 @@ import numpy as np
 
 from torsor_helper.models import Symbol
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -52,6 +52,10 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE TABLE IF NOT EXISTS path_access (
             path TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, last_seen INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS op_log (
+            op TEXT, args TEXT, hits INTEGER NOT NULL DEFAULT 0, last_used INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY(op, args)
         );
         """
     )
@@ -337,6 +341,27 @@ def bump_path_access(conn, paths):
 
 def path_access_map(conn) -> dict:
     return {r["path"]: (r["count"], r["last_seen"]) for r in conn.execute("SELECT path, count, last_seen FROM path_access")}
+
+
+def log_op(conn, op, args):
+    """Record one deterministic-tool call — the frequency signal behind 'recipes'
+    (what the agent does repeatedly). Recency is a monotonic counter, not a clock."""
+    clock = int(meta_get(conn, "op_clock") or 0) + 1
+    meta_set(conn, "op_clock", str(clock))
+    conn.execute(
+        "INSERT INTO op_log(op, args, hits, last_used) VALUES(?,?,1,?) "
+        "ON CONFLICT(op, args) DO UPDATE SET hits=hits+1, last_used=?",
+        (op, args, clock, clock),
+    )
+    conn.commit()
+
+
+def top_ops(conn, limit=10):
+    rows = conn.execute(
+        "SELECT op, args, hits FROM op_log ORDER BY hits DESC, last_used DESC, op LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [{"op": r["op"], "args": r["args"], "hits": r["hits"]} for r in rows]
 
 
 def save_complexity_snapshot(conn, mapping):

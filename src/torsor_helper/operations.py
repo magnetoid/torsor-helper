@@ -97,6 +97,7 @@ def _open_index(store, config):
 
 
 def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8) -> RecallResult:
+    _log_op(store, "recall", query)
     conn = _open_index(store, config)
     if conn is not None:
         try:
@@ -205,6 +206,7 @@ def export_project(store: Store, config: TorsorConfig) -> dict:
 def find_targets(store: Store, config: TorsorConfig, query: str, *, mode: str = "fuzzy",
                  limit: int = 20, include_files: bool = True, include_symbols: bool = True) -> list:
     """Fuzzy/literal/regex find over repo files + mapped symbols, frecency-ranked."""
+    _log_op(store, "find_files", query)
     from torsor_helper import finder
 
     return finder.find(store, config, query, mode=mode, limit=limit,
@@ -226,6 +228,7 @@ def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int = 600) ->
     charter principles + machine-readable ADR rules — for agent prompt files
     (AGENTS.md / CLAUDE.md). Rules the agent sees at prompt time cost zero
     tool-call tokens per session, and the guard still enforces them in CI."""
+    _log_op(store, "get_rules", "")
     sections: list[str] = []
 
     if store.paths.charter.exists():
@@ -414,10 +417,40 @@ def run_command(store: Store, name: str):
     return subprocess.run(found["command"], shell=True, cwd=str(store.paths.root))
 
 
+# ---- Op frequency log: learn which deterministic lookups recur ----
+
+def _log_op(store: Store, op: str, args: str = "") -> None:
+    """Best-effort: record a deterministic-tool call for the 'recipes' view. Never
+    creates the index just to log, and never raises (logging must not break a tool)."""
+    try:
+        if not store.paths.index_db.exists():
+            return
+        conn = db.connect(store.paths.index_db)
+        try:
+            db.log_op(conn, op, str(args)[:200])
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
+
+def recipes(store: Store, limit: int = 10) -> list:
+    """The most-repeated deterministic lookups — what the agent does over and over,
+    i.e. prime candidates to run on the cheap model."""
+    if not store.paths.index_db.exists():
+        return []
+    conn = db.connect(store.paths.index_db)
+    try:
+        return db.top_ops(conn, limit)
+    finally:
+        conn.close()
+
+
 def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
     """Blast radius of a symbol: who references it, across files, via the
     cartographer's resolved reference edges. Read-only over the existing index
     (run `torsor map` first). Empty when the index/symbol is absent."""
+    _log_op(store, "impact", symbol)
     empty = {"symbol": symbol, "callers": [], "count": 0}
     if not store.paths.index_db.exists():
         return empty
@@ -444,6 +477,7 @@ def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
 
 
 def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:
+    _log_op(store, "get_intent", topic or "")
     cpt = config.budgets.chars_per_token
     total = config.budgets.bootstrap_tokens
     sections: list[str] = []
@@ -628,6 +662,7 @@ def _git_changed(root) -> list[str]:
 
 
 def check_drift(store, config, files=None) -> list:
+    _log_op(store, "check_drift", "")
     if files is None:
         files = _git_changed(store.paths.root)
     return guard.check_drift(store, files)
@@ -661,6 +696,7 @@ def guard_run(store, config, files=None, *, update_baseline=False, strict=False,
 def check_dependencies(store, config, files=None) -> list:
     """Flag imports that resolve to no known package (possible slopsquatting).
     Defaults to git-changed files; fully offline."""
+    _log_op(store, "check_dependencies", "")
     from torsor_helper import deps as _deps
 
     if files is None:
