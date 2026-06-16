@@ -11,7 +11,8 @@ on:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    environment: pypi
+    # No GitHub deployment environment — the PyPI Trusted Publisher is registered
+    # WITHOUT an environment, so the OIDC claims match with one fewer field.
     permissions:
       id-token: write  # required for Trusted Publishing (OIDC)
     steps:
