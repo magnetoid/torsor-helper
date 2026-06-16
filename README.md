@@ -8,7 +8,7 @@
 One small Python **MCP** server — works with *every* AI coding tool (Claude Code, Codex, Cursor, …).
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
-![status](https://img.shields.io/badge/release-v0.3%20resilience-success)
+![status](https://img.shields.io/badge/release-v0.4%20token%20thrift-success)
 ![tests](https://img.shields.io/badge/tests-328%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
@@ -445,7 +445,7 @@ Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs who
 
 ## 📍 Status & roadmap
 
-**v0.3 shipped — 235 tests, lint-clean, dogfooded.** The 6-phase foundation, the 12-improvement intelligence release, and the 4-feature resilience release.
+**v0.4 shipped — 328 tests, lint-clean, dogfooded.** The 6-phase foundation, the intelligence release (v0.2), the resilience release (v0.3), and the token-thrift release (v0.4).
 
 **Foundation (v0.1):**
 - [x] **Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools
@@ -468,7 +468,13 @@ Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs who
 - [x] **Hidden coupling** · temporal-coupling coach recs from git co-change
 - [x] **Never-nag** · complexity-trend "new findings only" regressions
 
-**Planned fast-follows (v0.4):** multi-language map (tree-sitter) for JS/TS · sampling-based *semantic* drift guard · weaving `impact`/`deps` warnings into `check_drift` and pre-commit flows.
+**Token-thrift release (v0.4):**
+- [x] **Navigation** · fuzzy + frecency finder (`torsor find` / `find_files`) over files + mapped symbols
+- [x] **Command book** · `torsor commands` — record & replay project commands (no re-derivation)
+- [x] **Recipes** · `torsor recipes` — learn which deterministic lookups recur
+- [x] **Model routing** · `torsor models` — cheap/smart policy, app-agnostic (MCP · prompt block · JSON), `--client` publish
+
+**Planned fast-follows (v0.5):** multi-language map (tree-sitter) for JS/TS · sampling-based *semantic* drift guard · weaving `impact`/`deps` warnings into `check_drift` and pre-commit flows.
 
 ## 🧪 Built with
 

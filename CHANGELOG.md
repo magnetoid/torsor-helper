@@ -4,7 +4,10 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
-## [Unreleased]
+## [0.4.0] — Token Thrift (2026-06-16)
+
+### Fuzzy + frecency finder & cross-tool publishing
+- **🧭 `--client` for managed blocks:** `torsor rules` / `primer` / `models --write` accept `--client <name>` to write the block into that tool's *conventional* instructions file automatically (CLAUDE.md for Claude Code/Desktop, GEMINI.md for Gemini, AGENTS.md cross-tool default) — no path needed. `clients.instructions_file()`; an explicit `--write` path still overrides.
 
 ### Token thrift — spend fewer, cheaper tokens
 
