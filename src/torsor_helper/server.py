@@ -100,6 +100,11 @@ def build_server(root: Path | str) -> FastMCP:
         return digest or "No rules declared yet — fill the charter's principles or record ADRs with rules."
 
     @mcp.tool()
+    def get_model_policy() -> str:
+        """The project's model-routing policy (token thrift): which work to run on the cheap model vs the smart model. Follow it — do deterministic torsor lookups on the cheap model, reserve the smart model for design/code/decisions."""
+        return ops.model_policy(store, config)
+
+    @mcp.tool()
     def get_primer(max_tokens: int = 800) -> str:
         """Token-saver: a budgeted project primer (charter + architecture + repo map + token-efficient tool habits). Load once instead of exploring — or better, `torsor primer --write AGENTS.md` makes it free at prompt time."""
         return ops.project_primer(store, config, max_tokens=max_tokens)

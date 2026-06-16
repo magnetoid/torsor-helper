@@ -316,6 +316,50 @@ def write_primer_block(store: Store, config: TorsorConfig, target, *, max_tokens
     )
 
 
+_MODELS_START = "<!-- torsor:models -->"
+_MODELS_END = "<!-- /torsor:models -->"
+
+# Default op -> tier policy. CHEAP = deterministic torsor lookups + mechanical
+# maintenance that return exact answers (no reasoning). SMART = judgement/creation.
+_CHEAP_OPS = [
+    "recall", "get_intent", "find_files", "impact", "get_rules", "get_primer",
+    "check_drift", "check_dependencies", "map_repo", "consolidate", "list_commands", "recipes",
+]
+_SMART_WORK = [
+    "designing architecture", "writing & refactoring code",
+    "making decisions (record_decision)", "debugging novel failures",
+]
+
+
+def model_policy(store: Store, config: TorsorConfig) -> str:
+    """A prompt-ready model-routing policy: which work runs on the cheap model vs
+    the smart model. torsor declares it; the harness/agent routes by it."""
+    cheap = config.models.cheap or "(unset — run: torsor models --cheap <model-id>)"
+    smart = config.models.smart or "(unset — run: torsor models --smart <model-id>)"
+    lines = [
+        "## Model routing (torsor-helper — token thrift)",
+        "",
+        "Route each task to the cheapest model that can do it *correctly*:",
+        "",
+        f"- **Cheap model — `{cheap}`** for deterministic torsor lookups & mechanical work "
+        f"that return EXACT answers (no reasoning needed): {' · '.join(_CHEAP_OPS)}, and replaying "
+        f"recorded commands (`torsor commands --run`). These recur constantly — they don't need a frontier model.",
+        f"- **Smart model — `{smart}`** for judgement & creation: {' · '.join(_SMART_WORK)}.",
+    ]
+    if config.models.fast:
+        lines.append(f"- **Fast model — `{config.models.fast}`** for quick mid-tier turns when the cheap model is too weak but a frontier model is overkill.")
+    lines += [
+        "",
+        "Rule of thumb: if torsor can answer it deterministically, use the cheap model; "
+        "if it requires inventing something new, use the smart model.",
+    ]
+    return "\n".join(lines)
+
+
+def write_model_policy(store: Store, config: TorsorConfig, target) -> str:
+    return _write_managed_block(target, _MODELS_START, _MODELS_END, model_policy(store, config))
+
+
 def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
     """Blast radius of a symbol: who references it, across files, via the
     cartographer's resolved reference edges. Read-only over the existing index

@@ -42,11 +42,20 @@ class IndexConfig(BaseModel):
     importance_floors: dict[str, float] = Field(default_factory=lambda: dict(_DEFAULT_IMPORTANCE_FLOORS))
 
 
+class ModelsConfig(BaseModel):
+    # Model-tier policy (token thrift). torsor never calls models — it publishes
+    # this routing policy for the orchestrating agent/harness to follow.
+    cheap: str = ""   # basic, deterministic work (torsor lookups, command replays)
+    smart: str = ""   # thinking & construction (design, code, decisions)
+    fast: str = ""    # optional middle tier
+
+
 class TorsorConfig(BaseModel):
     version: int = 1
     budgets: BudgetConfig = Field(default_factory=BudgetConfig)
     embeddings: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     index: IndexConfig = Field(default_factory=IndexConfig)
+    models: ModelsConfig = Field(default_factory=ModelsConfig)
 
 
 def load_config(paths: TorsorPaths) -> TorsorConfig:

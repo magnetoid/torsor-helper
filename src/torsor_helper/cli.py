@@ -423,5 +423,41 @@ def consolidate(root: Path = typer.Option(Path("."), help="Project root.")) -> N
         typer.echo(f"Most-recalled: {hot}")
 
 
+@app.command()
+def models(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    cheap: Optional[str] = typer.Option(None, help="Model id for basic, deterministic work (torsor lookups, command replays)."),
+    smart: Optional[str] = typer.Option(None, help="Model id for thinking & construction (design, code, decisions)."),
+    fast: Optional[str] = typer.Option(None, help="Optional mid-tier model id."),
+    write: Optional[Path] = typer.Option(None, "--write", help="Inject a managed 'Model routing' block into a prompt file (e.g. AGENTS.md). Idempotent."),
+) -> None:
+    """Set cheap/smart model tiers and publish the routing policy (token thrift)."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    if cheap is not None or smart is not None or fast is not None:
+        if cheap is not None:
+            config.models.cheap = cheap
+        if smart is not None:
+            config.models.smart = smart
+        if fast is not None:
+            config.models.fast = fast
+        save_config(tp, config)
+        typer.echo("Updated [models] in torsor.toml.")
+    if write is not None:
+        target = write if write.is_absolute() else root / write
+        ops.write_model_policy(store, config, target)
+        typer.echo(f"Wrote Model-routing block to {target}.")
+        return
+    typer.echo(f"cheap: {config.models.cheap or '(unset)'}")
+    typer.echo(f"smart: {config.models.smart or '(unset)'}")
+    if config.models.fast:
+        typer.echo(f"fast:  {config.models.fast}")
+    typer.echo("\n" + ops.model_policy(store, config))
+
+
 def main() -> None:
     app()
