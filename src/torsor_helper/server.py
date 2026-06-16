@@ -100,6 +100,22 @@ def build_server(root: Path | str) -> FastMCP:
         return digest or "No rules declared yet — fill the charter's principles or record ADRs with rules."
 
     @mcp.tool()
+    def record_command(name: str, command: str, note: str = "") -> str:
+        """Record a project command (test/build/lint/run/deploy) so it's never re-derived. Persisted to the committed command book and shown in the primer."""
+        ops.record_command(store, name, command, note)
+        return f"Recorded command '{name}': {command}"
+
+    @mcp.tool()
+    def list_commands() -> str:
+        """The project's recorded commands — run them with your own shell instead of rediscovering how to test/build/lint here."""
+        cmds = ops.list_commands(store)
+        if not cmds:
+            return "No project commands recorded yet (record them with record_command)."
+        return "\n".join(
+            f"- {c['name']}: `{c['command']}`" + (f" — {c['note']}" if c["note"] else "") for c in cmds
+        )
+
+    @mcp.tool()
     def get_model_policy() -> str:
         """The project's model-routing policy (token thrift): which work to run on the cheap model vs the smart model. Follow it — do deterministic torsor lookups on the cheap model, reserve the smart model for design/code/decisions."""
         return ops.model_policy(store, config)

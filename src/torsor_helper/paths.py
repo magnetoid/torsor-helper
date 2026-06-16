@@ -74,6 +74,11 @@ class TorsorPaths:
         return self.base / "llms.txt"
 
     @property
+    def commands_file(self) -> Path:
+        # The learned command book — committed Markdown so it travels with the repo.
+        return self.base / "commands.md"
+
+    @property
     def baseline_file(self) -> Path:
         # Committed, reviewable drift baseline — a sibling of the charter, NOT
         # under the disposable .index/ (a baseline is source-of-truth config).

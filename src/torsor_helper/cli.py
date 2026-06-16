@@ -424,6 +424,42 @@ def consolidate(root: Path = typer.Option(Path("."), help="Project root.")) -> N
 
 
 @app.command()
+def commands(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    add: Optional[str] = typer.Option(None, "--add", help="Record a command as 'name=command' (e.g. --add 'test=uv run pytest')."),
+    note: str = typer.Option("", help="Optional description for --add."),
+    run: Optional[str] = typer.Option(None, "--run", help="Run a recorded command by name."),
+) -> None:
+    """Record & replay the project's commands so agents don't re-derive them each session."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    store = Store(tp)
+    if add is not None:
+        if "=" not in add:
+            typer.echo("Use --add 'name=command' (e.g. 'test=uv run pytest').", err=True)
+            raise typer.Exit(code=1)
+        name, _, command = add.partition("=")
+        ops.record_command(store, name.strip(), command.strip(), note)
+        typer.echo(f"Recorded command '{name.strip()}'.")
+        return
+    if run is not None:
+        result = ops.run_command(store, run)
+        if result is None:
+            typer.echo(f"No command named {run!r}. See: torsor commands", err=True)
+            raise typer.Exit(code=1)
+        raise typer.Exit(code=result.returncode)
+    cmds = ops.list_commands(store)
+    if not cmds:
+        typer.echo("No commands recorded yet. Add one:  torsor commands --add 'test=uv run pytest'")
+        return
+    for c in cmds:
+        tail = f"  — {c['note']}" if c["note"] else ""
+        typer.echo(f"  {c['name']}: {c['command']}{tail}")
+
+
+@app.command()
 def models(
     root: Path = typer.Option(Path("."), help="Project root."),
     cheap: Optional[str] = typer.Option(None, help="Model id for basic, deterministic work (torsor lookups, command replays)."),

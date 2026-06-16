@@ -305,6 +305,11 @@ def project_primer(store: Store, config: TorsorConfig, *, max_tokens: int = 800)
             if text.strip():
                 sections.append(f"### {label}\n{text}")
 
+    cmds = list_commands(store)
+    if cmds:
+        lines = [f"- `{c['command']}`" + (f" — {c['note']}" if c["note"] else f" ({c['name']})") for c in cmds]
+        sections.append("### Project commands (don't re-derive these)\n" + "\n".join(lines))
+
     sections.append(_TOKEN_PLAYBOOK)
     primer = "## Project primer (torsor-helper)\n\n" + "\n\n".join(sections)
     return truncate_to_tokens(primer, max_tokens, cpt)
@@ -358,6 +363,55 @@ def model_policy(store: Store, config: TorsorConfig) -> str:
 
 def write_model_policy(store: Store, config: TorsorConfig, target) -> str:
     return _write_managed_block(target, _MODELS_START, _MODELS_END, model_policy(store, config))
+
+
+# ---- Command book: learn & replay the project's commands ----
+
+_CMD_RE = _re.compile(r"^- \*\*(.+?)\*\*:\s*`([^`]+)`(?:\s*—\s*(.*))?$")
+
+
+def list_commands(store: Store) -> list[dict]:
+    """The recorded project commands, parsed from .torsor/commands.md."""
+    if not store.paths.commands_file.exists():
+        return []
+    out: list[dict] = []
+    for line in store.read_note(store.paths.commands_file).body.splitlines():
+        m = _CMD_RE.match(line.strip())
+        if m:
+            out.append({"name": m.group(1).strip(), "command": m.group(2).strip(), "note": (m.group(3) or "").strip()})
+    return out
+
+
+def record_command(store: Store, name: str, command: str, note: str = "") -> str:
+    """Record/update a named project command so it's never re-derived. Persists to
+    the committed Markdown command book; surfaces in the primer."""
+    cmds = {c["name"]: c for c in list_commands(store)}
+    cmds[name] = {"name": name, "command": command, "note": note}
+    lines = []
+    for n in sorted(cmds):
+        c = cmds[n]
+        line = f"- **{c['name']}**: `{c['command']}`"
+        if c["note"]:
+            line += f" — {c['note']}"
+        lines.append(line)
+    store.write_note(
+        store.paths.commands_file,
+        Frontmatter(type="commands", tags=["commands"]),
+        "Project Commands", "\n".join(lines),
+    )
+    return str(store.paths.commands_file)
+
+
+def run_command(store: Store, name: str):
+    """Execute a recorded command (returns CompletedProcess, or None if unknown).
+    Runs the user-/agent-recorded command via the shell from the repo root."""
+    import subprocess
+
+    cmds = {c["name"]: c for c in list_commands(store)}
+    found = cmds.get(name)
+    if not found:
+        return None
+    return subprocess.run(found["command"], shell=True, cwd=str(store.paths.root))
 
 
 def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
