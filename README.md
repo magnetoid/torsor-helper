@@ -9,7 +9,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
 ![status](https://img.shields.io/badge/release-v0.3%20resilience-success)
-![tests](https://img.shields.io/badge/tests-308%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-321%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
@@ -21,7 +21,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 > **Your AI agent has amnesia.** Every new session starts from zero. Mid-session it forgets the rules you set an hour ago. It rebuilds the helper you already wrote, re-introduces the pattern you explicitly rejected, quietly drifts from your architecture — and sometimes imports a package that doesn't even exist. **torsor-helper** is the persistent **brain** that fixes the forgetting, a **guardrail** that catches the drift, and a **coach** that keeps nudging your project back toward health — all local-first, no API key.
 
-**Contents:** [Why](#-why) · [Every feature — what & when](#-every-feature--what-it-solves--when-to-use-it) · [What's new](#-whats-new) · [How it works](#-how-it-works) · [Install](#-install) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Usage](#-usage) · [Team / HTTP mode](#-team--http-mode) · [What's inside](#-whats-inside) · [Status](#-status--roadmap) · [Design](#-design--prior-art)
+**Contents:** [Why](#-why) · [Every feature — what & when](#-every-feature--what-it-solves--when-to-use-it) · [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens) · [What's new](#-whats-new) · [How it works](#-how-it-works) · [Install](#-install) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Usage](#-usage) · [Team / HTTP mode](#-team--http-mode) · [What's inside](#-whats-inside) · [Status](#-status--roadmap) · [Design](#-design--prior-art)
 
 > **New here / vibe-coding a startup?** Jump to [**Every feature — what it solves & when to use it**](#-every-feature--what-it-solves--when-to-use-it) for a plain-language guide to which tool helps with what.
 >
@@ -128,9 +128,64 @@ Run `torsor coach` (or it's pushed at session start). It's advisory, ranked, and
 | `regression` | A file's complexity **rose since your last `consolidate`** — review before it ossifies. | "New findings only" — alerts on what got *worse*, not absolute badness. |
 | `phantom_dep` | An import resolves to no known package (see `torsor deps`). | Early warning on hallucinated dependencies. |
 
+### 💸 Spending fewer (and cheaper) tokens — *"my agent keeps re-deriving the same things on the most expensive model"*
+| Feature | What it does | Reach for it when… |
+|---|---|---|
+| `torsor commands` | A **learned command book** — record `test`/`build`/`lint`/`run` once; persisted in committed Markdown and shown in the primer. | The agent rediscovers *"how do I run the tests here?"* every session. Record it once, replay forever. |
+| `torsor recipes` | Shows the **deterministic lookups you run most** (`recall`/`impact`/`get_intent`/…) with hit counts. | You want to see what recurs — the exact-answer work worth pushing to a cheap model. |
+| `torsor models` | Sets a **cheap/smart model policy** and writes it into your agent's prompt file. | You want a cheap model doing the basic deterministic work and the frontier model only thinking/building. |
+
 > **Rule of thumb:** start a session → `bootstrap_session`; before building → `recall` / `get_intent`; before changing a symbol → `impact`; before installing a suggested package → `deps`; before committing → `guard`; end of session → `handoff`; weekly → `consolidate` + skim `coach`.
 
+## 💸 Token thrift — spend fewer, cheaper tokens
+
+The most expensive tokens in agentic coding are **re-derivation**: the agent re-discovers how to run your tests, re-greps for callers, and re-reads files to answer questions that have an *exact, deterministic* answer — every session, usually on the most expensive model. torsor attacks this three ways. (torsor itself never calls an LLM — it makes the exact answers cheap to fetch and tells your harness how to route models.)
+
+### 1. Learn the project's commands once — `torsor commands`
+Stop the agent rediscovering *"how do I run the tests here?"* every session. Record it once; it lives in committed Markdown (`.torsor/commands.md`) and is shown in the primer, so every future session already knows it.
+```bash
+torsor commands --add 'test=uv run pytest' --note 'run the suite'
+torsor commands --add 'lint=uv run ruff check src tests'
+torsor commands --add 'build=uv build'
+torsor commands              # list them
+torsor commands --run test   # replay one from the repo root
+```
+Your agent calls `list_commands()` (or just reads the primer) and runs the exact command — no trial and error. The MCP server **records and lists** commands but never executes them; the agent runs them with its own shell.
+
+### 2. See what recurs — `torsor recipes`
+torsor records every deterministic lookup the agent makes (`recall`, `get_intent`, `find_files`, `impact`, `check_drift`, `check_dependencies`, `get_rules`) and how often:
+```bash
+torsor recipes
+#  12×  recall 'auth flow'
+#   8×  impact 'login'
+#   5×  get_intent 'payments'
+```
+These are exact, deterministic answers the agent asks for over and over — prime candidates to run on a cheap model (next). It's *frequency tracking*, not a stale answer cache: the lookups stay exact-by-construction; torsor just learns which ones recur.
+
+### 3. Route cheap vs smart models — `torsor models`
+Declare which model does the basic deterministic work and which one thinks. torsor publishes the routing policy into your agent's prompt file (and as the `get_model_policy` MCP tool); your harness/agent routes by it.
+```bash
+torsor models --cheap claude-haiku-4-5 --smart claude-opus-4-8
+torsor models                      # show current tiers + the policy
+torsor models --write AGENTS.md    # inject a managed "Model routing" block into the prompt file
+```
+The published policy, in plain terms:
+- **Cheap model** → deterministic torsor lookups + command replays (`recall` · `get_intent` · `find_files` · `impact` · `get_rules` · `check_drift` · `check_dependencies` · `map_repo` · `consolidate` · `list_commands`). They return exact answers — no reasoning, no frontier model needed.
+- **Smart model** → judgement & creation: designing architecture, writing/refactoring code, making decisions.
+
+> **Put together:** the cheap model handles the dozens of recurring exact-answer lookups; the frontier model is reserved for genuine reasoning; and the command book + memory mean *neither* model re-derives what torsor already knows. That's the token — and dollar — saving. torsor only **declares** the policy; routing is done by your orchestrator (e.g. Claude Code subagents, a multi-model router).
+
 ## ✨ What's new
+
+### v0.4 — token thrift *(spend fewer, cheaper tokens)*
+
+| | Feature | Kills the failure mode | Try it |
+|---|---|---|---|
+| 🧰 | **Learned command book** | Agent re-derives how to test/build/lint every session | `torsor commands --add 'test=uv run pytest'` |
+| 📊 | **Op-frequency recipes** | No visibility into what recurs (and could be cheaper) | `torsor recipes` |
+| 💸 | **Cheap/smart model routing** | The frontier model does basic deterministic work | `torsor models --cheap … --smart …` |
+
+Plus a **fuzzy + frecency finder** (`torsor find` / `find_files`) — fast navigation over files **and** mapped symbols (inspired by [dmtrKovalenko/fff](https://github.com/dmtrKovalenko/fff), pure-Python, no daemon). See [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens).
 
 ### v0.3 — the resilience release *(supply-chain + blast-radius + hidden coupling)*
 
@@ -298,6 +353,9 @@ torsor init --client <name>
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
 | `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** recommendations |
 | `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, snapshot complexity, report duplicates |
+| `torsor commands [--add 'name=cmd'] [--run name]` | Record & replay project commands (test/build/lint) so agents don't re-derive them |
+| `torsor recipes` | The deterministic lookups you run most — candidates to route to the cheap model |
+| `torsor models [--cheap … --smart …] [--write AGENTS.md]` | Set the cheap/smart model policy and publish it into the agent's prompt file |
 
 ### MCP tools (what the agent calls)
 
@@ -313,6 +371,8 @@ torsor init --client <name>
 | `get_rules()` | The standing constraints (principles + ADR rules) as one compact digest — load once per session |
 | `get_primer(max_tokens?)` · `list_practices(lang?)` · `adopt_practices(lang)` | Token-saving project primer; list/adopt curated best-practice packs as guard-enforced ADRs |
 | `check_dependencies(files?)` · `export()` | Flag hallucinated imports (slopsquatting); portable `llms.txt` + Mermaid diagram |
+| `record_command(...)` · `list_commands()` · `recipes()` | The learned command book + the most-repeated deterministic lookups (token thrift) |
+| `get_model_policy()` | The cheap/smart model-routing policy to follow — do basic lookups on the cheap model |
 | `recommend(context?)` · `consolidate()` | The Coach (health · reuse · hotspots · coupling · regressions · phantom-deps); self-improving maintenance |
 
 ### A typical loop

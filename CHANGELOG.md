@@ -6,6 +6,14 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### Token thrift — spend fewer, cheaper tokens
+
+torsor never calls an LLM; it makes the exact, deterministic answers cheap to fetch and tells your harness how to route models. The expensive tokens in agentic coding are *re-derivation* — these three features cut it.
+
+- **🧰 Learned command book (`torsor commands` + `record_command`/`list_commands` MCP tools):** record `test`/`build`/`lint`/`run` once into committed Markdown (`.torsor/commands.md`); surfaced in the primer so every session knows them without re-deriving. `--run <name>` replays from the repo root; the MCP server records & lists but never executes (the agent runs commands with its own shell).
+- **📊 Op-frequency recipes (`torsor recipes` + `recipes` MCP tool):** the deterministic read-tools (`recall`/`get_intent`/`find_files`/`impact`/`check_drift`/`check_dependencies`/`get_rules`) record each call best-effort into a new `op_log` table (SCHEMA_VERSION 5→6, additive; never creates the index just to log, never raises); `recipes` surfaces the most-repeated lookups — the recurring exact-answer work to route to a cheap model. Frequency tracking, not a stale answer cache.
+- **💸 Cheap/smart model routing (`torsor models` + `get_model_policy` MCP tool):** new `[models]` config (cheap/smart/fast); `operations.model_policy` renders a routing policy (deterministic torsor lookups + command replays → cheap model; design/code/decisions → smart model); `torsor models --write AGENTS.md` injects an idempotent "Model routing" block into the prompt file. torsor *declares* the policy; the orchestrator routes.
+
 - **🔎 Fuzzy + frecency finder (`torsor find <query>` + `find_files` MCP tool):** fast, offline navigation over the repo's files **and** torsor's mapped symbols — greedy subsequence fuzzy matching with consecutive/boundary bonuses, smart-case, and strong basename preference, plus `literal` and `regex` modes. Files rank by match quality × **frecency** (a new `path_access` table: count + a monotonic per-find recency counter, deterministic — no wall-clock; SCHEMA_VERSION 4→5, additive); symbols by a small `refs` boost. Inspired by [dmtrKovalenko/fff](https://github.com/dmtrKovalenko/fff) — adopts its fuzzy+frecency *ideas* in pure Python while keeping torsor per-call/stateless/offline (no daemon, no Rust; run fff alongside for fff-grade speed on huge repos).
 
 ## [0.3.0] — Resilience Release (2026-06-10)
