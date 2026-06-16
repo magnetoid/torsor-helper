@@ -54,9 +54,25 @@ CONFIG_LOCATIONS: dict[str, str] = {
 }
 
 
+# The conventional agent-instructions file per client — where a managed rules /
+# primer / model-policy block belongs. AGENTS.md is the cross-tool standard
+# (adopted by Codex, Cursor, and many others); a few clients use their own.
+INSTRUCTIONS_FILES: dict[str, str] = {
+    "claude-code": "CLAUDE.md",
+    "claude-desktop": "CLAUDE.md",
+    "gemini": "GEMINI.md",
+}
+
+
 def config_location(client: str) -> str:
     """Where the snippet from config_snippet() should be pasted, per client."""
     return CONFIG_LOCATIONS.get(client, "")
+
+
+def instructions_file(client: str) -> str:
+    """The conventional agent-instructions filename for a client (AGENTS.md by
+    default — the cross-tool standard). Override with an explicit `--write` path."""
+    return INSTRUCTIONS_FILES.get(client, "AGENTS.md")
 
 
 def mcp_servers_block(root: str) -> dict:

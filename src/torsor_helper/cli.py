@@ -7,7 +7,7 @@ import typer
 
 from torsor_helper import db
 from torsor_helper import operations as ops
-from torsor_helper.clients import SUPPORTED_CLIENTS, config_location, config_snippet
+from torsor_helper.clients import SUPPORTED_CLIENTS, config_location, config_snippet, instructions_file
 from torsor_helper.config import TorsorConfig, load_config, save_config
 from torsor_helper.embeddings import get_embedder
 from torsor_helper.indexer import reindex
@@ -15,6 +15,20 @@ from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
 
 app = typer.Typer(help="torsor-helper: persistent memory + architectural intent over MCP.")
+
+
+def _resolve_block_target(root: Path, write: Optional[Path], client: Optional[str]) -> Optional[Path]:
+    """Resolve where a managed block (rules/primer/model policy) should be written:
+    an explicit --write path wins; else --client's conventional instructions file
+    (AGENTS.md by default). Returns None when neither was given. Exits on bad client."""
+    if write is not None:
+        return write if write.is_absolute() else root / write
+    if client is not None:
+        if client not in SUPPORTED_CLIENTS:
+            typer.echo(f"Unknown client {client!r}. Known: {', '.join(SUPPORTED_CLIENTS)}", err=True)
+            raise typer.Exit(code=1)
+        return root / instructions_file(client)
+    return None
 
 
 def _version_callback(value: bool) -> None:
@@ -245,6 +259,7 @@ def export(root: Path = typer.Option(Path("."), help="Project root to export."))
 def rules(
     root: Path = typer.Option(Path("."), help="Project root."),
     write: Optional[Path] = typer.Option(None, "--write", help="Write/refresh a managed rules block in this file (e.g. AGENTS.md or CLAUDE.md). Idempotent."),
+    client: Optional[str] = typer.Option(None, "--client", help=f"Write to a client's conventional instructions file instead of --write ({', '.join(SUPPORTED_CLIENTS)})."),
 ) -> None:
     """Print a compact agent-rules digest (charter principles + ADR rules) — paste it into AGENTS.md/CLAUDE.md so agents follow the rules without spending tool-call tokens."""
     tp = TorsorPaths(root)
@@ -253,8 +268,9 @@ def rules(
         raise typer.Exit(code=1)
     config = load_config(tp)
     store = Store(tp)
-    if write is not None:
-        target = ops.write_rules_block(store, config, write)
+    dest = _resolve_block_target(root, write, client)
+    if dest is not None:
+        target = ops.write_rules_block(store, config, dest)
         typer.echo(f"Wrote rules block → {target} (re-run after recording new ADRs)")
         return
     digest = ops.agent_rules(store, config)
@@ -293,6 +309,7 @@ def practices(
 def primer(
     root: Path = typer.Option(Path("."), help="Project root."),
     write: Optional[Path] = typer.Option(None, "--write", help="Write/refresh a managed primer block in this file (e.g. AGENTS.md or CLAUDE.md). Idempotent."),
+    client: Optional[str] = typer.Option(None, "--client", help="Write to a client's conventional instructions file instead of --write."),
     tokens: int = typer.Option(800, "--tokens", help="Token budget for the primer."),
 ) -> None:
     """Token-saver: print a budgeted prompt-time project primer (charter + architecture + repo map + token-efficiency habits) — content in the prompt file costs zero discovery tool-calls per session."""
@@ -302,8 +319,9 @@ def primer(
         raise typer.Exit(code=1)
     config = load_config(tp)
     store = Store(tp)
-    if write is not None:
-        target = ops.write_primer_block(store, config, write, max_tokens=tokens)
+    dest = _resolve_block_target(root, write, client)
+    if dest is not None:
+        target = ops.write_primer_block(store, config, dest, max_tokens=tokens)
         typer.echo(f"Wrote primer block → {target} (re-run after big changes or `torsor map`)")
         return
     typer.echo(ops.project_primer(store, config, max_tokens=tokens))
@@ -487,6 +505,7 @@ def models(
     smart: Optional[str] = typer.Option(None, help="Model id for thinking & construction (design, code, decisions)."),
     fast: Optional[str] = typer.Option(None, help="Optional mid-tier model id."),
     write: Optional[Path] = typer.Option(None, "--write", help="Publish the policy to a file: a *.md/AGENTS.md/CLAUDE.md target gets a Markdown block (any agent reads it); a *.json target gets machine-readable JSON (any router reads it)."),
+    client: Optional[str] = typer.Option(None, "--client", help="Write the Markdown policy to a client's conventional instructions file instead of --write."),
     json_out: bool = typer.Option(False, "--json", help="Print the machine-readable policy (for piping into any harness's router)."),
 ) -> None:
     """Set cheap/smart model tiers and publish the routing policy (token thrift). App-agnostic: any MCP client, any agent rules file, or any programmatic router can consume it."""
@@ -507,14 +526,14 @@ def models(
             config.models.fast = fast
         save_config(tp, config)
         typer.echo("Updated [models] in torsor.toml.")
-    if write is not None:
-        target = write if write.is_absolute() else root / write
-        if str(target).endswith(".json"):
-            target.write_text(_json.dumps(ops.model_policy_json(store, config), indent=2) + "\n", encoding="utf-8")
-            typer.echo(f"Wrote machine-readable model policy to {target} (for programmatic routers).")
+    dest = _resolve_block_target(root, write, client)
+    if dest is not None:
+        if str(dest).endswith(".json"):
+            dest.write_text(_json.dumps(ops.model_policy_json(store, config), indent=2) + "\n", encoding="utf-8")
+            typer.echo(f"Wrote machine-readable model policy to {dest} (for programmatic routers).")
         else:
-            ops.write_model_policy(store, config, target)
-            typer.echo(f"Wrote Model-routing block to {target} (any agent that reads this file follows it).")
+            ops.write_model_policy(store, config, dest)
+            typer.echo(f"Wrote Model-routing block to {dest} (any agent that reads this file follows it).")
         return
     if json_out:
         typer.echo(_json.dumps(ops.model_policy_json(store, config), indent=2))
