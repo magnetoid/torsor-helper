@@ -9,7 +9,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
 ![status](https://img.shields.io/badge/release-v0.3%20resilience-success)
-![tests](https://img.shields.io/badge/tests-324%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-328%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
@@ -25,7 +25,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 > **New here / vibe-coding a startup?** Jump to [**Every feature — what it solves & when to use it**](#-every-feature--what-it-solves--when-to-use-it) for a plain-language guide to which tool helps with what.
 >
-> 📚 **Step-by-step guides:** [**How to install**](docs/how-to-install.md) — every install path + setup for all 20 supported clients · [**How to use**](docs/how-to-use.md) — the day-to-day workflow, ADR rules, CI, and the full CLI/MCP reference.
+> 📚 **Step-by-step guides:** [**Vibe-coding guide**](docs/vibe-coding-guide.md) — how to use torsor while building fast with an AI agent (start here) · [**How to install**](docs/how-to-install.md) — every install path + setup for all 20 supported clients · [**How to use**](docs/how-to-use.md) — the day-to-day workflow, ADR rules, CI, and the full CLI/MCP reference.
 
 ## ⏱️ The 30-second version
 
@@ -78,6 +78,18 @@ Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, st
         ╱        T0        ╲       CHARTER      charter.md    what & why · non-negotiable principles  ← most stable
        ╱────────────────────╲
 ```
+
+### 🔬 Under the hood — how each part works
+
+Everything below is **derived from your Markdown** and rebuildable. Delete `.torsor/.index/` any time; the next command rebuilds it.
+
+- **Recall (`recall`)** — every note is indexed three ways: **FTS5** keyword search, **vector** embeddings (a local `fastembed` model, or a deterministic offline hash fallback), and a **wiki-link graph**. A query fuses them with **Reciprocal Rank Fusion**, then re-weights by tier (stable tiers rank higher), recency, an **importance multiplier** (notes you recall often float up; charter/architecture never decay), and a 1-hop link-graph boost. **MMR** drops near-duplicate hits so scarce context isn't wasted, and results are packed to a token budget. Indexing is incremental (content-hash diff) and self-heals when the embedder changes.
+- **The map (`map` / `get_intent` / `impact`)** — a stdlib-`ast` cartographer extracts every function/class/method and, crucially, **real reference edges** ("who calls what") by resolving names — not substring matching, so comments and strings never inflate counts. `impact` walks those edges to show a symbol's blast radius; `find` fuzzy-searches files + symbols, ranked by match quality and frecency. A repo fingerprint lets `map` skip entirely when nothing changed.
+- **The guard (`guard` / `check_drift`)** — ADRs carry machine-readable `rules:` in their frontmatter (`forbid_import`, `forbid_layer_import`, `require_import`, `forbid_pattern`). The guard checks changed files against them deterministically (AST + regex), citing the ADR. It's **advisory by default**; `--strict` fails CI, and a committed **baseline** grandfathers existing debt so only *new* drift fails.
+- **The Coach (`coach` / `recommend`)** — surfaces ranked, evidence-backed nudges: stale/thin files, `reuse` (a symbol already exists), `hotspot` (churn × complexity), `coupling` (files that always change together but aren't linked), `regression` (complexity rose since the last snapshot), `phantom_dep` (a hallucinated import). Each **decays** so it never nags; a 3-item digest rides along in `bootstrap_session`.
+- **Token thrift (`commands` / `recipes` / `models`)** — the learned command book and the rules/primer blocks live in your prompt file (zero tool-call cost); `recipes` learns which deterministic lookups recur; `models` publishes a cheap-vs-smart routing policy your harness follows. torsor never calls an LLM — it makes the exact answers cheap to fetch. See [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens).
+
+> **The one rule:** Markdown is always the source of truth. The SQLite index, the symbol map, the frecency counters — all derived, all disposable, never something to fear losing.
 
 ## 🧰 Every feature — what it solves & when to use it
 

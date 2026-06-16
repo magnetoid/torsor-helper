@@ -1,6 +1,6 @@
 # How to use torsor-helper
 
-This is the practical, day-to-day guide. For setup, see [how-to-install.md](how-to-install.md); for the design rationale, see the [README](../README.md).
+This is the practical, day-to-day reference. New to vibe-coding with torsor? Start with the [**Vibe-coding guide**](vibe-coding-guide.md). For setup, see [how-to-install.md](how-to-install.md); for the design rationale, see the [README](../README.md).
 
 **Contents:** [Mental model](#the-mental-model-60-seconds) · [First hour](#the-first-hour-set-up-your-projects-memory) · [Daily loop](#the-daily-loop) · [Architecture rules](#keeping-your-architecture-adrs--rules--guard) · [Codebase map](#understanding-the-codebase-map--intent--impact) · [Dependency safety](#dependency-safety) · [The Coach](#the-coach--housekeeping) · [CLI reference](#cli-reference) · [MCP tool reference](#mcp-tool-reference) · [Team / HTTP mode](#team--http-mode) · [FAQ](#faq)
 
@@ -146,9 +146,13 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `torsor map [--force]` | Generate the symbol map + reference edges |
 | `torsor impact <symbol>` | Who references a symbol, across files |
 | `torsor export` | `llms.txt` + Mermaid module diagram |
-| `torsor rules [--write <file>]` | Compact rules digest; `--write` maintains a managed block in AGENTS.md/CLAUDE.md |
+| `torsor rules [--write <file>] [--client <name>]` | Compact rules digest; `--write`/`--client` maintains a managed block in the agent's instructions file |
 | `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs as guard-enforced ADRs |
-| `torsor primer [--write <file>] [--tokens N]` | Token-saving prompt-time project primer (managed block) |
+| `torsor primer [--write <file>] [--client <name>] [--tokens N]` | Token-saving prompt-time project primer (managed block) |
+| `torsor commands [--add 'name=cmd'] [--note ...] [--run name]` | Record & replay project commands (test/build/lint) |
+| `torsor recipes [--limit N]` | Most-repeated deterministic lookups — candidates for the cheap model |
+| `torsor models [--cheap … --smart …] [--write <file>\|--client <name>] [--json]` | Cheap/smart model-routing policy (Markdown block, JSON, or MCP) |
+| `torsor find <query> [--mode] [--files-only\|--symbols-only]` | Fuzzy + frecency search over files and mapped symbols |
 | `torsor update [--print-only]` | Self-update the CLI (detects uv tool / pipx / pip) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | ADR-rule drift check with CI ratchet |
 | `torsor deps [files…] [--strict]` | Offline hallucinated-dependency check |
