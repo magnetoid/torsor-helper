@@ -290,6 +290,19 @@ def call_graph_edges(conn):
     return [(r["caller"], r["referenced_name"], r["resolved_module"]) for r in rows]
 
 
+def symbol_fan_in(conn):
+    """In-degree of each referenced symbol: (resolved_module, referenced_name,
+    fan_in) where fan_in is the count of *distinct* calling symbols. Powers the
+    coach's 'God node' (hub) detection — symbols many others depend on."""
+    rows = conn.execute(
+        "SELECT resolved_module, referenced_name, "
+        "COUNT(DISTINCT caller || '@' || module) AS fan_in FROM symbol_edges "
+        "WHERE resolved_module IS NOT NULL AND role='call' "
+        "GROUP BY resolved_module, referenced_name"
+    ).fetchall()
+    return [(r["resolved_module"], r["referenced_name"], r["fan_in"]) for r in rows]
+
+
 def module_edges(conn):
     """Distinct (module, resolved_module) pairs for module-level dependency views."""
     rows = conn.execute(

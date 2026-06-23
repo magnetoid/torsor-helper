@@ -33,7 +33,7 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 - `guard.py` — ADRs carry machine-readable `rules:` blocks in frontmatter (forbid_import, layering, seams); guard checks code against them. `baseline.py` is the committed ratchet so `--strict` only fails on *new* drift. The guard is advisory — it never blocks or edits code.
 - `deps.py` — advisory, offline dependency check (ADR 0006): flags phantom/slopsquatted imports against declared/installed deps. Conservative by design (prefers a missed phantom over a false alarm).
 - `finder.py` — `torsor find`: fuzzy subsequence matcher over the symbol index (boundary-aware scoring), the keyword path when you don't have an exact name.
-- `coach/` — hygiene/health recommendations (hotspots, temporal coupling, complexity trend); a digest is pushed into `bootstrap_session` output.
+- `coach/` — hygiene/health recommendations (hotspots, temporal coupling, complexity trend, and `hubs` — high-fan-in "God node" detection over the symbol graph); a digest is pushed into `bootstrap_session` output.
 - `export.py` — `torsor export` emits `llms.txt` + a Mermaid module-dependency graph from the index.
 - `clients.py` — registry of supported AI clients (Claude Code, Cursor, Codex, Gemini, …); the `--client` flag resolves the conventional instructions file for `rules`/`primer`/`models --write`.
 - `budget.py` — every context-returning path is token-budgeted; preserve this when adding output paths.
