@@ -8,7 +8,7 @@ def test_server_registers_expected_tools(tmp_path):
     assert server.name == "torsor-helper"
     tools = anyio.run(server.list_tools)
     names = {t.name for t in tools}
-    assert {"bootstrap_session", "recall", "remember", "update_active", "handoff"} <= names
+    assert {"bootstrap_session", "recall", "remember", "update_active", "handoff", "connect"} <= names
 
 
 def test_server_resources_registered(tmp_path):

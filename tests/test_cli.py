@@ -43,6 +43,29 @@ def test_doctor_reports_malformed_config(tmp_path):
     assert "malformed" in result.output.lower()
 
 
+def test_connect_traces_call_path(tmp_path):
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    (tmp_path / "store_mod.py").write_text("def bottom():\n    return 1\n")
+    (tmp_path / "svc.py").write_text(
+        "from store_mod import bottom\n\ndef middle():\n    return bottom()\n"
+    )
+    (tmp_path / "app.py").write_text(
+        "from svc import middle\n\ndef top():\n    return middle()\n"
+    )
+    runner.invoke(app, ["map", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["connect", "top", "bottom", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "top" in result.output and "middle" in result.output and "bottom" in result.output
+
+
+def test_connect_reports_no_path(tmp_path):
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["map", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["connect", "alpha", "omega", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No call path" in result.output
+
+
 def test_end_to_end_remember_then_bootstrap(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     from datetime import datetime

@@ -29,7 +29,7 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 **Core module roles** (the non-obvious ones):
 - `search.py` — hybrid recall: RRF fusion of FTS5 + vector results, plus importance decay and MMR diversity. `recall.py` is the keyword-only fallback when no index exists.
 - `embeddings.py` — fastembed if installed (`embeddings` extra), otherwise a deterministic hashing embedder. Tests rely on the hashing fallback being offline.
-- `cartographer.py` — stdlib-`ast` symbol map + reference edges ("who calls what"). Deliberately not tree-sitter (ADR 0003); reference edges resolve only the two reliable cases (ADR 0004). `impact` reuses these edges rather than building a call graph (ADR 0007).
+- `cartographer.py` — stdlib-`ast` symbol map + reference edges ("who calls what"). Deliberately not tree-sitter (ADR 0003); reference edges resolve only the two reliable cases (ADR 0004). `impact` (who-references) and `connect` (shortest directed path between two symbols) both reuse these edges rather than building a separate call graph (ADR 0007).
 - `guard.py` — ADRs carry machine-readable `rules:` blocks in frontmatter (forbid_import, layering, seams); guard checks code against them. `baseline.py` is the committed ratchet so `--strict` only fails on *new* drift. The guard is advisory — it never blocks or edits code.
 - `deps.py` — advisory, offline dependency check (ADR 0006): flags phantom/slopsquatted imports against declared/installed deps. Conservative by design (prefers a missed phantom over a false alarm).
 - `finder.py` — `torsor find`: fuzzy subsequence matcher over the symbol index (boundary-aware scoring), the keyword path when you don't have an exact name.
