@@ -210,6 +210,31 @@ def impact(
 
 
 @app.command()
+def connect(
+    source: str = typer.Argument(..., help="Start symbol (e.g. a function/class name)."),
+    target: str = typer.Argument(..., help="Destination symbol to reach."),
+    root: Path = typer.Option(Path("."), help="Project root."),
+    max_hops: int = typer.Option(12, help="Maximum path length to search."),
+) -> None:
+    """Trace the shortest call-graph path from one symbol to another (run `torsor map` first)."""
+    paths = TorsorPaths(root)
+    if not paths.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(paths)
+    store = Store(paths)
+    res = ops.connect(store, config, source, target, max_hops=max_hops)
+    if not res["found"]:
+        typer.echo(
+            f"No call path from {source!r} to {target!r} "
+            f"(directed; is the map current? run `torsor map`)."
+        )
+        return
+    typer.echo(f"{res['hops']} hop(s) from {source!r} to {target!r}:")
+    typer.echo("  " + " -> ".join(f"{s['symbol']} ({s['module']})" for s in res["path"]))
+
+
+@app.command()
 def find(
     query: str = typer.Argument(..., help="Fuzzy query for files and mapped symbols."),
     root: Path = typer.Option(Path("."), help="Project root."),
