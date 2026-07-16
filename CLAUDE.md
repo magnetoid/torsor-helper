@@ -22,7 +22,7 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 
 ## Architecture
 
-**Layered: pure core under thin adapters.** `server.py` (FastMCP) and `cli.py` (Typer) are the only adapters, and they reach only into `operations.py` — the tested orchestration core. Core modules never import adapters. This is ADR-enforced (`.torsor/architecture/decisions/0002-…`) and `torsor guard` will flag violations. Put new logic in `operations.py` (or a core module it calls) and expose it via thin wrappers in both `server.py` and `cli.py` — every feature is both an MCP tool and a CLI command.
+**Layered: pure core under thin adapters.** `server.py` (FastMCP) and `cli.py` (Typer) are the only adapters, and they reach only into `operations.py` — the tested orchestration core. Core modules never import adapters. This is ADR-enforced (`.torsor/architecture/decisions/0002-…`) and `torsor guard` will flag violations. Put new logic in `operations.py` (or a core module it calls) and expose it via thin wrappers in both `server.py` and `cli.py` — every feature is both an MCP tool and a CLI command. The one deliberate exception is `update` (`updater.py`): a running MCP server must not replace its own code mid-session, so self-update is CLI-only.
 
 **Markdown is the source of truth; the index is throwaway.** `store.py` does all Markdown I/O (YAML frontmatter + `[[wikilinks]]`, five stability tiers: charter → architecture → map → active → memory). `indexer.py` incrementally derives the SQLite index in `db.py` (FTS5 + embedding vectors + wiki-link edges + symbols + symbol_edges; `SCHEMA_VERSION` guards migrations). Never treat the index as authoritative.
 
@@ -32,6 +32,7 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 - `cartographer.py` — stdlib-`ast` symbol map + reference edges ("who calls what"). Deliberately not tree-sitter (ADR 0003); reference edges resolve only the two reliable cases (ADR 0004). `impact` (who-references) and `connect` (shortest directed path between two symbols) both reuse these edges rather than building a separate call graph (ADR 0007).
 - `guard.py` — ADRs carry machine-readable `rules:` blocks in frontmatter (forbid_import, layering, seams); guard checks code against them. `baseline.py` is the committed ratchet so `--strict` only fails on *new* drift. The guard is advisory — it never blocks or edits code.
 - `deps.py` — advisory, offline dependency check (ADR 0006): flags phantom/slopsquatted imports against declared/installed deps. Conservative by design (prefers a missed phantom over a false alarm).
+- `practices.py` — `torsor practices`: curated per-language best-practice packs. Adopting a pack records ONE ADR whose regex-backed rules `torsor guard` then enforces; false-positive-prone rules ship as `warning`/`hint` (not `error`) so `--strict --severity error` stays trustworthy.
 - `finder.py` — `torsor find`: fuzzy subsequence matcher over the symbol index (boundary-aware scoring), the keyword path when you don't have an exact name.
 - `coach/` — hygiene/health recommendations (hotspots, temporal coupling, complexity trend, and `hubs` — high-fan-in "God node" detection over the symbol graph); a digest is pushed into `bootstrap_session` output.
 - `export.py` — `torsor export` emits `llms.txt` + a Mermaid module-dependency graph from the index.
