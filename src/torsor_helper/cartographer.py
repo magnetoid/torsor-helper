@@ -250,9 +250,17 @@ def _scan(root: Path, paths: list[str] | None, ignore: set[str]) -> tuple[list[S
         symbols.extend(extract_symbols(src, module))
         edges.extend(extract_edges(src, module))
 
-    # refs = count of *resolved* references (intra- and cross-module), keyed by
-    # (normalized target module, referenced name). Honest — never counts comments
-    # or strings, unlike the old substring heuristic.
+    compute_refs(symbols, edges)
+    return symbols, edges
+
+
+def compute_refs(symbols: list[Symbol], edges: list[SymbolEdge]) -> None:
+    """Set each symbol's `refs` in place from the given edge set. refs = count of
+    *resolved* references (intra- and cross-module), keyed by (normalized target
+    module, referenced name). Honest — never counts comments or strings, unlike
+    the old substring heuristic. Reused when merging a partial map into the full
+    graph, so the whole (symbols, edges) union must be passed for counts to be
+    correct — a subset would undercount cross-module references."""
     counts: Counter[tuple[str, str]] = Counter(
         (norm_module(e.resolved_module), e.referenced_name) for e in edges if e.resolved_module
     )
@@ -261,7 +269,21 @@ def _scan(root: Path, paths: list[str] | None, ignore: set[str]) -> tuple[list[S
             sym.refs = 0  # methods score 0 by design (ADR 0004) — resolution only targets top-level names
             continue
         sym.refs = counts.get((norm_module(sym.module), sym.name), 0)
-    return symbols, edges
+
+
+def scanned_modules(root: Path, paths: list[str]) -> set[str]:
+    """The module keys a partial scan of `paths` covers — mirrors how `_scan`
+    derives a file's module, so callers can scope a merge to exactly the files
+    that were rescanned (including ones that now yield zero symbols)."""
+    root = Path(root)
+    mods: set[str] = set()
+    for p in paths:
+        fp = (root / p) if not Path(p).is_absolute() else Path(p)
+        try:
+            mods.add(fp.relative_to(root).as_posix())
+        except ValueError:
+            mods.add(fp.name)
+    return mods
 
 
 def scan_repo(root: Path, paths: list[str] | None = None, ignore: set[str] = DEFAULT_IGNORE) -> list[Symbol]:

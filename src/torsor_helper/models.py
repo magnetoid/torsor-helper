@@ -16,6 +16,18 @@ class Tier(IntEnum):
     EPISODIC = 4
 
 
+# Canonical per-tier recall weight. The single source of truth for both the
+# indexed search path (search.py) and the keyword fallback (recall.py) — keep
+# it here so the two rankings can never silently diverge.
+TIER_WEIGHTS: dict[Tier, float] = {
+    Tier.CHARTER: 1.5,
+    Tier.ARCHITECTURE: 1.4,
+    Tier.ACTIVE: 1.2,
+    Tier.MAP: 1.1,
+    Tier.EPISODIC: 1.0,
+}
+
+
 class MemoryKind(str, Enum):
     OBSERVATION = "observation"
     DECISION = "decision"
@@ -102,7 +114,7 @@ class Violation(BaseModel):
 
 class Recommendation(BaseModel):
     # kind: thin | stale | unruled | uncharted | reuse | decision | learning | hotspot
-    #       | phantom_dep | coupling | regression
+    #       | phantom_dep | coupling | regression | dangling_link | stale_path
     kind: str
     severity: str = "suggest"  # info | suggest | important
     message: str

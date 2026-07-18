@@ -3,18 +3,13 @@ from __future__ import annotations
 import re
 
 from torsor_helper.budget import estimate_tokens
-from torsor_helper.models import Note, RecallHit, RecallResult, Tier
+from torsor_helper.models import TIER_WEIGHTS, Note, RecallHit, RecallResult, Tier
 from torsor_helper.snippets import best_snippet
 
 _WORD = re.compile(r"\w+")
 
-_DEFAULT_TIER_WEIGHTS = {
-    Tier.CHARTER: 1.5,
-    Tier.ARCHITECTURE: 1.4,
-    Tier.ACTIVE: 1.2,
-    Tier.MAP: 1.1,
-    Tier.EPISODIC: 1.0,
-}
+# Aliased for local readability; the object is the canonical one in models.py.
+_DEFAULT_TIER_WEIGHTS = TIER_WEIGHTS
 
 
 def keyword_recall(

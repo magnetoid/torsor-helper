@@ -50,12 +50,29 @@ class ModelsConfig(BaseModel):
     fast: str = ""    # optional middle tier
 
 
+class AutomationConfig(BaseModel):
+    # Event-driven auto-capture (see `torsor hooks install`). Capture behaviors
+    # default ON: installing the hooks is itself the explicit opt-in, and each
+    # only writes .torsor/ Markdown (the source of truth) or the disposable
+    # index — never user code. The one behavior that could surprise by blocking
+    # a push defaults OFF. Every hook-run core checks its flag and no-ops when
+    # disabled, so a user can neuter any single behavior via torsor.toml without
+    # uninstalling. torsor never calls an LLM and never runs a daemon — these
+    # fire per-event (git / Claude Code lifecycle) and exit.
+    auto_handoff: bool = True          # deterministic digest handoff on session end
+    auto_map_on_commit: bool = True    # partial-map the just-committed files
+    auto_snapshot_on_commit: bool = True  # refresh the complexity regression baseline
+    guard_on_push: bool = False        # advisory pre-push guard — never surprise-blocks
+    parse_transcript: bool = False     # opt-in transcript enrichment for auto-handoff
+
+
 class TorsorConfig(BaseModel):
     version: int = 1
     budgets: BudgetConfig = Field(default_factory=BudgetConfig)
     embeddings: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     index: IndexConfig = Field(default_factory=IndexConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
+    automation: AutomationConfig = Field(default_factory=AutomationConfig)
 
 
 def load_config(paths: TorsorPaths) -> TorsorConfig:

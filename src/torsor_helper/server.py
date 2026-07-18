@@ -177,6 +177,31 @@ def build_server(root: Path | str) -> FastMCP:
         return f"{len(findings)} possible hallucinated dependenc(y/ies); verify before installing:\n" + "\n".join(lines)
 
     @mcp.tool()
+    def verify(files: list[str] | None = None, severity: str | None = None, run_tests: bool = False) -> str:
+        """The deterministic verification gate (guard + deps + staleness [+ tests]) as
+        one machine-checkable verdict — a loop completion condition. Returns JSON:
+        {ok, exit_code, checks:[{name,ok,status,reasons,count}], summary}. Defaults to
+        git-changed files; run_tests also runs a recorded `test` command."""
+        import json
+
+        return json.dumps(ops.verify(store, config, files, severity=severity, run_tests=run_tests))
+
+    @mcp.tool()
+    def stale(mark: bool = False) -> str:
+        """Flag memory that contradicts current code: dangling [[wikilinks]] and dead
+        file-path references. Deterministic and offline. Read-only unless mark=True,
+        which sets status: stale on the offending notes (reversible; body untouched)."""
+        result = ops.check_staleness(store, config, mark=mark)
+        findings = result["findings"]
+        if not findings:
+            return "No staleness detected — memory matches the code."
+        lines = [f"- [{r.kind}] {r.message}" for r in findings]
+        out = f"{len(findings)} staleness finding(s):\n" + "\n".join(lines)
+        if result["marked"]:
+            out += f"\n\nMarked {len(result['marked'])} note(s) status: stale."
+        return out
+
+    @mcp.tool()
     def consolidate() -> str:
         """Self-improving maintenance: mine journal entries into insight notes, reindex, report duplicates."""
         stats = ops.consolidate(store, config)
@@ -200,6 +225,18 @@ def build_server(root: Path | str) -> FastMCP:
             tail = f" → {r.action}" if r.action else ""
             lines.append(f"- [{r.severity}/{r.kind}] {r.message}{tail}  (key: {r.key})")
         return "\n".join(lines)
+
+    @mcp.tool()
+    def hooks_status() -> str:
+        """Report which git hooks and Claude Code events carry a torsor auto-capture
+        entry. Read-only: installing/removing hooks is CLI-only (`torsor hooks install`)
+        — an agent should not rewrite its own hooks or settings (ADR 0009)."""
+        status = ops.hooks_status(store, config)
+        git = "not a git repo" if not status["git_repo"] else ", ".join(
+            f"{name}={'on' if on else 'off'}" for name, on in status["git_hooks"].items()
+        )
+        events = ", ".join(status["claude_events"]) or "none"
+        return f"git hooks: {git}\nclaude events: {events}"
 
     @mcp.resource("torsor://charter")
     def charter_resource() -> str:

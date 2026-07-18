@@ -169,6 +169,17 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
             }
 
         symbols, edges = cartographer.scan_repo_with_edges(store.paths.root, paths)
+        if not full_scan:
+            # Merge the rescanned modules into the existing graph rather than
+            # replacing it wholesale, then recompute refs across the union so
+            # cross-module counts to/from unscanned modules stay correct. The
+            # result is identical to a pristine full remap. (Truly incremental,
+            # skip-unchanged mapping is I-20 / the tree-sitter fast-follow.)
+            scanned = cartographer.scanned_modules(store.paths.root, paths)
+            symbols = [s for s in db.load_symbols(conn) if s.module not in scanned] + symbols
+            edges = [e for e in db.load_edges(conn) if e.module not in scanned] + edges
+            cartographer.compute_refs(symbols, edges)
+
         rendered = cartographer.render_map(
             symbols,
             overview_tokens=config.budgets.bootstrap_tokens,
@@ -184,8 +195,9 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
         if full_scan:
             db.meta_set(conn, "map_fingerprint", fingerprint)
         else:
-            # A partial map wiped symbols/edges for every other module; clear the
-            # fingerprint so the next full map can't falsely skip on an incomplete graph.
+            # The stored fingerprint reflects the last full scan; a partial map
+            # doesn't re-verify the whole tree, so clear it to force the next
+            # full map to actually run rather than falsely skip.
             db.meta_set(conn, "map_fingerprint", "")
         conn.commit()
     finally:
@@ -331,7 +343,8 @@ _MODELS_END = "<!-- /torsor:models -->"
 # maintenance that return exact answers (no reasoning). SMART = judgement/creation.
 _CHEAP_OPS = [
     "recall", "get_intent", "find_files", "impact", "get_rules", "get_primer",
-    "check_drift", "check_dependencies", "map_repo", "consolidate", "list_commands", "recipes",
+    "check_drift", "check_dependencies", "check_staleness", "verify", "map_repo",
+    "consolidate", "list_commands", "recipes",
 ]
 _SMART_WORK = [
     "designing architecture", "writing & refactoring code",
@@ -357,6 +370,10 @@ def model_policy(store: Store, config: TorsorConfig) -> str:
     if config.models.fast:
         lines.append(f"- **Fast model — `{config.models.fast}`** for quick mid-tier turns when the cheap model is too weak but a frontier model is overkill.")
     lines += [
+        "",
+        "Run `torsor verify` (the deterministic guard+deps+staleness gate) on the "
+        "cheap model as a loop / pre-commit completion check; route the *fix* after a "
+        "failed verdict to the smart model.",
         "",
         "Rule of thumb: if torsor can answer it deterministically, use the cheap model; "
         "if it requires inventing something new, use the smart model.",
@@ -637,9 +654,27 @@ def adopt_practices(store, config, language) -> dict:
     }
 
 
+def _rel_to_root(root, toplevel, files) -> list[str]:
+    """Re-anchor git toplevel-relative paths to the torsor root, keeping only
+    source files that live under it — so a .torsor/ in a subdirectory of the git
+    repo never checks the wrong paths. Shared by the working-tree and per-commit
+    change discovery."""
+    from pathlib import Path
+
+    top, base = Path(toplevel), Path(root).resolve()
+    out: list[str] = []
+    for f in files:
+        if not f.endswith(_SOURCE_EXTS):
+            continue
+        try:
+            out.append((top / f).relative_to(base).as_posix())
+        except ValueError:
+            continue  # outside the torsor root — not ours to check
+    return out
+
+
 def _git_changed(root) -> list[str]:
     import subprocess
-    from pathlib import Path
 
     try:
         toplevel = subprocess.run(
@@ -660,19 +695,29 @@ def _git_changed(root) -> list[str]:
         return []
     if not toplevel:
         return []
-    # git paths are relative to the repo TOPLEVEL, not to the torsor root —
-    # re-anchor them (and drop files outside the root) so a .torsor/ living in
-    # a subdirectory of the git repo doesn't silently check the wrong paths.
-    top, base = Path(toplevel), Path(root).resolve()
-    out: list[str] = []
-    for f in changed + untracked:
-        if not f.endswith(_SOURCE_EXTS):
-            continue
-        try:
-            out.append((top / f).relative_to(base).as_posix())
-        except ValueError:
-            continue  # outside the torsor root — not ours to check
-    return out
+    return _rel_to_root(root, toplevel, changed + untracked)
+
+
+def _git_changed_in_commit(root, ref="HEAD") -> list[str]:
+    """Source files touched by a single commit (default HEAD) — what the
+    post-commit hook remaps. Working-tree `_git_changed` diffs uncommitted state;
+    this diffs the commit itself."""
+    import subprocess
+
+    try:
+        toplevel = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+        names = subprocess.run(
+            ["git", "-C", str(root), "diff-tree", "--no-commit-id", "--name-only", "-r", ref],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if not toplevel:
+        return []
+    return _rel_to_root(root, toplevel, names)
 
 
 def check_drift(store, config, files=None) -> list:
@@ -718,6 +763,57 @@ def check_dependencies(store, config, files=None) -> list:
     return _deps.unknown_imports(store.paths.root, files)
 
 
+def _verify_check(name, ok, status, reasons) -> dict:
+    return {"name": name, "ok": ok, "status": status, "reasons": reasons, "count": len(reasons)}
+
+
+def _verify_tests(store) -> dict:
+    """Run a recorded `test` (or `verify`) command if one exists; skip — never
+    fail — when none is recorded, so the default gate stays instant static analysis."""
+    names = {c["name"] for c in list_commands(store)}
+    target = "test" if "test" in names else ("verify" if "verify" in names else None)
+    if target is None:
+        return _verify_check("tests", True, "skip", ["no 'test' command recorded (torsor commands --record)"])
+    proc = run_command(store, target)
+    code = getattr(proc, "returncode", None)
+    ok = code == 0
+    return _verify_check("tests", ok, "pass" if ok else "fail",
+                         [] if ok else [f"`{target}` command exited {code}"])
+
+
+def verify(store, config, files=None, *, severity=None, run_tests=False) -> dict:
+    """The single deterministic verification gate: guard (new drift) + deps
+    (slopsquatting) + staleness, and optionally a recorded test command. Composes
+    the existing cores — no new checking logic — into one machine-checkable verdict
+    designed as a loop-engineering / Stop-hook / CI completion condition.
+
+    `files` defaults to git-changed so guard/deps judge the same change set (fast,
+    offline). `ok` is the single boolean a gate reads; per-check `reasons` give the
+    agent a fix list without re-running each tool."""
+    _log_op(store, "verify", "")
+    if files is None:
+        files = _git_changed(store.paths.root)
+
+    guard = guard_run(store, config, files, strict=True, severity=severity)
+    guard_reasons = [f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})" for v in guard["new"]]
+    dep_findings = check_dependencies(store, config, files)
+    dep_reasons = [f"{f['file']}:{f['line']} — unknown import '{f['name']}'" for f in dep_findings]
+    stale_findings = check_staleness(store, config)["findings"]
+    stale_reasons = [f"[{r.kind}] {r.message}" for r in stale_findings]
+
+    checks = [
+        _verify_check("guard", not guard["failed"], "pass" if not guard["failed"] else "fail", guard_reasons),
+        _verify_check("deps", not dep_findings, "pass" if not dep_findings else "fail", dep_reasons),
+        _verify_check("staleness", not stale_findings, "pass" if not stale_findings else "fail", stale_reasons),
+    ]
+    if run_tests:
+        checks.append(_verify_tests(store))
+
+    ok = all(c["ok"] for c in checks)
+    summary = " ".join(f"{c['name']}:{c['status'] if c['status'] != 'fail' else str(c['count'])}" for c in checks)
+    return {"ok": ok, "exit_code": 0 if ok else 1, "checks": checks, "summary": summary}
+
+
 def recommend(store, config, context=None, limit=8):
     conn = _open_index(store, config)
     embedder = _embedder_for(config) if conn is not None else None
@@ -734,6 +830,61 @@ def dismiss_recommendation(store, key) -> None:
     state.save()
 
 
+def check_staleness(store, config, *, mark=False, unmark=False) -> dict:
+    """Detect memory that contradicts current code — dangling [[wikilinks]] and
+    dead file-path references (deterministic, index-free, high-precision). Read-only
+    by default; `--mark` sets `status: stale` on the offending notes (opt-in,
+    reversible via `--unmark`), never touching the note body (ADR 0010)."""
+    from torsor_helper.coach import staleness as _staleness
+
+    _log_op(store, "check_staleness", "")
+    findings = _staleness.run_staleness(store)
+    counts: dict[str, int] = {}
+    for r in findings:
+        counts[r.kind] = counts.get(r.kind, 0) + 1
+
+    marked: list[str] = []
+    if unmark:
+        marked = _set_note_status(store, sorted({_note_rel(store, p) for p in _stale_notes(store)}), "active")
+    elif mark:
+        marked = _set_note_status(store, sorted({r.source for r in findings}), "stale")
+    return {"findings": findings, "counts": counts, "marked": marked}
+
+
+def _stale_notes(store):
+    for path in store.iter_note_paths():
+        try:
+            if store.read_note(path).frontmatter.status == "stale":
+                yield path
+        except (OSError, UnicodeDecodeError):
+            continue
+
+
+def _note_rel(store, path) -> str:
+    try:
+        return path.relative_to(store.paths.root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _set_note_status(store, rels: list[str], status: str) -> list[str]:
+    """Rewrite each note's frontmatter `status`, preserving body + other fields
+    (mirrors the record_decision supersede rewrite). Returns the notes changed."""
+    changed: list[str] = []
+    for rel in rels:
+        path = store.paths.root / rel
+        if not path.exists():
+            continue
+        note = store.read_note(path)
+        if note.frontmatter.status == status:
+            continue
+        data = note.frontmatter.model_dump(exclude_none=True)
+        data["status"] = status
+        store.write_note(path, Frontmatter.model_validate(data), note.title, note.body)
+        changed.append(rel)
+    return changed
+
+
 def consolidate(store, config) -> dict:
     written = coach_mining.mine_insights(store)
     duplicates = coach_mining.find_duplicate_entries(store)
@@ -741,16 +892,15 @@ def consolidate(store, config) -> dict:
     # consolidate is a maintenance pass: index once, directly, so the `indexed`
     # count reflects the freshly-mined insights. (Using _open_index here would
     # reindex internally first, leaving this explicit call to report 0.)
-    from torsor_helper.coach import trend as coach_trend
-
     conn = db.connect(store.paths.index_db)
     try:
         indexed = reindex(store, conn, _embedder_for(config))["indexed"]
         top_accessed = db.top_accessed(conn, limit=3)
-        # Snapshot complexity so the Coach can report regressions *since this maintenance pass*.
-        db.save_complexity_snapshot(conn, coach_trend.current_complexity(store.paths.root))
     finally:
         conn.close()
+
+    # Snapshot complexity so the Coach can report regressions *since this pass*.
+    _snapshot_complexity(store)
 
     return {
         "insights": len(written),
@@ -758,3 +908,338 @@ def consolidate(store, config) -> dict:
         "indexed": indexed,
         "top_accessed": top_accessed,
     }
+
+
+def _snapshot_complexity(store) -> None:
+    """Refresh the per-file complexity baseline `coach/trend.find_regressions`
+    diffs against. Shared by `consolidate` and the post-commit auto-capture hook,
+    so a regression baseline stays fresh with zero manual maintenance calls."""
+    from torsor_helper.coach import trend as coach_trend
+
+    if not store.paths.index_db.exists():
+        return
+    conn = db.connect(store.paths.index_db)
+    try:
+        db.save_complexity_snapshot(conn, coach_trend.current_complexity(store.paths.root))
+    finally:
+        conn.close()
+
+
+# ---- Auto-capture hooks: memory that captures itself on the git / agent
+# lifecycle. torsor is never the scheduler (no daemon) — git and Claude Code
+# invoke `torsor hooks run <event>`, which dispatches into the cores below.
+# Every core is deterministic, offline, and flag-guarded (config.automation).
+
+def _capture_state_path(store):
+    # Disposable session bookkeeping, NOT source of truth — lives under .index/.
+    return store.paths.index_dir / "capture_state.json"
+
+
+def _load_capture_state(store) -> dict:
+    import json
+
+    try:
+        data = json.loads(_capture_state_path(store).read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_capture_state(store, data: dict) -> None:
+    import json
+
+    path = _capture_state_path(store)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _git_out(root, *args) -> str:
+    import subprocess
+
+    try:
+        r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=10)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _git_head(root) -> str:
+    return _git_out(root, "rev-parse", "HEAD")
+
+
+def _op_totals(store) -> dict:
+    if not store.paths.index_db.exists():
+        return {}
+    conn = db.connect(store.paths.index_db)
+    try:
+        return db.op_totals(conn)
+    finally:
+        conn.close()
+
+
+def _op_delta(store, snapshot: dict) -> list[tuple[str, int]]:
+    """Per-op hit increase since the last snapshot — a best-effort, deterministic
+    'what ran this session' (op_log is aggregate, not session-scoped: db.py)."""
+    cur = _op_totals(store)
+    out = [(op, cur[op] - int(snapshot.get(op, 0))) for op in cur]
+    out = [(op, n) for op, n in out if n > 0]
+    out.sort(key=lambda t: (-t[1], t[0]))
+    return out
+
+
+def _adrs_between(store, prev: int, cur: int) -> list[str]:
+    if cur <= prev or not store.paths.decisions_dir.exists():
+        return []
+    out = []
+    for p in sorted(store.paths.decisions_dir.glob("*.md")):
+        m = _re.match(r"(\d+)", p.name)
+        if m and prev < int(m.group(1)) <= cur:
+            out.append(p.stem)
+    return out
+
+
+def _read_md_section(text: str, header: str) -> str:
+    """Body under a `## header` up to the next `## ` (or EOF). Empty when absent."""
+    m = _re.search(rf"(?m)^##\s+{_re.escape(header)}\s*$", text)
+    if not m:
+        return ""
+    rest = text[m.end():]
+    nxt = _re.search(r"(?m)^##\s+", rest)
+    return (rest[: nxt.start()] if nxt else rest).strip()
+
+
+def _find_file_paths(obj) -> list[str]:
+    """Recursively collect `file_path` string values from a parsed transcript
+    event — generic so a Claude Code schema tweak can't break it."""
+    found: list[str] = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == "file_path" and isinstance(v, str):
+                found.append(v)
+            else:
+                found.extend(_find_file_paths(v))
+    elif isinstance(obj, list):
+        for item in obj:
+            found.extend(_find_file_paths(item))
+    return found
+
+
+def _transcript_digest(transcript_path) -> str:
+    import json
+    from pathlib import Path
+
+    try:
+        raw = Path(transcript_path).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    files: list[str] = []
+    for line in raw.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        for fp in _find_file_paths(event):
+            if fp not in files:
+                files.append(fp)
+    if not files:
+        return ""
+    return "Files touched this session:\n" + "\n".join(f"- {f}" for f in files[:20])
+
+
+def auto_handoff(store, config, *, session_id=None, transcript_path=None) -> str | None:
+    """Write a deterministic end-of-session handoff (no LLM) from git history +
+    the op-log delta + new ADRs + the agent's own active-context/progress, so the
+    agent never has to call handoff() by hand. Writes nothing (returns None) when
+    disabled or when nothing changed — avoids empty handoffs."""
+    if not config.automation.auto_handoff:
+        return None
+    root = store.paths.root
+    state = _load_capture_state(store)
+    last_head = state.get("last_head") or ""
+    head = _git_head(root)
+
+    commit_lines: list[str] = []
+    diffstat = ""
+    if head and last_head and last_head != head:
+        log = _git_out(root, "log", "--oneline", f"{last_head}..{head}")
+        commit_lines = [ln for ln in log.splitlines() if ln.strip()]
+        diffstat = _git_out(root, "diff", "--shortstat", f"{last_head}..{head}")
+    worktree = _git_changed(root)
+    worktree_stat = _git_out(root, "diff", "--shortstat")
+    op_delta = _op_delta(store, state.get("op_snapshot") or {})
+    prev_adr = int(state.get("adr_max") or 0)
+    cur_adr = _next_adr_number(store) - 1
+    new_adrs = _adrs_between(store, prev_adr, cur_adr)
+
+    if not commit_lines and not worktree and not op_delta and not new_adrs:
+        return None
+
+    bits: list[str] = []
+    if commit_lines:
+        bits.append(f"{len(commit_lines)} commit(s)")
+    if diffstat:
+        bits.append(diffstat)
+    elif worktree_stat:
+        bits.append(f"uncommitted: {worktree_stat}")
+    if op_delta:
+        bits.append("ran " + ", ".join(f"{n}× {op}" for op, n in op_delta))
+    summary = "; ".join(bits) or "session activity"
+    if commit_lines:
+        summary += "\n\nCommits:\n" + "\n".join(f"- {c}" for c in commit_lines[:20])
+    if config.automation.parse_transcript and transcript_path:
+        extra = _transcript_digest(transcript_path)
+        if extra:
+            summary += f"\n\n{extra}"
+
+    active_text = store.read_note(store.paths.active_context).body if store.paths.active_context.exists() else ""
+    open_qs = _read_md_section(active_text, "Open questions")
+    next_steps = store.read_note(store.paths.progress).body.strip() if store.paths.progress.exists() else ""
+
+    path = record_handoff(store, summary, decisions=", ".join(new_adrs),
+                          open_questions=open_qs, next_steps=next_steps)
+
+    _save_capture_state(store, {
+        "last_head": head or last_head,
+        "op_snapshot": _op_totals(store),
+        "adr_max": cur_adr,
+    })
+    return path
+
+
+def on_commit(store, config) -> dict:
+    """Post-commit hook core: partial-map the just-committed source files (the
+    ADR 0008 merge — zero new mapping code) and refresh the complexity baseline,
+    so the graph and regression signal stay fresh with no manual map/consolidate.
+    Best-effort; writes only .torsor/ Markdown + the disposable index, never commits."""
+    result = {"mapped": [], "snapshot": False}
+    changed = _git_changed_in_commit(store.paths.root, "HEAD")
+    if not changed:
+        return result
+    if config.automation.auto_map_on_commit:
+        map_repo(store, config, paths=changed)
+        result["mapped"] = changed
+    if config.automation.auto_snapshot_on_commit:
+        _snapshot_complexity(store)
+        result["snapshot"] = store.paths.index_db.exists()
+    return result
+
+
+def pre_push(store, config) -> dict:
+    """Pre-push hook core: advisory guard. Installed only when guard_on_push is
+    on; the adapter maps `failed` to the process exit code so a failing guard can
+    block the push. A no-op verdict when disabled."""
+    if not config.automation.guard_on_push:
+        return {"failed": False, "new": [], "skipped": True}
+    result = guard_run(store, config, strict=True)
+    return {"failed": result["failed"], "new": result["new"], "skipped": False}
+
+
+def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=False) -> dict:
+    """Wire git hooks + Claude Code hook entries so capture fires on the lifecycle.
+    Idempotent, foreign-content-preserving, and CLI-only (footgun parity with the
+    self-updater — an agent should not rewrite its own hooks; ADR 0009)."""
+    import json
+
+    from torsor_helper import hooks as _hooks
+
+    root = str(store.paths.root)
+    result = {"git_hooks": [], "claude_settings": None, "warnings": [], "skipped": []}
+
+    if git:
+        hooks_dir = _hooks.resolve_hooks_dir(root)
+        if hooks_dir is None:
+            result["warnings"].append("not a git repo — git hooks skipped")
+            result["skipped"].append("git")
+        else:
+            foreign = _hooks.foreign_hook_manager(root)
+            if foreign:
+                result["warnings"].append(
+                    f"{foreign} manages git hooks here — add "
+                    f'`torsor hooks run post-commit --root \"{root}\"` to your {foreign} '
+                    "config instead of relying on .git/hooks"
+                )
+            pc = _hooks.write_git_hook(hooks_dir, "post-commit", _hooks.post_commit_script(root))
+            result["git_hooks"].append(str(pc))
+            if config.automation.guard_on_push:
+                pp = _hooks.write_git_hook(hooks_dir, "pre-push", _hooks.pre_push_script(root))
+                result["git_hooks"].append(str(pp))
+
+    if claude:
+        target = store.paths.claude_settings_local if local else store.paths.claude_settings
+        data: dict = {}
+        if target.exists():
+            try:
+                loaded = json.loads(target.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    data = loaded
+            except ValueError:
+                data = {}
+        merged = _hooks.merge_settings_hooks(data, root=".", on_stop=on_stop)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+        result["claude_settings"] = str(target)
+
+    # Baseline the capture marker at install time so the first auto-handoff is
+    # scoped to post-install activity (not a dump of all prior commits/ADRs).
+    if not _capture_state_path(store).exists():
+        _save_capture_state(store, {
+            "last_head": _git_head(root),
+            "op_snapshot": _op_totals(store),
+            "adr_max": _next_adr_number(store) - 1,
+        })
+    return result
+
+
+def uninstall_hooks(store, config, *, local=False) -> dict:
+    """Remove only torsor-owned git hooks + Claude Code hook entries."""
+    import json
+
+    from torsor_helper import hooks as _hooks
+
+    result = {"removed": [], "claude_settings": None}
+    hooks_dir = _hooks.resolve_hooks_dir(str(store.paths.root))
+    if hooks_dir is not None:
+        for name in ("post-commit", "pre-push"):
+            removed = _hooks.write_git_hook(hooks_dir, name, "", remove=True)
+            if removed is not None:
+                result["removed"].append(str(removed))
+
+    target = store.paths.claude_settings_local if local else store.paths.claude_settings
+    if target.exists():
+        try:
+            loaded = json.loads(target.read_text(encoding="utf-8"))
+            data = loaded if isinstance(loaded, dict) else {}
+        except ValueError:
+            data = {}
+        merged = _hooks.merge_settings_hooks(data, remove=True)
+        target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+        result["claude_settings"] = str(target)
+    return result
+
+
+def hooks_status(store, config) -> dict:
+    """Read-only report of which git hooks + Claude Code events carry a torsor
+    entry. The only auto-capture surface exposed as an MCP tool (writes are CLI-only)."""
+    import json
+
+    from torsor_helper import hooks as _hooks
+
+    status = {"git_repo": False, "git_hooks": {}, "claude_events": []}
+    hooks_dir = _hooks.resolve_hooks_dir(str(store.paths.root))
+    if hooks_dir is not None:
+        status["git_repo"] = True
+        for name in ("post-commit", "pre-push"):
+            f = hooks_dir / name
+            status["git_hooks"][name] = f.exists() and _hooks.is_managed_git_hook(f.read_text(encoding="utf-8"))
+
+    events: list[str] = []
+    for target in (store.paths.claude_settings, store.paths.claude_settings_local):
+        if not target.exists():
+            continue
+        try:
+            data = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        events.extend(_hooks.settings_events_with_torsor(data))
+    status["claude_events"] = sorted(set(events))
+    return status

@@ -397,6 +397,73 @@ def deps(
 
 
 @app.command()
+def verify(
+    paths: list[str] = typer.Argument(None, help="Files to check (default: git-changed)."),
+    root: Path = typer.Option(Path("."), help="Project root."),
+    severity: Optional[str] = typer.Option(None, "--severity", help="Guard threshold: hint|info|warning|error."),
+    run_tests: bool = typer.Option(False, "--run-tests", help="Also run a recorded `test` command."),
+    as_json: bool = typer.Option(False, "--json", help="Emit the machine-readable verdict."),
+) -> None:
+    """The deterministic verification gate (guard + deps + staleness [+ tests]).
+    Exits non-zero on failure — a loop-engineering / CI / Stop-hook completion check."""
+    import json
+
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    verdict = ops.verify(store, config, paths or None, severity=severity, run_tests=run_tests)
+    if as_json:
+        typer.echo(json.dumps(verdict))
+        raise typer.Exit(code=verdict["exit_code"])
+    for c in verdict["checks"]:
+        tail = f" ({c['count']})" if c["count"] else ""
+        typer.echo(f"{c['name']}: {c['status'].upper()}{tail}")
+        for reason in c["reasons"]:
+            typer.echo(f"  - {reason}")
+    typer.echo(f"\n{'PASS' if verdict['ok'] else 'FAIL'}")
+    raise typer.Exit(code=verdict["exit_code"])
+
+
+@app.command()
+def stale(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    mark: bool = typer.Option(False, "--mark", help="Set status: stale on notes with findings (reversible)."),
+    unmark: bool = typer.Option(False, "--unmark", help="Restore status: active on all stale-marked notes."),
+    as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON findings."),
+    strict: bool = typer.Option(False, help="Exit non-zero if any staleness finding (for CI)."),
+) -> None:
+    """Flag memory that contradicts current code: dangling [[wikilinks]] and dead
+    file-path references. Read-only unless --mark/--unmark. Deterministic, offline."""
+    import json
+
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    result = ops.check_staleness(store, config, mark=mark, unmark=unmark)
+    findings = result["findings"]
+
+    if as_json:
+        typer.echo(json.dumps([r.model_dump() for r in findings]))
+    elif not findings:
+        typer.echo("No staleness detected — memory matches the code.")
+    else:
+        for r in findings:
+            typer.echo(f"[{r.kind}] {r.message}")
+        typer.echo(f"\n{len(findings)} staleness finding(s).")
+    if result["marked"]:
+        verb = "Unmarked" if unmark else "Marked"
+        typer.echo(f"{verb} {len(result['marked'])} note(s).")
+    if strict and findings:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def coach(
     context: list[str] = typer.Argument(None, help="Optional context for best-practice hints (e.g. what you're building)."),
     root: Path = typer.Option(Path("."), help="Project root."),
@@ -543,6 +610,107 @@ def models(
     if config.models.fast:
         typer.echo(f"fast:  {config.models.fast}")
     typer.echo("\n" + ops.model_policy(store, config))
+
+
+hooks_app = typer.Typer(help="Auto-capture: wire memory to the git / Claude Code lifecycle.")
+app.add_typer(hooks_app, name="hooks")
+
+
+def _load(root: Path):
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    return tp, load_config(tp), Store(tp)
+
+
+@hooks_app.command("install")
+def hooks_install(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    no_git: bool = typer.Option(False, "--no-git", help="Skip git hooks."),
+    no_claude: bool = typer.Option(False, "--no-claude", help="Skip Claude Code settings."),
+    local: bool = typer.Option(False, "--local", help="Write .claude/settings.local.json (git-ignored) instead."),
+    on_stop: bool = typer.Option(False, "--on-stop", help="Register the Stop event instead of SessionEnd."),
+) -> None:
+    """Install auto-capture hooks (auto-handoff on session end, auto-map on commit).
+    Idempotent and removable; never clobbers your existing hooks or settings."""
+    _, config, store = _load(root)
+    result = ops.install_hooks(store, config, git=not no_git, claude=not no_claude, local=local, on_stop=on_stop)
+    for h in result["git_hooks"]:
+        typer.echo(f"git hook: {h}")
+    if result["claude_settings"]:
+        typer.echo(f"claude settings: {result['claude_settings']}")
+    for w in result["warnings"]:
+        typer.echo(f"warning: {w}", err=True)
+
+
+@hooks_app.command("uninstall")
+def hooks_uninstall(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    local: bool = typer.Option(False, "--local", help="Also target .claude/settings.local.json."),
+) -> None:
+    """Remove only torsor-owned git hooks and Claude Code hook entries."""
+    _, config, store = _load(root)
+    result = ops.uninstall_hooks(store, config, local=local)
+    for h in result["removed"]:
+        typer.echo(f"removed: {h}")
+    if result["claude_settings"]:
+        typer.echo(f"cleaned: {result['claude_settings']}")
+    if not result["removed"] and not result["claude_settings"]:
+        typer.echo("Nothing to uninstall.")
+
+
+@hooks_app.command("status")
+def hooks_status_cmd(root: Path = typer.Option(Path("."), help="Project root.")) -> None:
+    """Show which git hooks and Claude Code events currently carry a torsor entry."""
+    _, config, store = _load(root)
+    status = ops.hooks_status(store, config)
+    if not status["git_repo"]:
+        typer.echo("git: not a repo here")
+    else:
+        for name, on in status["git_hooks"].items():
+            typer.echo(f"git {name}: {'installed' if on else 'not installed'}")
+    events = status["claude_events"]
+    typer.echo(f"claude events: {', '.join(events) if events else 'none'}")
+
+
+@hooks_app.command("run")
+def hooks_run(
+    event: str = typer.Argument(..., help="post-commit | pre-push | session-end"),
+    root: Path = typer.Option(Path("."), help="Project root."),
+) -> None:
+    """Stable dispatcher the on-disk hook scripts call — so scripts never change
+    across upgrades. Best-effort; a missing project just exits 0."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        return  # nothing to capture; never break the git/agent lifecycle
+    config = load_config(tp)
+    store = Store(tp)
+    if event == "post-commit":
+        ops.on_commit(store, config)
+    elif event == "session-end":
+        import sys
+
+        session_id = transcript_path = None
+        if not sys.stdin.isatty():
+            import json
+
+            try:
+                payload = json.loads(sys.stdin.read() or "{}")
+                session_id = payload.get("session_id")
+                transcript_path = payload.get("transcript_path")
+            except ValueError:
+                pass
+        ops.auto_handoff(store, config, session_id=session_id, transcript_path=transcript_path)
+    elif event == "pre-push":
+        result = ops.pre_push(store, config)
+        if result["failed"]:
+            for v in result["new"]:
+                typer.echo(f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})", err=True)
+            raise typer.Exit(code=1)
+    else:
+        typer.echo(f"unknown hook event {event!r}", err=True)
+        raise typer.Exit(code=2)
 
 
 def main() -> None:

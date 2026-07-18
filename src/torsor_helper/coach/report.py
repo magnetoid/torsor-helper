@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from torsor_helper import cartographer, db, deps
-from torsor_helper.coach import coupling, health, hotspots, recommender, trend
+from torsor_helper.coach import coupling, health, hotspots, recommender, staleness, trend
 from torsor_helper.coach.state import CoachState
 from torsor_helper.models import Recommendation
 from torsor_helper.store import Store
@@ -31,6 +31,10 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
     modules_in_map: set[str] = set(db.modules(conn)) if conn is not None else set()
 
     recs: list[Recommendation] = health.run_health(store, modules_in_map)
+    # Only dangling wikilinks surface passively (deletion is unambiguous). Dead
+    # path refs (check_path_refs) can still catch an example path, so they live
+    # only in the explicit `torsor stale` command, not the always-on Coach.
+    recs += staleness.check_dangling_links(store)
     if conn is not None:  # indexed path; these self-skip outside a git repo / on a clean project
         recs += hotspots.find_hotspots(store.paths.root)
         recs += _phantom_dep_recs(store)

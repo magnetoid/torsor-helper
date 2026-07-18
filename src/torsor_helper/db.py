@@ -7,7 +7,7 @@ from typing import Sequence
 
 import numpy as np
 
-from torsor_helper.models import Symbol
+from torsor_helper.models import Symbol, SymbolEdge
 
 SCHEMA_VERSION = 6
 
@@ -319,6 +319,29 @@ def all_symbols(conn):
     return [dict(r) for r in rows]
 
 
+def load_symbols(conn) -> list[Symbol]:
+    """Full Symbol objects for every mapped symbol — used when merging a partial
+    map into the existing graph (unlike all_symbols, carries doc)."""
+    rows = conn.execute("SELECT name, kind, signature, module, line, doc, refs FROM symbols").fetchall()
+    return [
+        Symbol(name=r["name"], kind=r["kind"], signature=r["signature"],
+               module=r["module"], line=r["line"], doc=r["doc"] or "", refs=r["refs"])
+        for r in rows
+    ]
+
+
+def load_edges(conn) -> list[SymbolEdge]:
+    """Full SymbolEdge objects for every recorded reference edge."""
+    rows = conn.execute(
+        "SELECT caller, referenced_name, role, module, resolved_module FROM symbol_edges"
+    ).fetchall()
+    return [
+        SymbolEdge(caller=r["caller"], referenced_name=r["referenced_name"], role=r["role"],
+                   module=r["module"], resolved_module=r["resolved_module"])
+        for r in rows
+    ]
+
+
 def find_clock(conn) -> int:
     return int(meta_get(conn, "find_clock") or 0)
 
@@ -362,6 +385,13 @@ def top_ops(conn, limit=10):
         (limit,),
     ).fetchall()
     return [{"op": r["op"], "args": r["args"], "hits": r["hits"]} for r in rows]
+
+
+def op_totals(conn) -> dict[str, int]:
+    """Total hits per op, aggregated across args — the per-session delta baseline
+    for the deterministic auto-handoff digest."""
+    rows = conn.execute("SELECT op, SUM(hits) AS n FROM op_log GROUP BY op").fetchall()
+    return {r["op"]: int(r["n"]) for r in rows}
 
 
 def save_complexity_snapshot(conn, mapping):

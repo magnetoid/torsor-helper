@@ -22,7 +22,7 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 
 ## Architecture
 
-**Layered: pure core under thin adapters.** `server.py` (FastMCP) and `cli.py` (Typer) are the only adapters, and they reach only into `operations.py` — the tested orchestration core. Core modules never import adapters. This is ADR-enforced (`.torsor/architecture/decisions/0002-…`) and `torsor guard` will flag violations. Put new logic in `operations.py` (or a core module it calls) and expose it via thin wrappers in both `server.py` and `cli.py` — every feature is both an MCP tool and a CLI command.
+**Layered: pure core under thin adapters.** `server.py` (FastMCP) and `cli.py` (Typer) are the only adapters, and they reach only into `operations.py` — the tested orchestration core. Core modules never import adapters. This is ADR-enforced (`.torsor/architecture/decisions/0002-…`) and `torsor guard` will flag violations. Put new logic in `operations.py` (or a core module it calls) and expose it via thin wrappers in both `server.py` and `cli.py` — nearly every feature is both an MCP tool and a CLI command. The deliberate exception is `updater.py` (`torsor self-update`): CLI-only by design, since an agent updating its own server is a footgun.
 
 **Markdown is the source of truth; the index is throwaway.** `store.py` does all Markdown I/O (YAML frontmatter + `[[wikilinks]]`, five stability tiers: charter → architecture → map → active → memory). `indexer.py` incrementally derives the SQLite index in `db.py` (FTS5 + embedding vectors + wiki-link edges + symbols + symbol_edges; `SCHEMA_VERSION` guards migrations). Never treat the index as authoritative.
 
@@ -33,6 +33,7 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 - `guard.py` — ADRs carry machine-readable `rules:` blocks in frontmatter (forbid_import, layering, seams); guard checks code against them. `baseline.py` is the committed ratchet so `--strict` only fails on *new* drift. The guard is advisory — it never blocks or edits code.
 - `coach/` — hygiene/health recommendations (hotspots, temporal coupling, complexity trend); a digest is pushed into `bootstrap_session` output.
 - `budget.py` — every context-returning path is token-budgeted; preserve this when adding output paths.
+- Feature clusters that follow the same core-plus-adapter shape: `practices.py` (curated per-language best-practice packs), `deps.py` (dependency drift, venv-first with a declared-deps fallback), `models.py` (model-policy tiering), `clients.py`/`updater.py` (per-client instruction files + CLI self-update).
 
 **Graceful degradation is a design rule:** no index → keyword recall; no fastembed → hashing embeddings; everything works offline with no API key.
 

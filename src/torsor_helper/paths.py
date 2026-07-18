@@ -92,5 +92,16 @@ class TorsorPaths:
     def index_db(self) -> Path:
         return self.index_dir / "torsor.db"
 
+    @property
+    def claude_settings(self) -> Path:
+        # Claude Code project settings — NOT under .torsor/. Auto-capture hook
+        # entries are merged into its "hooks" section (foreign keys preserved).
+        return self.root / ".claude" / "settings.json"
+
+    @property
+    def claude_settings_local(self) -> Path:
+        # Git-ignored local variant, for hook entries a user doesn't want committed.
+        return self.root / ".claude" / "settings.local.json"
+
     def journal_file(self, date_str: str) -> Path:
         return self.journal_dir / f"{date_str}.md"
