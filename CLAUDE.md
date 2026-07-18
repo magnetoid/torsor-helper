@@ -29,9 +29,13 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 **Core module roles** (the non-obvious ones):
 - `search.py` — hybrid recall: RRF fusion of FTS5 + vector results, plus importance decay and MMR diversity. `recall.py` is the keyword-only fallback when no index exists.
 - `embeddings.py` — fastembed if installed (`embeddings` extra), otherwise a deterministic hashing embedder. Tests rely on the hashing fallback being offline.
-- `cartographer.py` — stdlib-`ast` symbol map + reference edges ("who calls what"). Deliberately not tree-sitter (ADR 0003); reference edges resolve only the two reliable cases (ADR 0004). `impact` reuses these edges rather than building a call graph (ADR 0007).
+- `cartographer.py` — stdlib-`ast` symbol map + reference edges ("who calls what"). Deliberately not tree-sitter (ADR 0003); reference edges resolve only the two reliable cases (ADR 0004). `impact` (who-references) and `connect` (shortest directed path between two symbols) both reuse these edges rather than building a separate call graph (ADR 0007).
 - `guard.py` — ADRs carry machine-readable `rules:` blocks in frontmatter (forbid_import, layering, seams); guard checks code against them. `baseline.py` is the committed ratchet so `--strict` only fails on *new* drift. The guard is advisory — it never blocks or edits code.
-- `coach/` — hygiene/health recommendations (hotspots, temporal coupling, complexity trend); a digest is pushed into `bootstrap_session` output.
+- `deps.py` — advisory, offline dependency check (ADR 0006): flags phantom/slopsquatted imports against declared/installed deps. Conservative by design (prefers a missed phantom over a false alarm).
+- `finder.py` — `torsor find`: fuzzy subsequence matcher over the symbol index (boundary-aware scoring), the keyword path when you don't have an exact name.
+- `coach/` — hygiene/health recommendations (hotspots, temporal coupling, complexity trend, and `hubs` — high-fan-in "God node" detection over the symbol graph); a digest is pushed into `bootstrap_session` output.
+- `export.py` — `torsor export` emits `llms.txt` + a Mermaid module-dependency graph from the index.
+- `clients.py` — registry of supported AI clients (Claude Code, Cursor, Codex, Gemini, …); the `--client` flag resolves the conventional instructions file for `rules`/`primer`/`models --write`.
 - `budget.py` — every context-returning path is token-budgeted; preserve this when adding output paths.
 - Feature clusters that follow the same core-plus-adapter shape: `practices.py` (curated per-language best-practice packs), `deps.py` (dependency drift, venv-first with a declared-deps fallback), `models.py` (model-policy tiering), `clients.py`/`updater.py` (per-client instruction files + CLI self-update).
 
@@ -42,3 +46,5 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 - TDD: failing test first, then minimal implementation. Tests inject clocks via `CLOCK = lambda: datetime(...)` (ruff E731 is intentionally ignored for this).
 - Ruff config in `pyproject.toml`: line length 110, target py311.
 - Design specs and phase plans live in `docs/superpowers/`; architectural decisions in `.torsor/architecture/decisions/`. Record a new ADR when making a load-bearing structural choice.
+- `models.py` defines the five-tier `Tier` IntEnum where `CHARTER == 0` is falsy — never test a tier with truthiness (`if note.tier:`); compare explicitly (`is`/`==`).
+- `uv run torsor --help` lists the full command surface; the README is the long-form user manual.

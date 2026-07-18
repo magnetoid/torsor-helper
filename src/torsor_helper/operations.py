@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re as _re
+from collections import deque
 
 from torsor_helper import cartographer, db, export as _export, guard
 from torsor_helper.coach import mining as coach_mining
@@ -505,6 +506,64 @@ def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
 
     callers.sort(key=lambda c: (c["module"], c["caller"]))
     return {"symbol": symbol, "callers": callers, "count": len(callers)}
+
+
+def connect(store: Store, config: TorsorConfig, source: str, target: str, *, max_hops: int = 12) -> dict:
+    """Shortest directed path through the symbol call graph from `source` to
+    `target` (who-calls-what), via the cartographer's resolved reference edges.
+    Read-only over the existing index (run `torsor map` first). `found` is False
+    when the index is absent, either endpoint is unknown, or no directed path
+    exists. Bounded by `max_hops` so output stays token-thrifty on dense graphs."""
+    _log_op(store, "connect", f"{source} -> {target}")
+    empty = {"source": source, "target": target, "path": [], "hops": 0, "found": False}
+    if not store.paths.index_db.exists():
+        return empty
+    src = source.split(".")[-1]
+    dst = target.split(".")[-1]
+
+    conn = db.connect(store.paths.index_db)
+    try:
+        src_syms = [s for s in db.search_symbols(conn, src, limit=50)
+                    if s.name.split(".")[-1] == src]
+        if not src_syms:
+            return empty
+        start_module = cartographer.norm_module(src_syms[0].module)
+        if src == dst:
+            return {"source": source, "target": target,
+                    "path": [{"symbol": src, "module": start_module}], "hops": 0, "found": True}
+        # adjacency: caller name -> [(referenced_name, resolved_module)]
+        adj: dict[str, list[tuple[str, str]]] = {}
+        for caller, ref, mod in db.call_graph_edges(conn):
+            adj.setdefault(caller, []).append((ref, cartographer.norm_module(mod)))
+    finally:
+        conn.close()
+
+    # Breadth-first search yields the shortest hop-count path. `prev` doubles as
+    # the visited set and records each node's parent + the module it resolved into.
+    prev: dict[str, tuple[str | None, str]] = {src: (None, start_module)}
+    queue: deque[tuple[str, int]] = deque([(src, 0)])
+    while queue:
+        node, depth = queue.popleft()
+        if node == dst:
+            break
+        if depth >= max_hops:
+            continue
+        for ref, mod in adj.get(node, []):
+            if ref not in prev:
+                prev[ref] = (node, mod)
+                queue.append((ref, depth + 1))
+
+    if dst not in prev:
+        return empty
+
+    chain: list[dict] = []
+    node: str | None = dst
+    while node is not None:
+        parent, mod = prev[node]
+        chain.append({"symbol": node, "module": mod})
+        node = parent
+    chain.reverse()
+    return {"source": source, "target": target, "path": chain, "hops": len(chain) - 1, "found": True}
 
 
 def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:

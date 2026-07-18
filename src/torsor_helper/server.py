@@ -68,6 +68,18 @@ def build_server(root: Path | str) -> FastMCP:
         return f"{res['count']} reference(s) to {symbol!r}:\n" + "\n".join(lines)
 
     @mcp.tool()
+    def connect(source: str, target: str, max_hops: int = 12) -> str:
+        """Trace the shortest directed call-graph path from one symbol to another ("how does X reach Y?") — who-calls-what across files (run map_repo first)."""
+        res = ops.connect(store, config, source, target, max_hops=max_hops)
+        if not res["found"]:
+            return (
+                f"No call path from {source!r} to {target!r} "
+                f"(directed; run map_repo to refresh the symbol graph)."
+            )
+        chain = " -> ".join(f"{s['symbol']} ({s['module']})" for s in res["path"])
+        return f"{res['hops']} hop(s) from {source!r} to {target!r}:\n{chain}"
+
+    @mcp.tool()
     def find_files(query: str, mode: str = "fuzzy", limit: int = 20) -> str:
         """Fuzzy, frecency-ranked search over the repo's files and mapped symbols — jump to the right file/symbol fast. mode: fuzzy|literal|regex. Run map_repo first for symbol results."""
         res = ops.find_targets(store, config, query, mode=mode, limit=limit)
