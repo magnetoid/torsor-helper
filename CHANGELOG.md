@@ -4,6 +4,33 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
+## [0.5.0] — Self-Driving Memory (2026-07-18)
+
+The autonomy release: memory that captures itself on the git / agent lifecycle, so
+you interact with torsor by hand almost never. Grounded in 2026 agent-memory research
+(auto-capture via hooks, staleness as the top open problem, loop-engineering gates)
+and kept strictly **deterministic, offline, and daemon-free** — autonomy comes from
+event-driven hooks that run torsor's existing deterministic ops; torsor still never
+calls an LLM. All additive over the layered core (three new ADRs; `torsor guard --strict` clean).
+
+### 🪝 Auto-capture hooks (`torsor hooks install/uninstall/status/run` + read-only `hooks_status` MCP tool)
+- One command wires **git** + **Claude Code** so memory captures itself: a **post-commit** hook auto-maps the just-committed files (reusing the partial-map merge) and refreshes the complexity snapshot; a **SessionEnd** hook writes a **deterministic auto-handoff** — a digest built from `git log/diff` since a marker + the op-log delta + new ADRs + your active-context, **no LLM** — so agents stop forgetting to call `handoff`.
+- New pure `hooks.py`; marker-delimited git-hook blocks and a `.claude/settings.json` merge that are **idempotent, removable, and never clobber** your existing hooks/settings; a Husky / pre-commit detector warns instead of fighting for `.git/hooks`. Installers are **CLI-only** (footgun parity with `updater.py` — an agent shouldn't rewrite its own hooks); only the read-only `hooks_status` is an MCP tool. New `[automation]` config toggles (capture on by default; `guard_on_push` off). **ADR 0009.**
+
+### 🧭 Staleness guard (`torsor stale` + `stale` MCP tool + Coach `dangling_link`)
+- Detects memory that contradicts current code — the #1 open problem in agent memory (stale notes make agents suggest deprecated patterns). Deterministic, offline, and **high-precision by design**: dangling `[[wikilinks]]` (deletion is unambiguous — surfaced passively in the Coach) and dead file-path references restricted to inline `` `code` `` spans (real refs are backticked; example paths in prose are conventionally "double-quoted" — kept to the explicit `torsor stale` command). The `status: stale` WRITE is opt-in (`--mark`), reversible (`--unmark`), and never touches the note body. **ADR 0010.**
+
+### ✅ Verification gate (`torsor verify` + `verify` MCP tool)
+- One deterministic pass/fail gate composing guard (new drift) + deps (slopsquatting) + staleness, plus an optional recorded `test` command, into a machine-checkable verdict `{ok, exit_code, checks[], summary}` — a loop-engineering / Stop-hook / CI completion condition. Defaults to git-changed files (fast, offline); a missing `test` command reports **skip**, never fail, so the default gate stays instant static analysis. Added to the cheap-model route.
+
+### 🕸️ Symbol-graph reach (from #7)
+- **God-node (hub) detection (Coach `hub`):** high fan-in hubs over the symbol graph — the modules everything depends on.
+- **`torsor connect` (+ MCP tool):** shortest directed path between two symbols over the call graph (reusing the reference edges, ADR 0007).
+
+#### Fixed
+- **Partial `map_repo` no longer wipes the index (ADR 0008):** `map_repo(paths=[…])` previously `replace_all`'d — deleting every other module's symbols/edges and inserting only the scanned subset. It now **merges** the rescanned modules into the existing graph and recomputes `refs` across the union, producing a graph byte-identical to a full remap (correctness fix; true incremental scanning remains a fast-follow).
+- **Single-source tier weights:** `search.py` and `recall.py` shared duplicate `_TIER_WEIGHTS` dicts that could silently diverge indexed vs. keyword ranking; both now alias one canonical `models.TIER_WEIGHTS` (identity-pinned by a test).
+
 ## [0.4.0] — Token Thrift (2026-06-16)
 
 ### Fuzzy + frecency finder & cross-tool publishing
