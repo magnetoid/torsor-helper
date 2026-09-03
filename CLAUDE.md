@@ -24,6 +24,8 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 
 **Layered: pure core under thin adapters.** `server.py` (FastMCP) and `cli.py` (Typer) are the only adapters, and they reach only into `operations.py` — the tested orchestration core. Core modules never import adapters. This is ADR-enforced (`.torsor/architecture/decisions/0002-…`) and `torsor guard` will flag violations. Put new logic in `operations.py` (or a core module it calls) and expose it via thin wrappers in both `server.py` and `cli.py` — nearly every feature is both an MCP tool and a CLI command. The deliberate exception is `updater.py` (`torsor self-update`): CLI-only by design, since an agent updating its own server is a footgun.
 
+**Everything lives under the project root — nothing in `$HOME`, XDG or `/tmp`** — so `.torsor/` travels with the repo and dies with it. Only `.torsor/.index/` is git-ignored; `map/` is committed (which is why orphaned map notes must be pruned, not left to accumulate in git).
+
 **Markdown is the source of truth; the index is throwaway.** `store.py` does all Markdown I/O (YAML frontmatter + `[[wikilinks]]`, five stability tiers: charter → architecture → map → active → memory). `indexer.py` incrementally derives the SQLite index in `db.py` (FTS5 + embedding vectors + wiki-link edges + symbols + symbol_edges; `SCHEMA_VERSION` guards migrations). Never treat the index as authoritative.
 
 **Core module roles** (the non-obvious ones):
@@ -35,6 +37,7 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `u
 - `finder.py` — `torsor find`: fuzzy subsequence matcher over the symbol index (boundary-aware scoring), the keyword path when you don't have an exact name.
 - `coach/` — hygiene/health recommendations (hotspots, temporal coupling, complexity trend, and `hubs` — high-fan-in "God node" detection over the symbol graph); a digest is pushed into `bootstrap_session` output.
 - `export.py` — `torsor export` emits `llms.txt` + a Mermaid module-dependency graph from the index.
+- `cleaner.py` — `torsor clean`: plan-then-apply GC over derived artefacts (orphaned map notes, index rows whose source file is gone, journals past `clean.journal_retention_days`, and `--deep` for the whole `.index/`). `plan()` is strictly read-only and the dry run is the default at both adapters; it never touches a stable tier or source code (ADR 0011). Orphan detection mangles module names *forward* into map-note filenames — never reverse-parse one, `pkg/__init__.py` renders as `pkg____init__.py.md`.
 - `clients.py` — registry of supported AI clients (Claude Code, Cursor, Codex, Gemini, …); the `--client` flag resolves the conventional instructions file for `rules`/`primer`/`models --write`.
 - `budget.py` — every context-returning path is token-budgeted; preserve this when adding output paths.
 - Feature clusters that follow the same core-plus-adapter shape: `practices.py` (curated per-language best-practice packs), `deps.py` (dependency drift, venv-first with a declared-deps fallback), `models.py` (model-policy tiering), `clients.py`/`updater.py` (per-client instruction files + CLI self-update).

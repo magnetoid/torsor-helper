@@ -3,7 +3,7 @@ from __future__ import annotations
 import re as _re
 from collections import deque
 
-from torsor_helper import cartographer, db, export as _export, guard
+from torsor_helper import cartographer, cleaner, db, export as _export, guard
 from torsor_helper.coach import mining as coach_mining
 from torsor_helper.coach import report as coach_report
 from torsor_helper.coach.state import CoachState
@@ -942,6 +942,31 @@ def _set_note_status(store, rels: list[str], status: str) -> list[str]:
         store.write_note(path, Frontmatter.model_validate(data), note.title, note.body)
         changed.append(rel)
     return changed
+
+
+def clean(store, config, *, apply: bool = False, deep: bool = False) -> dict:
+    """Reclaim derived and expired torsor artefacts. Dry-run by default: without
+    `apply` nothing is touched and the returned stats describe what *would* go.
+    Never removes a stable tier (charter/architecture/active/insights) or any
+    source file — `cleaner` only ever targets orphaned map notes, dead index
+    rows, journals past the retention window, and (with `deep`) the whole index."""
+    _log_op(store, "clean", f"apply={apply} deep={deep}")
+    proposed = cleaner.plan(store, config, deep=deep)
+    stats = {
+        "dry_run": not apply,
+        "map_orphans": len(proposed.map_orphans),
+        "journals_expired": len(proposed.journal_expired),
+        "dead_rows": sum(proposed.dead_rows.values()),
+        "deep": bool(proposed.deep_paths),
+        "reclaimed_bytes": proposed.reclaimed_bytes,
+        "insights_mined": 0,
+        "notes": list(proposed.notes),
+        "files": [str(p.relative_to(store.paths.root)) for p in proposed.files],
+    }
+    if apply:
+        stats.update(cleaner.apply(store, config, proposed))
+        stats["dry_run"] = False
+    return stats
 
 
 def consolidate(store, config) -> dict:

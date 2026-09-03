@@ -4,6 +4,15 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
+## [Unreleased]
+
+### 🧹 `torsor clean` — plan-then-apply garbage collection (+ `clean` MCP tool)
+- Nothing ever removed what torsor stopped needing. `render_map` writes one note per module and **never deleted**, so renaming or deleting a source file left an orphaned map note behind — and since `map/` is committed, that orphan got pushed to git. `path_access` / `complexity_snapshot` accumulated rows for files that no longer exist, SQLite never returned freed pages, and `memory/journal/` grew one file per active day forever.
+- New pure `cleaner.py` reclaims exactly four categories: **orphaned map notes**, **index rows whose source path is gone** (then `VACUUM`), **journals past `clean.journal_retention_days`** (new config, default 90; `0` disables), and — behind `--deep` — the whole disposable `.index/`.
+- **Dry run by default** at both adapters: `plan()` is strictly read-only and `--apply` is the only thing that deletes. Journals are mined into `memory/insights/` *before* any are discarded, so the one non-derivable category is captured before it is dropped. Stable tiers (charter · architecture · active · insights · `commands.md` · `baseline.json` · `torsor.toml`) and source code are never touched. **ADR 0011.**
+- Orphan detection mangles module names **forward** into map-note filenames rather than reverse-parsing them (`pkg/__init__.py` renders as `pkg____init__.py.md`, which reverse-parsing misreads).
+- Fixed: this repo's `.torsor/.gitignore` ignored `map/`, diverging from what `torsor init` writes — the map is meant to travel with the repo, and orphan pruning is what makes that sustainable.
+
 ## [0.5.0] — Self-Driving Memory (2026-07-18)
 
 The autonomy release: memory that captures itself on the git / agent lifecycle, so

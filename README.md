@@ -36,7 +36,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 | **Every session** | agent calls `bootstrap_session()` first, `handoff()` last | No blank-slate starts; the next session resumes where this one stopped |
 | **While coding** | agent calls `recall()` / `get_intent()` / `impact()` before changing things | Finds prior decisions and existing code instead of re-inventing or breaking it |
 | **Before commit / in CI** | `torsor guard --strict` · `torsor deps` | Catches architectural drift and hallucinated packages the moment they appear |
-| **Weekly-ish** | `torsor coach` · `torsor consolidate` | Hotspot/coupling nudges; journal noise distilled into clean insights |
+| **Weekly-ish** | `torsor coach` · `torsor consolidate` · `torsor clean` | Hotspot/coupling nudges; journal noise distilled into clean insights; dead artefacts reclaimed |
 
 
 ## 💡 Why
@@ -105,6 +105,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 | `remember(content)` · `update_active(...)` | The agent writes down what it learns / the current focus. | After a decision, a gotcha, or finishing a chunk — so the next session inherits it. |
 | `handoff()` | A structured end-of-session summary that seeds the next session. | **End of a work session**, before you close the chat. |
 | `torsor consolidate` | Distills scattered journal notes into clean per-topic insight files. | **Weekly-ish housekeeping** — keeps memory from turning into noise. |
+| `torsor clean` | Reclaims what torsor stopped needing: orphaned map notes, dead index rows, journals past retention. **Dry run by default.** | **Whenever `.torsor/` feels cluttered** — especially after renaming or deleting source files. |
 
 ### 🗺️ Understanding the codebase — *"the agent doesn't see how files connect"*
 | Feature | What it does | Reach for it when… |
@@ -380,6 +381,7 @@ torsor init --client <name>
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
 | `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** recommendations |
 | `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, snapshot complexity, report duplicates |
+| `torsor clean [--apply] [--deep]` | Garbage-collect derived artefacts: orphaned map notes, dead index rows (+VACUUM), expired journals; `--deep` drops the whole index. Dry run unless `--apply` |
 | `torsor commands [--add 'name=cmd'] [--run name]` | Record & replay project commands (test/build/lint) so agents don't re-derive them |
 | `torsor recipes` | The deterministic lookups you run most — candidates to route to the cheap model |
 | `torsor models [--cheap … --smart …] [--write AGENTS.md\|policy.json] [--json]` | Set the cheap/smart model policy; publish it as a prompt block, JSON, or via MCP — app-agnostic |
@@ -401,6 +403,7 @@ torsor init --client <name>
 | `record_command(...)` · `list_commands()` · `recipes()` | The learned command book + the most-repeated deterministic lookups (token thrift) |
 | `get_model_policy(as_json?)` | The cheap/smart model-routing policy to follow — do basic lookups on the cheap model (`as_json` for a parseable form) |
 | `recommend(context?)` · `consolidate()` | The Coach (health · reuse · hotspots · coupling · regressions · phantom-deps); self-improving maintenance |
+| `clean(apply?, deep?)` | Reclaim orphaned map notes, dead index rows and expired journals — dry run unless `apply` |
 
 ### A typical loop
 1. **Once:** `torsor init --write`, fill in `charter.md` + `architecture/`, commit `.torsor/`; `torsor rules --write AGENTS.md` so the rules live in the prompt.
@@ -408,7 +411,7 @@ torsor init --client <name>
 3. **While working:** it `recall()`s prior decisions, `get_intent()` before changes, and `remember()`s what it learns.
 4. **Before a commit:** `check_drift()` flags anything that violates your ADR rules.
 5. **End of session:** `handoff()` writes a summary the next session resumes from.
-6. **Periodically:** `torsor coach` for health + reuse nudges; `torsor consolidate` to distill journal into insights.
+6. **Periodically:** `torsor coach` for health + reuse nudges; `torsor consolidate` to distill journal into insights; `torsor clean` to see what's become dead weight (then `--apply`).
 
 ### 🩺 The Coach
 An **independent advisor that sits beside your coding, never in it.** It watches project health and nudges — *"your `architecture/` is still the template", "12 decisions but 0 rules", "♻️ `format_date()` already exists in `utils/dates.py` — reuse it"* — each with **evidence + a concrete action**, ranked by severity, and **decaying** so it never nags. Pull it (`torsor coach` / `recommend()`), or get it **pushed** as a short digest at session start (silent when healthy). → [Coach design](docs/superpowers/specs/2026-06-01-torsor-coach-design.md)

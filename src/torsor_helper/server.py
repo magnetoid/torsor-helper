@@ -48,6 +48,20 @@ def build_server(root: Path | str) -> FastMCP:
         return ops.record_handoff(store, summary, decisions, open_questions, next_steps)
 
     @mcp.tool()
+    def clean(apply: bool = False, deep: bool = False) -> str:
+        """Reclaim orphaned map notes, dead index rows and journals past retention. Dry run unless apply."""
+        stats = ops.clean(store, config, apply=apply, deep=deep)
+        verb = "Removed" if apply else "Would remove"
+        summary = (
+            f"{verb} {stats['map_orphans']} orphaned map note(s), "
+            f"{stats['journals_expired']} expired journal(s), "
+            f"{stats['dead_rows']} dead index row(s); {stats['reclaimed_bytes']} byte(s)."
+        )
+        if stats["dry_run"]:
+            summary += " Nothing deleted — call again with apply=true to act on this plan."
+        return "\n".join([*stats["notes"], summary])
+
+    @mcp.tool()
     def map_repo(paths: list[str] | None = None, force: bool = False) -> str:
         """(Re)generate the repository symbol map and refresh the symbol inventory. Skips when unchanged unless force."""
         stats = ops.map_repo(store, config, paths, force=force)

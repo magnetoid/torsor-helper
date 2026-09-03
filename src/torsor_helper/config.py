@@ -66,6 +66,15 @@ class AutomationConfig(BaseModel):
     parse_transcript: bool = False     # opt-in transcript enrichment for auto-handoff
 
 
+class CleanConfig(BaseModel):
+    # `torsor clean` retention. Journals are the only episodic tier that grows
+    # unboundedly (one file per active day) and the only category clean can
+    # discard that isn't re-derivable, so the window is explicit and tunable;
+    # 0 disables journal expiry entirely. Everything else clean reclaims is
+    # either orphaned (its source file is gone) or rebuildable from Markdown.
+    journal_retention_days: int = 90
+
+
 class TorsorConfig(BaseModel):
     version: int = 1
     budgets: BudgetConfig = Field(default_factory=BudgetConfig)
@@ -73,6 +82,7 @@ class TorsorConfig(BaseModel):
     index: IndexConfig = Field(default_factory=IndexConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     automation: AutomationConfig = Field(default_factory=AutomationConfig)
+    clean: CleanConfig = Field(default_factory=CleanConfig)
 
 
 def load_config(paths: TorsorPaths) -> TorsorConfig:

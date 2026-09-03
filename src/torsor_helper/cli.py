@@ -515,6 +515,51 @@ def coach(
 
 
 @app.command()
+def clean(
+    root: Path = typer.Option(Path("."), help="Project root."),
+    apply: bool = typer.Option(False, "--apply", help="Actually delete (default is a dry run)."),
+    deep: bool = typer.Option(False, "--deep", help="Also drop the whole disposable index."),
+) -> None:
+    """Reclaim orphaned map notes, dead index rows and expired journals. Dry run by default."""
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    config = load_config(tp)
+    store = Store(tp)
+    stats = ops.clean(store, config, apply=apply, deep=deep)
+
+    for note in stats["notes"]:
+        typer.echo(note)
+    verb = "Removed" if apply else "Would remove"
+    typer.echo(
+        f"{verb} {stats['map_orphans']} orphaned map note(s), "
+        f"{stats['journals_expired']} expired journal(s), "
+        f"{stats['dead_rows']} dead index row(s)"
+        + (" and the whole index" if stats["deep"] else "")
+        + f" — {_human_bytes(stats['reclaimed_bytes'])}."
+    )
+    if stats["files"]:
+        for rel in stats["files"]:
+            typer.echo(f"  {rel}")
+    if stats["dry_run"]:
+        if stats["files"] or stats["dead_rows"]:
+            typer.echo("Nothing was deleted. Re-run with --apply to act on this plan.")
+        else:
+            typer.echo("Nothing to reclaim. (Re-run with --apply once there is.)")
+    elif stats["insights_mined"]:
+        typer.echo(f"Mined {stats['insights_mined']} insight file(s) before expiring journals.")
+
+
+def _human_bytes(n: int) -> str:
+    for unit in ("B", "KB", "MB"):
+        if n < 1024 or unit == "MB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n} B"
+
+
+@app.command()
 def consolidate(root: Path = typer.Option(Path("."), help="Project root.")) -> None:
     """Self-improving maintenance: mine journal insights, reindex, report duplicates."""
     tp = TorsorPaths(root)
