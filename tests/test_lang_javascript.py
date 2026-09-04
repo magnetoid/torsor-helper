@@ -127,3 +127,35 @@ def test_call_inside_nested_helper_is_attributed_to_outer_function():
         "}\n", "app.ts")
     assert any(e.caller == "run" and e.referenced_name == "util" for e in edges)
     assert not any(e.caller == "helper" for e in edges)
+
+
+def test_nested_local_shadowing_a_top_level_import_does_not_win_resolution():
+    # R8: a nested local `thing` (inside run()) must not make `top_defs` think
+    # the file defines `thing` at top level — foo's reference should still
+    # resolve through the `./lib` import, not the file's own module.
+    edges = _edges(
+        "import { thing } from './lib';\n"
+        "function run() { function thing() {} return thing(); }\n"
+        "function foo() { return thing(); }\n", "app.ts")
+    foo_edge = next(e for e in edges if e.caller == "foo" and e.referenced_name == "thing")
+    assert foo_edge.resolved_module == "lib"
+
+
+def test_class_field_arrow_owner_is_class_dot_field():
+    # R9: a reference inside a class-field arrow (`onClick = (e) => {...}`) is
+    # attributed to `Class.field`, matching the symbol Task 2 already names it.
+    src = "export class Widget {\n  onClick = (e) => { return helper(); };\n}\n"
+    edges = _edges(src, "w.ts")
+    assert any(e.caller == "Widget.onClick" and e.referenced_name == "helper" for e in edges)
+
+    js_edges = _edges("class Widget {\n  onClick = (e) => { return helper(); };\n}\n", "w.js")
+    assert any(e.caller == "Widget.onClick" and e.referenced_name == "helper" for e in js_edges)
+
+
+def test_this_method_and_reexport_do_not_error():
+    # Spot-check: neither construct is resolvable by this best-effort resolver,
+    # but neither should raise or produce a bogus resolved edge.
+    edges = _edges(
+        "export { a } from './b';\nclass C { m() { return this.other(); } }\n", "c.ts")
+    assert not any(e.referenced_name == "other" and e.resolved_module for e in edges)
+    assert not any(e.referenced_name == "a" for e in edges)

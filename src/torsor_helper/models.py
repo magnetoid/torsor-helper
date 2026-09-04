@@ -87,7 +87,12 @@ class SymbolEdge(BaseModel):
     referenced_name: str    # the referenced name (call target / read / write)
     role: str               # "call" | "read" | "write"
     module: str             # module (relpath) the reference lives in
-    resolved_module: str | None = None  # module the name resolves to, or None if best-effort failed
+    # Module the name resolves to, or None if best-effort failed. ALWAYS the
+    # canonical dotted key produced by the extractor/resolver (norm_module
+    # already applied) — consumers must never re-normalize it, only compare it
+    # against another canonical key (e.g. norm_module(sym.module) for a symbol's
+    # own file path).
+    resolved_module: str | None = None
     hint: str | None = None  # language-specific resolution hint (e.g. a Go import path); never persisted
 
 

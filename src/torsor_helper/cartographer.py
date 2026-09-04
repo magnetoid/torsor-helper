@@ -89,8 +89,10 @@ def compute_refs(symbols: list[Symbol], edges: list[SymbolEdge]) -> None:
     the old substring heuristic. Reused when merging a partial map into the full
     graph, so the whole (symbols, edges) union must be passed for counts to be
     correct — a subset would undercount cross-module references."""
+    # e.resolved_module is already the canonical dotted key (see SymbolEdge) —
+    # never re-normalize it, only sym.module (a file path).
     counts: Counter[tuple[str, str]] = Counter(
-        (norm_module(e.resolved_module), e.referenced_name) for e in edges if e.resolved_module
+        (e.resolved_module, e.referenced_name) for e in edges if e.resolved_module
     )
     for sym in symbols:
         if "." in sym.name:

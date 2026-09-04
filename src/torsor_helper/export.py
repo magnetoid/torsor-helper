@@ -79,7 +79,9 @@ def render_module_mermaid(conn) -> str:
     known = {norm_module(m) for m in db.modules(conn)}
     pairs = set()
     for module, resolved in db.module_edges(conn):
-        src, dst = norm_module(module), norm_module(resolved)
+        # `module` is a file relpath (needs norm_module); `resolved` is already
+        # the canonical resolved_module key — never re-normalize it.
+        src, dst = norm_module(module), resolved
         if src in known and dst in known and src != dst:
             pairs.add((src, dst))
     if not pairs:

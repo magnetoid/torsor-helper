@@ -75,7 +75,9 @@ def find_coupling_recs(root: Path, conn, limit: int = 3) -> list[Recommendation]
     edges: set[tuple[str, str]] = set()
     if conn is not None:
         for m, r in db.module_edges(conn):
-            nm, nr = norm_module(m), norm_module(r)
+            # `m` is a file relpath (needs norm_module); `r` is already the
+            # canonical resolved_module key — never re-normalize it.
+            nm, nr = norm_module(m), r
             if nm != nr:  # ignore self-edges (a module referencing its own symbols)
                 edges.add((nm, nr))
 

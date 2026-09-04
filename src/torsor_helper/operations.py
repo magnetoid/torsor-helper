@@ -618,9 +618,10 @@ def connect(store: Store, config: TorsorConfig, source: str, target: str, *, max
             return {"source": source, "target": target,
                     "path": [{"symbol": src, "module": start_module}], "hops": 0, "found": True}
         # adjacency: caller name -> [(referenced_name, resolved_module)]
+        # `mod` is already the canonical resolved_module key — never re-normalize it.
         adj: dict[str, list[tuple[str, str]]] = {}
         for caller, ref, mod in db.call_graph_edges(conn):
-            adj.setdefault(caller, []).append((ref, cartographer.norm_module(mod)))
+            adj.setdefault(caller, []).append((ref, mod))
     finally:
         conn.close()
 

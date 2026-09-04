@@ -160,13 +160,24 @@ def _refs_query(grammar: str) -> str:
 """
 
 
-def _def_names_query(grammar: str) -> str:
-    class_name = "(type_identifier)" if grammar in ("typescript", "tsx") else "(identifier)"
-    return f"""
-(function_declaration name: (identifier) @n)
-(lexical_declaration (variable_declarator name: (identifier) @n value: [(arrow_function) (function_expression)]))
-(class_declaration name: {class_name} @n)
-"""
+def _top_level_def_names(grammar: str, root) -> set[str]:
+    """Same-file top-level definition names — the ADR 0004 "own module" case.
+    Reuses `_defs_query` (the same query `extract_symbols` matches against) and
+    gates each candidate with the same `_is_top_level` test, so a name that
+    merely collides with a *nested* local function/class (never a real symbol)
+    is never mistaken for the top-level one (R8)."""
+    names: set[str] = set()
+    for m in ts.matches(grammar, root, _defs_query(grammar)):
+        if "function" in m:
+            if _is_top_level(m["function"][0]):
+                names.add(ts.text(m["function.name"][0]))
+        elif "arrow" in m:
+            if _is_top_level(m["arrow"][0].parent):  # the lexical_declaration
+                names.add(ts.text(m["arrow.name"][0]))
+        elif "class" in m:
+            if _is_top_level(m["class"][0]):
+                names.add(ts.text(m["class.name"][0]))
+    return names
 
 
 def resolve_relative(specifier: str, module: str) -> str | None:
@@ -192,10 +203,20 @@ def _aliases(grammar: str, root, module: str) -> dict[str, str | None]:
     return out
 
 
+_FIELD_NODE_TYPES = ("public_field_definition", "field_definition")
+
+
+def _field_name_node(node):
+    """The name node of a class-field definition — TS/TSX name the field `name`,
+    plain JS names it `property` (mirrors `_field_query`'s per-grammar field)."""
+    return node.child_by_field_name("name") or node.child_by_field_name("property")
+
+
 def _owner(node) -> str:
     """The enclosing symbol a reference is attributed to. Walks up from `node`
     and stops at the OUTERMOST qualifying container — a top-level function/arrow/
-    class, or `Class.method` for a direct class-body member — never at a nested
+    class, `Class.method` for a direct class-body member, or `Class.field` for a
+    class-field arrow/function (`onClick = (e) => {...}`) — never at a nested
     local function, which `_is_top_level`/`_is_class_member` isn't a symbol
     (mirrors python.py's `_owners`: a call inside a nested helper inside `run()`
     is attributed to `run`, not to `helper`)."""
@@ -207,6 +228,14 @@ def _owner(node) -> str:
             cls = ts.enclosing(cur, ("class_declaration", "class"))
             name = _class_name(cur)
             return f"{_class_name(cls)}.{name}" if cls is not None else name
+        if cur.type in _FIELD_NODE_TYPES and _is_class_member(cur):
+            value = cur.child_by_field_name("value")
+            if value is not None and value.type in ("arrow_function", "function_expression"):
+                name_node = _field_name_node(cur)
+                if name_node is not None:
+                    cls = ts.enclosing(cur, ("class_declaration", "class"))
+                    name = ts.text(name_node)
+                    return f"{_class_name(cls)}.{name}" if cls is not None else name
         if cur.type == "variable_declarator":
             value = cur.child_by_field_name("value")
             if value is not None and value.type in ("arrow_function", "function_expression"):
@@ -223,7 +252,7 @@ def extract_edges(source: str, module: str) -> list[SymbolEdge]:
     grammar = grammar_for(module)
     root = ts.parse(grammar, source).root_node
     own = norm_module(module)
-    top_defs = {ts.text(n) for n in ts.captures(grammar, root, _def_names_query(grammar)).get("n", [])}
+    top_defs = _top_level_def_names(grammar, root)
     aliases = _aliases(grammar, root, module)
 
     def resolve(name: str) -> str | None:

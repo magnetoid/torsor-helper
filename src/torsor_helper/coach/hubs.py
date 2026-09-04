@@ -25,8 +25,9 @@ def find_hubs(conn, *, min_fan_in: int = 8, sigma: float = 2.0):
     fanins = [fi for _m, _n, fi in counts]
     mean = sum(fanins) / len(fanins)
     floor = max(float(min_fan_in), mean + sigma * pstdev(fanins))
-    hubs = [(nm, n, fi) for m, n, fi in counts
-            if fi >= floor and (nm := norm_module(m)) in first_party]
+    # `m` here is already the canonical resolved_module key (from symbol_edges) —
+    # never re-normalize it, only db.modules()'s file paths (first_party above).
+    hubs = [(m, n, fi) for m, n, fi in counts if fi >= floor and m in first_party]
     hubs.sort(key=lambda t: (-t[2], t[0], t[1]))
     return hubs
 
