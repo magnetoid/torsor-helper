@@ -42,3 +42,40 @@ def test_javascript_and_tsx_grammars_are_selected_by_suffix():
 
 def test_syntax_errors_degrade_to_what_parses():
     assert "ok" in _symbols("function ok() {}\nfunction {{{ broken\n")
+
+
+def test_nested_and_object_literal_definitions_are_excluded():
+    src = """\
+function outer() {
+  function inner() {}
+  const helper = () => 1;
+  return inner() + helper();
+}
+const obj = { foo() { return 1; } };
+"""
+    syms = _symbols(src, "app.js")
+    assert set(syms) == {"outer"}
+    assert "inner" not in syms and "helper" not in syms and "foo" not in syms
+
+
+def test_export_default_class_and_function_are_still_symbols():
+    syms = _symbols("export default function Page() { return 1; }\n", "p.ts")
+    assert syms["Page"].kind == "function"
+    syms2 = _symbols("export default class Widget {}\n", "w.ts")
+    assert syms2["Widget"].kind == "class"
+
+
+def test_class_field_arrow_method_is_a_symbol():
+    src = """\
+export class Widget {
+  // Handles a click.
+  onClick = (e) => { return e; };
+}
+"""
+    syms = _symbols(src, "w.ts")
+    assert syms["Widget.onClick"].kind == "method"
+    assert syms["Widget.onClick"].signature == "onClick(e)"
+    assert syms["Widget.onClick"].doc == "Handles a click."
+
+    js_syms = _symbols("class Widget {\n  onClick = (e) => { return e; };\n}\n", "w.js")
+    assert js_syms["Widget.onClick"].kind == "method"

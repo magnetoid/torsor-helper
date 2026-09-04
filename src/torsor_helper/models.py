@@ -74,7 +74,7 @@ class RecallResult(BaseModel):
 
 class Symbol(BaseModel):
     name: str
-    kind: str  # "function" | "class" | "method"
+    kind: str  # "function" | "class" | "method" | "type"
     signature: str
     module: str
     line: int
