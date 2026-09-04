@@ -85,7 +85,7 @@ Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, st
 Everything below is **derived from your Markdown** and rebuildable. Delete `.torsor/.index/` any time; the next command rebuilds it.
 
 - **Recall (`recall`)** — every note is indexed three ways: **FTS5** keyword search, **vector** embeddings (a local `fastembed` model, or a deterministic offline hash fallback), and a **wiki-link graph**. A query fuses them with **Reciprocal Rank Fusion**, then re-weights by tier (stable tiers rank higher), recency, an **importance multiplier** (notes you recall often float up; charter/architecture never decay), and a 1-hop link-graph boost. **MMR** drops near-duplicate hits so scarce context isn't wasted, and results are packed to a token budget. Indexing is incremental (content-hash diff) and self-heals when the embedder changes.
-- **The map (`map` / `get_intent` / `impact`)** — a stdlib-`ast` cartographer extracts every function/class/method and, crucially, **real reference edges** ("who calls what") by resolving names — not substring matching, so comments and strings never inflate counts. `impact` walks those edges to show a symbol's blast radius; `find` fuzzy-searches files + symbols, ranked by match quality and frecency. A repo fingerprint lets `map` skip entirely when nothing changed.
+- **The map (`map` / `get_intent` / `impact`)** — a cartographer over a per-language registry (Python via stdlib `ast`, always on; JavaScript/TypeScript/TSX and Go via the official tree-sitter grammar wheels behind the optional `[languages]` extra) extracts every function/class/method and, crucially, **real reference edges** ("who calls what") by resolving names — not substring matching, so comments and strings never inflate counts. `impact` walks those edges to show a symbol's blast radius; `connect` finds the shortest path between two symbols; `find` fuzzy-searches files + symbols, ranked by match quality and frecency — all of it language-agnostic since it's built on the same edge shape. A repo fingerprint lets `map` skip entirely when nothing changed; without `[languages]` installed, everything above quietly stays Python-only (ADR 0013).
 - **The guard (`guard` / `check_drift`)** — ADRs carry machine-readable `rules:` in their frontmatter (`forbid_import`, `forbid_layer_import`, `require_import`, `forbid_pattern`). The guard checks changed files against them deterministically (AST + regex), citing the ADR. It's **advisory by default**; `--strict` fails CI, and a committed **baseline** grandfathers existing debt so only *new* drift fails.
 - **The Coach (`coach` / `recommend`)** — surfaces ranked, evidence-backed nudges: stale/thin files, `reuse` (a symbol already exists), `hotspot` (churn × complexity), `coupling` (files that always change together but aren't linked), `regression` (complexity rose since the last snapshot), `phantom_dep` (a hallucinated import). Each **decays** so it never nags; a 3-item digest rides along in `bootstrap_session`.
 - **Token thrift (`commands` / `recipes` / `models`)** — the learned command book and the rules/primer blocks live in your prompt file (zero tool-call cost); `recipes` learns which deterministic lookups recur; `models` publishes a cheap-vs-smart routing policy your harness follows. torsor never calls an LLM — it makes the exact answers cheap to fetch. See [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens).
@@ -111,7 +111,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 ### 🗺️ Understanding the codebase — *"the agent doesn't see how files connect"*
 | Feature | What it does | Reach for it when… |
 |---|---|---|
-| `torsor map` | Builds a symbol map (functions/classes) **+ real reference edges** ("who calls what"). | **After big changes** (it auto-skips when nothing changed). Powers everything below. |
+| `torsor map` | Builds a symbol map (functions/classes) **+ real reference edges** ("who calls what") — Python via stdlib `ast`; JavaScript/TypeScript/TSX and Go via the optional `[languages]` extra. | **After big changes** (it auto-skips when nothing changed). Powers everything below. |
 | `get_intent(topic)` | Surfaces the architecture + relevant existing symbols for a topic. | Before building a feature — *"what already exists around payments?"* |
 | `torsor impact <symbol>` | Lists every caller of a symbol, across files — the **blast radius**. | **Before you let the agent change/rename a function** — see what breaks first. |
 | `torsor find <query>` | **Fuzzy, frecency-ranked** search over files **and** mapped symbols (literal/regex too). | *"jump me to the file/function that does X"* — fast navigation without exact names. |
@@ -257,11 +257,13 @@ Twelve improvements distilled from deep research into the best memory / repo-map
 uv tool install "git+https://github.com/magnetoid/torsor-helper"
 # or:  pipx install "git+https://github.com/magnetoid/torsor-helper"
 # with semantic embeddings:  uv tool install "torsor-helper[embeddings] @ git+https://github.com/magnetoid/torsor-helper"
+# with JS/TS/Go in the map:  uv tool install "torsor-helper[languages] @ git+https://github.com/magnetoid/torsor-helper"
 ```
 
 **Once published to PyPI** (a GitHub Release away — see [PUBLISHING.md](PUBLISHING.md)):
 ```bash
 uv tool install torsor-helper     # or: pipx install torsor-helper / pip install torsor-helper
+uv tool install "torsor-helper[languages]"   # + JS/TS/Go in the map (official tree-sitter grammar wheels)
 uvx torsor-helper --help          # ephemeral, no install
 ```
 
@@ -437,7 +439,8 @@ src/torsor_helper/
 ├─ config.py        # torsor.toml                db.py        # SQLite: FTS5 + vectors + wiki edges + symbols + symbol_edges
 ├─ embeddings.py    # FastEmbed | Hashing        indexer.py   # incremental reindex + contextual breadcrumbs
 ├─ recall.py        # keyword fallback           search.py    # hybrid RRF + importance decay + MMR
-├─ snippets.py      # section-aware snippets      cartographer.py  # stdlib-ast symbols + reference edges
+├─ snippets.py      # section-aware snippets      cartographer.py  # symbols + reference edges (dispatches to languages/)
+├─ languages/       # python.py (ast) · treesitter.py + javascript.py/go.py (optional `[languages]` extra)
 ├─ guard.py         # ADR rules → drift detection baseline.py  # committed drift baseline (ratchet)
 ├─ export.py        # llms.txt + Mermaid diagram  deps.py      # offline slopsquatting guard
 ├─ coach/           # health · recommender · report · state · mining · hotspots · coupling · trend
@@ -478,11 +481,16 @@ Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs who
 - [x] **Recipes** · `torsor recipes` — learn which deterministic lookups recur
 - [x] **Model routing** · `torsor models` — cheap/smart policy, app-agnostic (MCP · prompt block · JSON), `--client` publish
 
-**Planned fast-follows (v0.7):** multi-language map (tree-sitter) for JS/TS · sampling-based *semantic* drift guard · weaving `impact`/`deps` warnings into `check_drift` and pre-commit flows.
+**Polyglot map release (v0.7):**
+- [x] **Multi-language map** · JavaScript/TypeScript/TSX + Go join Python in `map`/`impact`/`connect`/`find`/`export`/hub-detection, via the official tree-sitter grammar wheels behind the optional `[languages]` extra — offline, never `tree-sitter-language-pack` (ADR 0013, supersedes ADR 0003)
+- [x] **Guard widening** · `forbid_import` checks JS/TS/Go import specifiers, not just Python imports
+- [x] **Discoverability** · `torsor doctor` and `torsor map` report which languages are available; Coach `uncharted_language` nudges installing `[languages]` when non-Python source is detected but unmapped
+
+**Planned fast-follows:** sampling-based *semantic* drift guard · weaving `impact`/`deps` warnings into `check_drift` and pre-commit flows.
 
 ## 🧪 Built with
 
-FastMCP · Typer · Pydantic · PyYAML · SQLite (FTS5) · NumPy · stdlib `ast` — *local-first, no API key required.* Optional `fastembed` extra for semantic embeddings. The repo map is Python-only today (multi-language is planned); the drift guard is deterministic (ADR rules → AST/regex).
+FastMCP · Typer · Pydantic · PyYAML · SQLite (FTS5) · NumPy · stdlib `ast` — *local-first, no API key required.* Optional `fastembed` extra for semantic embeddings. The repo map covers Python via stdlib `ast`; JavaScript/TypeScript/TSX and Go via the `[languages]` extra (official tree-sitter grammar wheels, offline — never `tree-sitter-language-pack`, which downloads its grammars at runtime). The drift guard is deterministic (ADR rules → AST/regex, plus JS/TS/Go import-specifier checks when `[languages]` is installed).
 
 ## 📚 Design & prior art
 

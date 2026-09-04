@@ -4,7 +4,23 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
-## [Unreleased]
+## [0.7.0] — Polyglot Map (2026-09-04)
+
+The map stops being Python-only. JavaScript, TypeScript/TSX and Go join the symbol
+graph behind a new optional `[languages]` extra, and everything already built on
+top of it — `impact`, `connect`, `find`, `export`, hub detection, complexity, and
+`forbid_import` — widens for free because it's all built on the same `Symbol`/
+`SymbolEdge` shape. Still deterministic, offline, daemon-free: one new ADR (0013,
+superseding 0003), `torsor guard --strict` clean.
+
+### 🌐 Multi-language map: JavaScript, TypeScript/TSX and Go
+- `torsor-helper[languages]` is a new optional extra (`tree-sitter`, `tree-sitter-javascript`, `tree-sitter-typescript`, `tree-sitter-go` — the **official per-grammar wheels**, ~3.7 MB total, MIT, grammars compiled into the wheel) that extends the cartographer past Python. A new `languages/` registry (`LanguageSpec` per language: extensions, extractor, `requires`, optional `cross_file_resolver`/`complexity`/`imports`) replaces the old Python-only dispatch in `cartographer.py`; `languages.is_available(name)` is the single source of truth for what degrades, so a repo without the extra installed sees exactly the same Python-only map as before — byte-identical.
+- **What widens for free:** because `impact`, `connect`, `find`, `export`, and Coach hub detection all consume `SymbolEdge.resolved_module` (always the canonical dotted key, whatever the source language) rather than reasoning about Python specifically, every one of them now covers JS/TS/TSX/Go the moment `[languages]` is installed — no per-feature changes needed.
+- **Complexity and churn** (`torsor coach` hotspots/regressions) now score every registered language, not just `*.py` — TS/TSX modules correctly pick the TypeScript grammar rather than falling back to JS.
+- **`forbid_import` guard rule** now matches JS/TS/Go import specifiers (`import`/`require`/Go import-path strings), not only Python imports — a team can write `scope: "src/**/*.ts"` rules today. `require_import` and `forbid_layer_import` stay Python-only (they reason over the `ast` module graph); that's documented, not a bug.
+- **Discoverability:** `torsor doctor` reports per-language availability (`ready` vs. "install torsor-helper[languages]"); `torsor map`'s summary line breaks symbol counts down by language; a new Coach `uncharted_language` recommendation fires when non-Python source is detected but the extra isn't installed, pointing straight at the install command.
+- **ADR 0013** (*Python stays on stdlib `ast`; other languages use the official tree-sitter grammar wheels, never the language pack*) supersedes ADR 0003 — 0.25+ `tree-sitter` is stable (ADR 0003's original objection no longer holds), and the official wheels are genuinely offline. `tree-sitter-language-pack` remains permanently rejected: it downloads a ~25 MB grammar bundle over the network on first use (measured 2026-09-04), which would silently break the offline guarantee. Two `forbid_import` rules enforce this: the language pack is banned everywhere under `src/`, and `tree_sitter` itself may only be imported from `languages/` so grammar access — and the degradation logic — stays in one place.
+- CI gained a second axis: every matrix cell now runs the suite once with no extras (proves the degradation path) and once with `--extra languages` (proves the grammars actually work).
 
 ### 🛡️ The edit gate: `PreToolUse` drift check on the *proposed* edit
 - `torsor hooks install` now also registers a Claude Code **`PreToolUse`** hook on `Edit|Write`. Before the edit lands, `torsor hooks run pre-edit` reconstructs the **proposed file content** (a Write's `content`, or the file with the Edit's `old_string → new_string` applied), runs the ADR rules against it, ratchets against `baseline.json`, and — only when the edit would introduce *new* drift — returns the verdict with the ADR cited as `additionalContext`. Silent otherwise, so it costs nothing in the common case.

@@ -112,7 +112,7 @@ torsor export              # portable llms.txt + Mermaid module-dependency diagr
 
 - `get_intent(topic)` (MCP) combines architecture notes with relevant existing symbols — call it before building a feature.
 - Run `torsor impact <symbol>` **before letting an agent rename/regenerate a function** — one regenerated symbol silently breaking far-off callers is a classic agent failure.
-- The map is Python-only today (stdlib `ast`, by design — see ADR 0003); ref counts only count *resolved* references, never comments or strings.
+- The map covers Python (stdlib `ast`, always on) plus JavaScript/TypeScript/TSX and Go via the optional `[languages]` extra (official tree-sitter grammar wheels, offline — see ADR 0013, which supersedes ADR 0003); without the extra installed it stays Python-only. Ref counts only count *resolved* references, never comments or strings.
 
 ## Dependency safety
 
