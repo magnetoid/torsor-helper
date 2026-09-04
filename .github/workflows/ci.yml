@@ -19,6 +19,8 @@ jobs:
       - name: Lint
         run: uv run --with ruff ruff check src tests
       - name: Test (no extras — proves degradation)
-        run: uv run --extra dev pytest -q
+        # --exact prunes anything a previous step installed, so this really is a
+        # no-[languages] environment rather than the union of both steps' deps.
+        run: uv run --exact --extra dev pytest -q
       - name: Test (with languages extra)
         run: uv run --extra dev --extra languages pytest -q

@@ -9,7 +9,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
 ![status](https://img.shields.io/badge/release-v0.4%20token%20thrift-success)
-![tests](https://img.shields.io/badge/tests-328%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-514%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
@@ -448,11 +448,11 @@ src/torsor_helper/
 ├─ server.py        # FastMCP adapter            cli.py       # Typer CLI
 ```
 
-Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` / `torsor deps` run. **235 tests, lint-clean**, every feature offline-testable.
+Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` / `torsor deps` run. **514 tests, lint-clean**, every feature offline-testable.
 
 ## 📍 Status & roadmap
 
-**v0.4 shipped — 328 tests, lint-clean, dogfooded.** The 6-phase foundation, the intelligence release (v0.2), the resilience release (v0.3), and the token-thrift release (v0.4).
+**v0.7 shipped — 514 tests, lint-clean, dogfooded.** The 6-phase foundation, the intelligence release (v0.2), the resilience release (v0.3), the token-thrift release (v0.4), self-driving memory (v0.5), self-serving memory (v0.6), and the polyglot map (v0.7).
 
 **Foundation (v0.1):**
 - [x] **Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools
@@ -498,7 +498,7 @@ Full design + every phase plan live in [`docs/superpowers/`](docs/superpowers/) 
 
 ## 🤝 Contributing & releasing
 
-`uv run --extra dev pytest` (235 tests) · `uv run --with ruff ruff check src tests`. Releasing: see [PUBLISHING.md](PUBLISHING.md).
+`uv run --extra dev --extra languages pytest` (514 tests) · `uv run --with ruff ruff check src tests`. Releasing: see [PUBLISHING.md](PUBLISHING.md).
 
 ## License
 

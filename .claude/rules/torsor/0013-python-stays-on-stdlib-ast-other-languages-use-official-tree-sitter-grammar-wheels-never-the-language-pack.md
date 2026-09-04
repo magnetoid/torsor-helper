@@ -2,12 +2,14 @@
 paths:
   - "src/**"
   - "src/torsor_helper/[!l]*.py"
+  - "src/torsor_helper/languages/[!t]*.py"
 ---
 
 # ADR 0013: Python stays on stdlib ast; other languages use the official tree-sitter grammar wheels, never the language pack
 
 - forbid_import: `tree_sitter_language_pack` in `src/**` — the language pack downloads grammars at runtime — torsor is offline-first (ADR 0013); use the official per-grammar wheels
 - forbid_import: `tree_sitter` in `src/torsor_helper/[!l]*.py` — tree_sitter is reached only through languages/treesitter.py (ADR 0013) so degradation lives in one place
+- forbid_import: `tree_sitter` in `src/torsor_helper/languages/[!t]*.py` — treesitter.py is the only module inside languages/ allowed to import tree_sitter (ADR 0013) — an extractor that imports it directly hard-breaks the no-extra path
 
 Machine-enforced — `torsor guard` flags violations.
 
