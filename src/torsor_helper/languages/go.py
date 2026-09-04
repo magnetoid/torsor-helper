@@ -126,5 +126,12 @@ def resolve_cross_file(symbols: list[Symbol], edges: list[SymbolEdge]) -> None:
             e.resolved_module = norm_module(target)
 
 
+_BRANCHES = """
+[(if_statement) (for_statement) (expression_case) (type_case) (communication_case) (select_statement)] @b
+(binary_expression operator: ["&&" "||"]) @b
+"""
+
+
 def complexity(text: str) -> int:
-    return 0  # Task 5
+    root = ts.parse("go", text).root_node
+    return text.count("\n") + 1 + len(ts.captures("go", root, _BRANCHES).get("b", []))

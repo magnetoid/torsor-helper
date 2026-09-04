@@ -11,6 +11,22 @@ from torsor_helper.languages.modules import norm_module
 from torsor_helper.models import Symbol, SymbolEdge
 
 
+_BRANCHES = """
+[(if_statement) (for_statement) (for_in_statement) (while_statement) (do_statement)
+ (switch_case) (catch_clause) (ternary_expression)] @b
+(binary_expression operator: ["&&" "||" "??"]) @b
+"""
+
+
+def complexity(text: str) -> int:
+    """File-grained complexity proxy (ADR-consistent with python.py's): newline
+    count plus a branch-node count. The JS grammar parses TS/TSX branch
+    structure well enough for this count, keeping the proxy stable across
+    `.ts`/`.tsx`/`.js` with one grammar."""
+    root = ts.parse("javascript", text).root_node
+    return text.count("\n") + 1 + len(ts.captures("javascript", root, _BRANCHES).get("b", []))
+
+
 def grammar_for(module: str) -> str:
     if module.endswith(".tsx"):
         return "tsx"

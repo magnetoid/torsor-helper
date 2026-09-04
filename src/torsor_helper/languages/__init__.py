@@ -29,11 +29,14 @@ class LanguageSpec:
 LANGUAGES: dict[str, LanguageSpec] = {
     "python": LanguageSpec("python", (".py",), _py.extract, complexity=_py.complexity),
     "javascript": LanguageSpec("javascript", (".js", ".jsx", ".mjs", ".cjs"), _js.extract,
-                               requires=("tree_sitter", "tree_sitter_javascript")),
+                               requires=("tree_sitter", "tree_sitter_javascript"),
+                               complexity=_js.complexity),
     "typescript": LanguageSpec("typescript", (".ts", ".tsx"), _js.extract,
-                               requires=("tree_sitter", "tree_sitter_typescript")),
+                               requires=("tree_sitter", "tree_sitter_typescript"),
+                               complexity=_js.complexity),
     "go": LanguageSpec("go", (".go",), _go.extract, requires=("tree_sitter", "tree_sitter_go"),
-                       cross_file_resolver=_go.resolve_cross_file, imports=_go.imports),
+                       cross_file_resolver=_go.resolve_cross_file, imports=_go.imports,
+                       complexity=_go.complexity),
 }
 
 

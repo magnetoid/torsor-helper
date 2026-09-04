@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import ast
 import subprocess
 from collections import Counter
 from pathlib import Path
 
+from torsor_helper import languages
 from torsor_helper.cartographer import iter_source_files
 from torsor_helper.models import Recommendation
-
-# Branch-y nodes used as a cheap complexity proxy (file-grained, no per-function
-# units, no schema). Pairs with git churn for a "where to fix first" signal.
-_DECISION_NODES = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.BoolOp)
 
 
 def _is_git_repo(root: Path) -> bool:
@@ -32,17 +28,13 @@ def _churn(root: Path) -> Counter:
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return Counter()
-    return Counter(line.strip() for line in out.splitlines() if line.strip().endswith(".py"))
+    return Counter(
+        line.strip() for line in out.splitlines() if line.strip().endswith(languages.source_extensions())
+    )
 
 
 def _complexity(path: Path) -> int:
-    try:
-        src = path.read_text(encoding="utf-8")
-        tree = ast.parse(src)
-    except (OSError, UnicodeDecodeError, SyntaxError):
-        return 0
-    decisions = sum(isinstance(n, _DECISION_NODES) for n in ast.walk(tree))
-    return src.count("\n") + 1 + decisions
+    return languages.complexity(path)
 
 
 def find_hotspots(root: Path, limit: int = 3) -> list[Recommendation]:

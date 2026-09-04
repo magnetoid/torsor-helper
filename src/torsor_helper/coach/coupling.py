@@ -5,14 +5,14 @@ from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
-from torsor_helper import db
+from torsor_helper import db, languages
 from torsor_helper.cartographer import norm_module
 from torsor_helper.coach.hotspots import _is_git_repo
 from torsor_helper.models import Recommendation
 
 
 def _commits(root: Path) -> list[set[str]]:
-    """Each commit as the set of *.py files it touched (via git log --name-only)."""
+    """Each commit as the set of source files it touched (via git log --name-only)."""
     try:
         out = subprocess.run(
             ["git", "-C", str(root), "log", "--no-merges", "--name-only", "--pretty=format:#commit#%H"],
@@ -29,7 +29,7 @@ def _commits(root: Path) -> list[set[str]]:
         if line.startswith("#commit#"):  # unambiguous boundary (a filename can't start with this)
             cur = set()
             commits.append(cur)
-        elif cur is not None and line.endswith(".py"):
+        elif cur is not None and line.endswith(languages.source_extensions()):
             cur.add(line)
     return commits
 
