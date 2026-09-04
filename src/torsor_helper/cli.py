@@ -709,7 +709,7 @@ def hooks_install(
     on_stop: bool = typer.Option(False, "--on-stop", help="Register the Stop event instead of SessionEnd."),
 ) -> None:
     """Install auto-capture hooks (project digest on session start + after compaction,
-    auto-handoff on session end, auto-map on commit). Idempotent and removable; never
+    ADR drift check on every proposed edit, auto-handoff on session end, auto-map on commit). Idempotent and removable; never
     clobbers your existing hooks or settings."""
     _, config, store = _load(root)
     result = ops.install_hooks(store, config, git=not no_git, claude=not no_claude, local=local, on_stop=on_stop)
@@ -753,7 +753,7 @@ def hooks_status_cmd(root: Path = typer.Option(Path("."), help="Project root."))
 
 @hooks_app.command("run")
 def hooks_run(
-    event: str = typer.Argument(..., help="post-commit | pre-push | session-start | session-end"),
+    event: str = typer.Argument(..., help="post-commit | pre-push | pre-edit | session-start | session-end"),
     root: Path = typer.Option(Path("."), help="Project root."),
 ) -> None:
     """Stable dispatcher the on-disk hook scripts call — so scripts never change
@@ -775,6 +775,17 @@ def hooks_run(
             typer.echo(json.dumps({
                 "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text},
             }))
+    elif event == "pre-edit":
+        import json
+
+        payload = _hook_payload()
+        verdict = ops.pre_edit(store, config, payload.get("tool_name"), payload.get("tool_input"))
+        if verdict:
+            out = {"hookEventName": "PreToolUse", "additionalContext": verdict["context"]}
+            if verdict["decision"] == "deny":
+                out["permissionDecision"] = "deny"
+                out["permissionDecisionReason"] = verdict["context"]
+            typer.echo(json.dumps({"hookSpecificOutput": out}))
     elif event == "session-end":
         payload = _hook_payload()
         ops.auto_handoff(

@@ -4,6 +4,12 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
+## [Unreleased]
+
+### 🛡️ The edit gate: `PreToolUse` drift check on the *proposed* edit
+- `torsor hooks install` now also registers a Claude Code **`PreToolUse`** hook on `Edit|Write`. Before the edit lands, `torsor hooks run pre-edit` reconstructs the **proposed file content** (a Write's `content`, or the file with the Edit's `old_string → new_string` applied), runs the ADR rules against it, ratchets against `baseline.json`, and — only when the edit would introduce *new* drift — returns the verdict with the ADR cited as `additionalContext`. Silent otherwise, so it costs nothing in the common case.
+- **Advisory by default.** `automation.guard_on_edit = "advise" | "block" | "off"`; `block` denies only on new `severity: error` violations. Read-only (never touches the file), `Edit|Write` only (Bash effects aren't knowable pre-execution), ignores `.torsor/` writes. **ADR 0012.**
+
 ## [0.6.0] — Self-Serving Memory (2026-09-04)
 
 Memory that shows up without being asked for, rules that load only where they apply,

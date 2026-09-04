@@ -35,6 +35,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 | **Once per project** | `torsor rules --write AGENTS.md` (or `CLAUDE.md`), or `torsor rules --scoped` for Claude Code | Your rules ride along in the agent's prompt file — **zero tool-call tokens** to follow them; `--scoped` loads each rule only when a governed file is touched |
 | **Every session** | `torsor hooks install` once — then the digest is injected at session start (and after `/compact`) and `handoff()` is written at session end, automatically | No blank-slate starts; the next session resumes where this one stopped |
 | **While coding** | agent calls `recall()` / `get_intent()` / `impact()` before changing things | Finds prior decisions and existing code instead of re-inventing or breaking it |
+| **Every edit** (with hooks installed) | nothing — the `PreToolUse` edit gate checks the *proposed* Edit/Write against your ADRs | Drift is flagged with the ADR cited **before** it lands; advisory by default, `guard_on_edit = "block"` to enforce |
 | **Before commit / in CI** | `torsor guard --strict` · `torsor deps` | Catches architectural drift and hallucinated packages the moment they appear |
 | **Weekly-ish** | `torsor coach` · `torsor consolidate` · `torsor clean` | Hotspot/coupling nudges; journal noise distilled into clean insights; dead artefacts reclaimed |
 

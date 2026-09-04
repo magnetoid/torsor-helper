@@ -81,3 +81,11 @@ def test_session_start_entry_is_idempotent_and_removable():
     assert len(_commands(twice, "SessionStart")) == 1
     gone = hooks.merge_settings_hooks(twice, remove=True)
     assert "SessionStart" not in gone.get("hooks", {})
+
+
+def test_install_adds_pre_tool_use_edit_gate():
+    data = hooks.merge_settings_hooks({}, root=".")
+    groups = data["hooks"]["PreToolUse"]
+    torsor = [g for g in groups if any("torsor hooks run pre-edit" in h["command"] for h in g["hooks"])]
+    assert len(torsor) == 1
+    assert torsor[0]["matcher"] == "Edit|Write"

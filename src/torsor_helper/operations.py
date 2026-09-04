@@ -1304,6 +1304,83 @@ def pre_push(store, config) -> dict:
     return {"failed": result["failed"], "new": result["new"], "skipped": False}
 
 
+def _proposed_text(path, tool_name: str, tool_input: dict) -> str | None:
+    """The file content an Edit/Write *would* produce — reconstructed, never
+    applied. None when it can't be known (missing file for an Edit, an
+    old_string that doesn't match — Claude Code will reject that edit anyway)."""
+    if tool_name == "Write":
+        content = tool_input.get("content")
+        return content if isinstance(content, str) else None
+    old = tool_input.get("old_string")
+    new = tool_input.get("new_string")
+    if not isinstance(old, str) or not isinstance(new, str):
+        return None
+    try:
+        current = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if old not in current:
+        return None
+    return current.replace(old, new) if tool_input.get("replace_all") else current.replace(old, new, 1)
+
+
+def pre_edit(store, config, tool_name, tool_input) -> dict | None:
+    """PreToolUse edit-gate core: run the ADR rules against the *proposed*
+    content of an Edit/Write, ratchet against the committed baseline, and hand
+    back a verdict — None when there is nothing new to say (the common case,
+    so the hook stays silent). Read-only: the gate never touches the file.
+    `decision` is "advise" unless automation.guard_on_edit is "block" AND a new
+    violation is severity=error; the guard never blocks by default (ADR 0012)."""
+    import fnmatch
+    from pathlib import Path
+
+    from torsor_helper import baseline as _baseline
+
+    mode = config.automation.guard_on_edit
+    if mode == "off" or tool_name not in ("Edit", "Write") or not isinstance(tool_input, dict):
+        return None
+    file_path = tool_input.get("file_path")
+    if not file_path:
+        return None
+    root = store.paths.root.resolve()
+    path = Path(file_path)
+    if not path.is_absolute():
+        path = root / path
+    try:
+        relpath = path.resolve().relative_to(root).as_posix()
+    except ValueError:
+        return None  # outside the project — not ours to judge
+    if relpath.startswith(".torsor/"):
+        return None  # memory writes are never architecture drift
+
+    text = _proposed_text(path, tool_name, tool_input)
+    if text is None:
+        return None
+    violations = [
+        v
+        for rule in guard.load_rules(store)
+        if fnmatch.fnmatch(relpath, rule.scope)
+        for v in guard.violations_for_file(relpath, text, rule)
+    ]
+    new = _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))
+    if not new:
+        return None
+
+    deny = mode == "block" and bool(guard.strict_failures(new, "error"))
+    decision = "deny" if deny else "advise"
+    lines = [f"- {v.file}:{v.line} [{v.severity}] {v.message} (per {v.source})" for v in new]
+    head = (
+        f"torsor guard: this {tool_name.lower()} would introduce {len(new)} new architecture "
+        f"violation(s) against the project's ADRs:"
+    )
+    tail = (
+        "Blocked (automation.guard_on_edit = block). Change the approach, or record a superseding ADR first."
+        if deny else
+        "Advisory: reconsider before proceeding, or record a superseding ADR if the rule is wrong."
+    )
+    return {"decision": decision, "new": new, "context": "\n".join([head, *lines, tail])}
+
+
 def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=False) -> dict:
     """Wire git hooks + Claude Code hook entries so capture fires on the lifecycle.
     Idempotent, foreign-content-preserving, and CLI-only (footgun parity with the

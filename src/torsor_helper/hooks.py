@@ -62,6 +62,17 @@ def claude_start_command(root: str) -> str:
     return f"torsor hooks run session-start --root {root}"
 
 
+# The edit gate watches the two tools that write source. Bash is deliberately
+# not matched: a shell command's effect on files isn't knowable pre-execution,
+# and guessing would make the gate noisy exactly where it must be trusted.
+EDIT_GATE_MATCHER = "Edit|Write"
+
+
+def claude_edit_command(root: str) -> str:
+    """The command torsor registers for the Claude Code PreToolUse edit gate."""
+    return f"torsor hooks run pre-edit --root {root}"
+
+
 def _strip_block(text: str) -> tuple[str, bool]:
     """Remove one managed block from `text`. Returns (new_text, found)."""
     if _GIT_START in text and _GIT_END in text:
@@ -120,7 +131,7 @@ def _is_torsor_group(group) -> bool:
 def merge_settings_hooks(data, *, root: str = ".", on_stop=False, remove=False) -> dict:
     """Pure transform on a parsed .claude/settings.json: drop every torsor-owned
     hook entry (from all events, so --on-stop switches cleanly), then — unless
-    removing — append fresh entries to SessionStart and SessionEnd (or Stop).
+    removing — append fresh entries to SessionStart, PreToolUse (edit gate) and SessionEnd (or Stop).
     Foreign hooks, foreign events, and all other top-level keys are preserved;
     non-dict input resets."""
     if not isinstance(data, dict):
@@ -144,6 +155,11 @@ def merge_settings_hooks(data, *, root: str = ".", on_stop=False, remove=False) 
             "hooks": [{"type": "command", "command": claude_start_command(root)}],
         }
         hooks_map["SessionStart"] = list(hooks_map.get("SessionStart") or []) + [start]
+        gate = {
+            "matcher": EDIT_GATE_MATCHER,
+            "hooks": [{"type": "command", "command": claude_edit_command(root)}],
+        }
+        hooks_map["PreToolUse"] = list(hooks_map.get("PreToolUse") or []) + [gate]
 
     if hooks_map:
         out["hooks"] = hooks_map

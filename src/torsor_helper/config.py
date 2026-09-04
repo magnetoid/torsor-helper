@@ -69,6 +69,11 @@ class AutomationConfig(BaseModel):
     auto_map_on_commit: bool = True    # partial-map the just-committed files
     auto_snapshot_on_commit: bool = True  # refresh the complexity regression baseline
     guard_on_push: bool = False        # advisory pre-push guard — never surprise-blocks
+    # PreToolUse edit gate: check the *proposed* Edit/Write against ADR rules
+    # before it lands. "advise" (default) only adds context — the guard stays
+    # advisory (ADR 0009/0012); "block" denies on new severity=error drift;
+    # "off" silences it without uninstalling.
+    guard_on_edit: str = "advise"      # off | advise | block
     parse_transcript: bool = False     # opt-in transcript enrichment for auto-handoff
 
 
