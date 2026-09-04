@@ -477,7 +477,7 @@ Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs who
 - [x] **Recipes** · `torsor recipes` — learn which deterministic lookups recur
 - [x] **Model routing** · `torsor models` — cheap/smart policy, app-agnostic (MCP · prompt block · JSON), `--client` publish
 
-**Planned fast-follows (v0.5):** multi-language map (tree-sitter) for JS/TS · sampling-based *semantic* drift guard · weaving `impact`/`deps` warnings into `check_drift` and pre-commit flows.
+**Planned fast-follows (v0.7):** multi-language map (tree-sitter) for JS/TS · sampling-based *semantic* drift guard · weaving `impact`/`deps` warnings into `check_drift` and pre-commit flows.
 
 ## 🧪 Built with
 

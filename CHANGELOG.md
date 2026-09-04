@@ -4,7 +4,11 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
-## [Unreleased]
+## [0.6.0] — Self-Serving Memory (2026-09-04)
+
+Memory that shows up without being asked for, rules that load only where they apply,
+and a garbage collector so `.torsor/` stops accumulating what nobody needs. Still
+deterministic, offline, daemon-free; one new ADR (0011); `torsor guard --strict` clean.
 
 ### 🚪 Memory that arrives on its own: `SessionStart` injection (+ re-injection after `/compact`)
 - `torsor hooks install` now also registers a Claude Code **`SessionStart`** hook (matcher `startup|resume|compact`) that pipes a **~500-token project digest** straight into context via `hookSpecificOutput.additionalContext` — the agent no longer has to remember to call `bootstrap_session()`, and the digest comes back **after every context compaction**, which is the documented way instructions silently vanish mid-session. Same deterministic composition as `bootstrap_session`, under a new `budgets.session_start_tokens` (default 500 — the "core tier" size the ETH Zurich instruction-file study recommends); `bootstrap_session()` stays as the fuller on-demand form. Off switch: `automation.auto_bootstrap = false`. No LLM, no daemon — one `torsor hooks run session-start` per event, exit.
