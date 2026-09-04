@@ -129,7 +129,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 ### 📦 Supply-chain safety — *"the AI imported a package that doesn't exist"*
 | Feature | What it does | Reach for it when… |
 |---|---|---|
-| `torsor deps` | Flags imports that match **no** stdlib / installed / declared / first-party package — a possible **hallucinated dependency** ("slopsquatting"). | **Before `pip install`-ing what the agent suggested.** ~5–20% of AI imports don't exist; some are malware bait. Fully offline. |
+| `torsor deps` | Flags imports that match **no** stdlib / installed / declared / first-party package — a possible **hallucinated dependency** ("slopsquatting"). Python, JS/TS, Go. | **Before `pip install`-ing what the agent suggested.** ~5–20% of AI imports don't exist; some are malware bait. Fully offline. |
 
 ### 🧭 The Coach — *"tell me what to fix, don't make me hunt"*
 Run `torsor coach` (or it's pushed at session start). It's advisory, ranked, and **decays so it never nags**:
@@ -380,7 +380,7 @@ torsor init --client <name>
 | `torsor primer [--write <file>] [--tokens N]` | **Token saver:** budgeted prompt-time project primer (charter + architecture + map + token-efficiency habits) — zero discovery tool-calls per session |
 | `torsor update [--print-only]` | Update the torsor CLI itself (detects uv tool / pipx / pip installs) |
 | `torsor rules [--write <file>] [--scoped]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write` maintains a managed block in `AGENTS.md`/`CLAUDE.md`; `--scoped` writes one path-scoped Claude Code rule file per ADR under `.claude/rules/torsor/` — prompt-time rules at zero tool-call cost |
-| `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline) |
+| `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline; Python, JS/TS, Go) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
 | `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** recommendations |
 | `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, snapshot complexity, report duplicates |
@@ -402,7 +402,7 @@ torsor init --client <name>
 | `record_decision(..., supersedes?)` · `check_drift(..., as_json?, new_only?)` | Record ADRs (that become rules); flag changes that violate intent |
 | `get_rules()` | The standing constraints (principles + ADR rules) as one compact digest — load once per session |
 | `get_primer(max_tokens?)` · `list_practices(lang?)` · `adopt_practices(lang)` | Token-saving project primer; list/adopt curated best-practice packs as guard-enforced ADRs |
-| `check_dependencies(files?)` · `export()` | Flag hallucinated imports (slopsquatting); portable `llms.txt` + Mermaid diagram |
+| `check_dependencies(files?)` · `export()` | Flag hallucinated imports (slopsquatting; Python, JS/TS, Go); portable `llms.txt` + Mermaid diagram |
 | `record_command(...)` · `list_commands()` · `recipes()` | The learned command book + the most-repeated deterministic lookups (token thrift) |
 | `get_model_policy(as_json?)` | The cheap/smart model-routing policy to follow — do basic lookups on the cheap model (`as_json` for a parseable form) |
 | `recommend(context?)` · `consolidate()` | The Coach (health · reuse · hotspots · coupling · regressions · phantom-deps); self-improving maintenance |

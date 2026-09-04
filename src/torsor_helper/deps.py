@@ -223,6 +223,40 @@ def _unknown_js_imports(root: Path, relpath: str, text: str, known: set[str]) ->
     return out
 
 
+_GO_REQUIRE = re.compile(r"^\s*(?:require\s+)?([A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)+)\s+v", re.M)
+_GO_REPLACE = re.compile(r"^\s*(?:replace\s+)?([A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)+)\s*=>", re.M)
+_GO_MODULE = re.compile(r"^module\s+(\S+)", re.M)
+
+
+def _go_known_prefixes(root: Path) -> list[str]:
+    mod = root / "go.mod"
+    if not mod.exists():
+        return []
+    try:
+        text = mod.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    prefixes = _GO_REQUIRE.findall(text)
+    prefixes += _GO_REPLACE.findall(text)  # a replace directive's left side is still imported
+    m = _GO_MODULE.search(text)
+    if m:
+        prefixes.append(m.group(1))
+    return prefixes
+
+
+def _unknown_go_imports(root: Path, relpath: str, text: str, prefixes: list[str]) -> list[dict]:
+    from torsor_helper import languages
+
+    out = []
+    for spec, line in languages.import_specifiers(relpath, text):
+        if "." not in spec.split("/", 1)[0]:
+            continue  # stdlib: first segment has no dot
+        if any(spec == p or spec.startswith(p + "/") for p in prefixes):
+            continue
+        out.append({"file": relpath, "line": line, "name": spec})
+    return out
+
+
 def unknown_imports(root: Path, files) -> list[dict]:
     """Flag top-level absolute imports that resolve to NO known package — a
     possible hallucinated dependency (slopsquatting). Fully offline; conservative
@@ -232,6 +266,7 @@ def unknown_imports(root: Path, files) -> list[dict]:
     root = Path(root)
     known = stdlib_names() | installed_import_names(root) | first_party_names(root) | declared_import_names(root)
     js_known: set[str] | None = None
+    go_prefixes: list[str] | None = None
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for f in files:
@@ -252,10 +287,9 @@ def unknown_imports(root: Path, files) -> list[dict]:
                 js_known = _js_known(root)
             found = _unknown_js_imports(root, rel, text, js_known)
         elif suffix == ".go":
-            # Task 10 wires up a Go-specific check; skip for now rather than
-            # falling through to the Python ast parser (which would just fail
-            # silently on Go syntax and add nothing).
-            continue
+            if go_prefixes is None:  # computed at most once per call, lazily
+                go_prefixes = _go_known_prefixes(root)
+            found = _unknown_go_imports(root, rel, text, go_prefixes)
         else:
             found = [
                 {"file": rel, "line": lineno, "name": name}
