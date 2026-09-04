@@ -188,6 +188,7 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
                 "modules": len(db.modules(conn)),
                 "symbols": conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0],
                 "edges": conn.execute("SELECT COUNT(*) FROM symbol_edges").fetchone()[0],
+                "languages": _language_counts(db.modules(conn)),
             }
 
         symbols, edges = cartographer.scan_repo_with_edges(store.paths.root, paths)
@@ -230,7 +231,19 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
         "modules": len({s.module for s in symbols}),
         "symbols": len(symbols),
         "edges": len(edges),
+        "languages": _language_counts({s.module for s in symbols}),
     }
+
+
+def _language_counts(modules) -> dict[str, int]:
+    from torsor_helper import languages
+
+    counts: dict[str, int] = {}
+    for m in modules:
+        spec = languages.spec_for(m)
+        if spec is not None:
+            counts[spec.name] = counts.get(spec.name, 0) + 1
+    return counts
 
 
 def export_project(store: Store, config: TorsorConfig) -> dict:

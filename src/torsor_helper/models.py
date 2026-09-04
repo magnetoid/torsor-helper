@@ -119,8 +119,8 @@ class Violation(BaseModel):
 
 
 class Recommendation(BaseModel):
-    # kind: thin | stale | unruled | uncharted | reuse | decision | learning | hotspot
-    #       | phantom_dep | coupling | hub | regression | dangling_link | stale_path
+    # kind: thin | stale | unruled | uncharted | uncharted_language | reuse | decision | learning
+    #       | hotspot | phantom_dep | coupling | hub | regression | dangling_link | stale_path
     kind: str
     severity: str = "suggest"  # info | suggest | important
     message: str

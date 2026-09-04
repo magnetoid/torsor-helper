@@ -143,6 +143,10 @@ def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) 
     except Exception as exc:  # malformed TOML or invalid schema
         typer.echo(f"Config malformed: {exc}", err=True)
         raise typer.Exit(code=1)
+    from torsor_helper import languages
+
+    for name, ok in languages.available().items():
+        typer.echo(f"{name}: {'ready' if ok else 'install torsor-helper[languages]'}")
     typer.echo("OK: torsor-helper project is healthy.")
 
 
@@ -179,12 +183,17 @@ def map(
     config = load_config(paths)
     store = Store(paths)
     stats = ops.map_repo(store, config, force=force)
+    lang_summary = ", ".join(f"{k} {v}" for k, v in stats["languages"].items())
     if stats.get("skipped"):
-        typer.echo(f"Map up to date ({stats['symbols']} symbol(s), {stats['modules']} module(s)) — nothing changed.")
+        typer.echo(
+            f"Map up to date ({stats['symbols']} symbol(s), {stats['modules']} module(s)) — nothing changed."
+            f" · {lang_summary}"
+        )
     else:
         typer.echo(
             f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s) "
             f"({stats['edges']} reference edge(s))."
+            f" · {lang_summary}"
         )
 
 

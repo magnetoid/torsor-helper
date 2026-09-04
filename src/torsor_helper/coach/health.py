@@ -60,10 +60,40 @@ def check_uncharted(store: Store, modules_in_map: set[str]) -> list[Recommendati
     )]
 
 
+_UNCHARTED_LANGUAGE_MIN_FILES = 5
+
+
+def check_uncharted_language(store: Store) -> list[Recommendation]:
+    """A language with real presence in the repo but no available extractor —
+    the map is silently blind to it. Index-free and deterministic."""
+    from torsor_helper import languages
+
+    counts: dict[str, int] = {}
+    for path in store.paths.root.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(store.paths.root).parts
+        if any(part in cartographer.DEFAULT_IGNORE or part.startswith(".") for part in rel[:-1]):
+            continue
+        for spec in languages.LANGUAGES.values():
+            if path.suffix in spec.extensions and not languages.is_available(spec.name):
+                counts[spec.name] = counts.get(spec.name, 0) + 1
+    out: list[Recommendation] = []
+    for name, n in sorted(counts.items()):
+        if n >= _UNCHARTED_LANGUAGE_MIN_FILES:
+            out.append(Recommendation(
+                kind="uncharted_language", severity="info",
+                message=f"{n} {name} file(s) are invisible to the map — the [languages] extra isn't installed.",
+                action="uv tool install 'torsor-helper[languages]'", source=name, key=f"uncharted_language:{name}",
+            ))
+    return out
+
+
 def run_health(store: Store, modules_in_map: set[str]) -> list[Recommendation]:
     return [
         *check_thin(store),
         *check_stale(store),
         *check_unruled(store),
         *check_uncharted(store, modules_in_map),
+        *check_uncharted_language(store),
     ]
