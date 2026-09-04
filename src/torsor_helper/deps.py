@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import sys
 import tomllib
 from pathlib import Path
 
 from torsor_helper.cartographer import DEFAULT_IGNORE
+
+_JS_SUFFIXES = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}
+
+_NODE_BUILTINS = {
+    "assert", "async_hooks", "buffer", "child_process", "cluster", "console", "constants", "crypto", "dgram",
+    "diagnostics_channel", "dns", "domain", "events", "fs", "http", "http2", "https", "inspector", "module",
+    "net", "os", "path", "perf_hooks", "process", "punycode", "querystring", "readline", "repl", "stream",
+    "string_decoder", "sys", "timers", "tls", "trace_events", "tty", "url", "util", "v8", "vm", "wasi",
+    "worker_threads", "zlib", "test",
+}
 
 # Common distribution-name -> import-name mismatches, used ONLY for the
 # declared-deps fallback (an installed venv is the accurate source). Keeps the
@@ -165,6 +176,47 @@ def _top_imports(text: str) -> list[tuple[str, int]]:
     return out
 
 
+def _js_package(spec: str) -> str | None:
+    """Bare specifier → package name ('lodash/fp' → 'lodash', '@s/p/x' → '@s/p');
+    None for relative/absolute paths and node: builtins."""
+    if spec.startswith((".", "/", "node:")):
+        return None
+    parts = spec.split("/")
+    return "/".join(parts[:2]) if spec.startswith("@") and len(parts) >= 2 else parts[0]
+
+
+def _js_known(root: Path) -> set[str]:
+    known = set(_NODE_BUILTINS)
+    pkg = root / "package.json"
+    if pkg.exists():
+        try:
+            data = json.loads(pkg.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            data = {}
+        for key in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+            known.update((data.get(key) or {}).keys())
+    nm = root / "node_modules"
+    if nm.is_dir():
+        for entry in nm.iterdir():
+            if entry.name.startswith("@") and entry.is_dir():
+                known.update(f"{entry.name}/{sub.name}" for sub in entry.iterdir() if sub.is_dir())
+            elif entry.is_dir():
+                known.add(entry.name)
+    return known
+
+
+def _unknown_js_imports(root: Path, relpath: str, text: str) -> list[dict]:
+    from torsor_helper import languages
+
+    known = _js_known(root)
+    out = []
+    for spec, line in languages.import_specifiers(relpath, text):
+        name = _js_package(spec)
+        if name and name not in known:
+            out.append({"file": relpath, "line": line, "name": name})
+    return out
+
+
 def unknown_imports(root: Path, files) -> list[dict]:
     """Flag top-level absolute imports that resolve to NO known package — a
     possible hallucinated dependency (slopsquatting). Fully offline; conservative
@@ -186,11 +238,26 @@ def unknown_imports(root: Path, files) -> list[dict]:
             rel = path.relative_to(root).as_posix()
         except ValueError:
             rel = path.name
-        for name, lineno in _top_imports(text):
-            if not name or name in known:
+
+        suffix = path.suffix
+        if suffix in _JS_SUFFIXES:
+            found = _unknown_js_imports(root, rel, text)
+        elif suffix == ".go":
+            # Task 10 wires up a Go-specific check; skip for now rather than
+            # falling through to the Python ast parser (which would just fail
+            # silently on Go syntax and add nothing).
+            continue
+        else:
+            found = [
+                {"file": rel, "line": lineno, "name": name}
+                for name, lineno in _top_imports(text)
+                if name and name not in known
+            ]
+
+        for item in found:
+            key = (item["file"], item["name"])
+            if key in seen:
                 continue
-            if (rel, name) in seen:
-                continue
-            seen.add((rel, name))
-            out.append({"file": rel, "line": lineno, "name": name})
+            seen.add(key)
+            out.append(item)
     return out
