@@ -65,3 +65,19 @@ def test_on_stop_uses_stop_event_and_switches_cleanly():
 def test_non_dict_input_resets():
     data = hooks.merge_settings_hooks("garbage", root=".")
     assert any("torsor hooks run session-end" in c for c in _commands(data, "SessionEnd"))
+
+
+def test_install_adds_session_start_entry_for_startup_resume_and_compact():
+    data = hooks.merge_settings_hooks({}, root=".")
+    groups = data["hooks"]["SessionStart"]
+    torsor = [g for g in groups if any("torsor hooks run session-start" in h["command"] for h in g["hooks"])]
+    assert len(torsor) == 1
+    assert set(torsor[0]["matcher"].split("|")) == {"startup", "resume", "compact"}
+
+
+def test_session_start_entry_is_idempotent_and_removable():
+    data = hooks.merge_settings_hooks({}, root=".")
+    twice = hooks.merge_settings_hooks(data, root=".")
+    assert len(_commands(twice, "SessionStart")) == 1
+    gone = hooks.merge_settings_hooks(twice, remove=True)
+    assert "SessionStart" not in gone.get("hooks", {})

@@ -49,6 +49,19 @@ def claude_command(root: str) -> str:
     return f"torsor hooks run session-end --root {root}"
 
 
+# SessionStart fires on a fresh start, a --resume, and after every context
+# compaction. Injecting on `compact` is what keeps the project digest alive
+# across a long session — the documented failure mode is instructions that
+# silently vanish after /compact. `clear` is deliberately excluded: the user
+# asked for a blank slate.
+SESSION_START_MATCHER = "startup|resume|compact"
+
+
+def claude_start_command(root: str) -> str:
+    """The command torsor registers for the Claude Code SessionStart hook."""
+    return f"torsor hooks run session-start --root {root}"
+
+
 def _strip_block(text: str) -> tuple[str, bool]:
     """Remove one managed block from `text`. Returns (new_text, found)."""
     if _GIT_START in text and _GIT_END in text:
@@ -107,8 +120,9 @@ def _is_torsor_group(group) -> bool:
 def merge_settings_hooks(data, *, root: str = ".", on_stop=False, remove=False) -> dict:
     """Pure transform on a parsed .claude/settings.json: drop every torsor-owned
     hook entry (from all events, so --on-stop switches cleanly), then — unless
-    removing — append a fresh entry to SessionEnd (or Stop). Foreign hooks, foreign
-    events, and all other top-level keys are preserved; non-dict input resets."""
+    removing — append fresh entries to SessionStart and SessionEnd (or Stop).
+    Foreign hooks, foreign events, and all other top-level keys are preserved;
+    non-dict input resets."""
     if not isinstance(data, dict):
         data = {}
     out = dict(data)
@@ -125,6 +139,11 @@ def merge_settings_hooks(data, *, root: str = ".", on_stop=False, remove=False) 
         event = "Stop" if on_stop else "SessionEnd"
         group = {"hooks": [{"type": "command", "command": claude_command(root)}]}
         hooks_map[event] = list(hooks_map.get(event) or []) + [group]
+        start = {
+            "matcher": SESSION_START_MATCHER,
+            "hooks": [{"type": "command", "command": claude_start_command(root)}],
+        }
+        hooks_map["SessionStart"] = list(hooks_map.get("SessionStart") or []) + [start]
 
     if hooks_map:
         out["hooks"] = hooks_map

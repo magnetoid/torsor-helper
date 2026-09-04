@@ -99,6 +99,13 @@ class TorsorPaths:
         return self.root / ".claude" / "settings.json"
 
     @property
+    def claude_rules_dir(self) -> Path:
+        # Path-scoped Claude Code rules (`paths:` frontmatter → loaded only when a
+        # matching file is touched). torsor owns exactly this subdirectory and
+        # nothing beside it, so a user's own .claude/rules/*.md are never touched.
+        return self.root / ".claude" / "rules" / "torsor"
+
+    @property
     def claude_settings_local(self) -> Path:
         # Git-ignored local variant, for hook entries a user doesn't want committed.
         return self.root / ".claude" / "settings.local.json"

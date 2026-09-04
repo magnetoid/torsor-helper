@@ -32,8 +32,8 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 | When | You (or your agent) do | What it buys you |
 |---|---|---|
 | **Once per project** | `torsor init --write`, fill `charter.md` + your architecture rules, commit `.torsor/` | Every future session starts from the same truth — no more re-explaining the project |
-| **Once per project** | `torsor rules --write AGENTS.md` (or `CLAUDE.md`) | Your rules ride along in the agent's prompt file — **zero tool-call tokens** to follow them |
-| **Every session** | agent calls `bootstrap_session()` first, `handoff()` last | No blank-slate starts; the next session resumes where this one stopped |
+| **Once per project** | `torsor rules --write AGENTS.md` (or `CLAUDE.md`), or `torsor rules --scoped` for Claude Code | Your rules ride along in the agent's prompt file — **zero tool-call tokens** to follow them; `--scoped` loads each rule only when a governed file is touched |
+| **Every session** | `torsor hooks install` once — then the digest is injected at session start (and after `/compact`) and `handoff()` is written at session end, automatically | No blank-slate starts; the next session resumes where this one stopped |
 | **While coding** | agent calls `recall()` / `get_intent()` / `impact()` before changing things | Finds prior decisions and existing code instead of re-inventing or breaking it |
 | **Before commit / in CI** | `torsor guard --strict` · `torsor deps` | Catches architectural drift and hallucinated packages the moment they appear |
 | **Weekly-ish** | `torsor coach` · `torsor consolidate` · `torsor clean` | Hotspot/coupling nudges; journal noise distilled into clean insights; dead artefacts reclaimed |
@@ -376,7 +376,7 @@ torsor init --client <name>
 | `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs (python · javascript · typescript · go · rust · agent) — `--apply` records an ADR the guard enforces |
 | `torsor primer [--write <file>] [--tokens N]` | **Token saver:** budgeted prompt-time project primer (charter + architecture + map + token-efficiency habits) — zero discovery tool-calls per session |
 | `torsor update [--print-only]` | Update the torsor CLI itself (detects uv tool / pipx / pip installs) |
-| `torsor rules [--write <file>]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write` maintains a managed block in `AGENTS.md`/`CLAUDE.md` — prompt-time rules at zero tool-call cost |
+| `torsor rules [--write <file>] [--scoped]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write` maintains a managed block in `AGENTS.md`/`CLAUDE.md`; `--scoped` writes one path-scoped Claude Code rule file per ADR under `.claude/rules/torsor/` — prompt-time rules at zero tool-call cost |
 | `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
 | `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** recommendations |

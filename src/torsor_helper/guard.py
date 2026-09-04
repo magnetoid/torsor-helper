@@ -10,14 +10,17 @@ from torsor_helper.models import Rule, Violation
 from torsor_helper.store import Store
 
 
-def load_rules(store: Store) -> list[Rule]:
+def load_rules_by_note(store: Store) -> list[tuple[Path, str, list[Rule]]]:
+    """(note path, note title, its rules) for every ADR / system-patterns note
+    that declares a `rules:` block — the grouping the scoped-rules exporter
+    needs, and the single place rule parsing happens."""
     notes = []
     if store.paths.decisions_dir.exists():
         notes.extend(sorted(store.paths.decisions_dir.glob("*.md")))
     if store.paths.system_patterns.exists():
         notes.append(store.paths.system_patterns)
 
-    rules: list[Rule] = []
+    out: list[tuple[Path, str, list[Rule]]] = []
     for path in notes:
         try:
             note = store.read_note(path)
@@ -26,15 +29,21 @@ def load_rules(store: Store) -> list[Rule]:
         raw = getattr(note.frontmatter, "rules", None)
         if not isinstance(raw, list):
             continue
+        rules: list[Rule] = []
         for item in raw:
             if not isinstance(item, dict):
                 continue
             try:
-                rule = Rule.model_validate({**item, "source": note.title})
+                rules.append(Rule.model_validate({**item, "source": note.title}))
             except Exception:
                 continue  # malformed rule: skip, never fatal
-            rules.append(rule)
-    return rules
+        if rules:
+            out.append((path, note.title, rules))
+    return out
+
+
+def load_rules(store: Store) -> list[Rule]:
+    return [rule for _path, _title, rules in load_rules_by_note(store) for rule in rules]
 
 
 def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:

@@ -23,6 +23,11 @@ _DEFAULT_IMPORTANCE_FLOORS = {
 class BudgetConfig(BaseModel):
     bootstrap_tokens: int = 2000
     recall_tokens: int = 1500
+    # The SessionStart hook digest. Deliberately small: it lands in *every*
+    # session (and again after each compaction) without the agent asking, so it
+    # follows the "core tier under ~500 tokens" rule for injected context —
+    # bootstrap_session() stays the fuller, on-demand form.
+    session_start_tokens: int = 500
     chars_per_token: int = 4
 
 
@@ -59,6 +64,7 @@ class AutomationConfig(BaseModel):
     # disabled, so a user can neuter any single behavior via torsor.toml without
     # uninstalling. torsor never calls an LLM and never runs a daemon — these
     # fire per-event (git / Claude Code lifecycle) and exit.
+    auto_bootstrap: bool = True        # inject a project digest at SessionStart (and after compaction)
     auto_handoff: bool = True          # deterministic digest handoff on session end
     auto_map_on_commit: bool = True    # partial-map the just-committed files
     auto_snapshot_on_commit: bool = True  # refresh the complexity regression baseline

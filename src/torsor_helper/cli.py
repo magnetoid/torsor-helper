@@ -285,6 +285,7 @@ def rules(
     root: Path = typer.Option(Path("."), help="Project root."),
     write: Optional[Path] = typer.Option(None, "--write", help="Write/refresh a managed rules block in this file (e.g. AGENTS.md or CLAUDE.md). Idempotent."),
     client: Optional[str] = typer.Option(None, "--client", help=f"Write to a client's conventional instructions file instead of --write ({', '.join(SUPPORTED_CLIENTS)})."),
+    scoped: bool = typer.Option(False, "--scoped", help="Claude Code only: write one path-scoped rule file per ADR under .claude/rules/torsor/ (loaded only when a governed file is touched)."),
 ) -> None:
     """Print a compact agent-rules digest (charter principles + ADR rules) — paste it into AGENTS.md/CLAUDE.md so agents follow the rules without spending tool-call tokens."""
     tp = TorsorPaths(root)
@@ -293,6 +294,11 @@ def rules(
         raise typer.Exit(code=1)
     config = load_config(tp)
     store = Store(tp)
+    if scoped:
+        written = ops.write_scoped_rules(store, config)
+        rel = tp.claude_rules_dir.relative_to(tp.root).as_posix()
+        typer.echo(f"Wrote {len(written)} path-scoped rule file(s) → {rel}/ (re-run after recording new ADRs)")
+        return
     dest = _resolve_block_target(root, write, client)
     if dest is not None:
         target = ops.write_rules_block(store, config, dest)
@@ -702,8 +708,9 @@ def hooks_install(
     local: bool = typer.Option(False, "--local", help="Write .claude/settings.local.json (git-ignored) instead."),
     on_stop: bool = typer.Option(False, "--on-stop", help="Register the Stop event instead of SessionEnd."),
 ) -> None:
-    """Install auto-capture hooks (auto-handoff on session end, auto-map on commit).
-    Idempotent and removable; never clobbers your existing hooks or settings."""
+    """Install auto-capture hooks (project digest on session start + after compaction,
+    auto-handoff on session end, auto-map on commit). Idempotent and removable; never
+    clobbers your existing hooks or settings."""
     _, config, store = _load(root)
     result = ops.install_hooks(store, config, git=not no_git, claude=not no_claude, local=local, on_stop=on_stop)
     for h in result["git_hooks"]:
@@ -746,7 +753,7 @@ def hooks_status_cmd(root: Path = typer.Option(Path("."), help="Project root."))
 
 @hooks_app.command("run")
 def hooks_run(
-    event: str = typer.Argument(..., help="post-commit | pre-push | session-end"),
+    event: str = typer.Argument(..., help="post-commit | pre-push | session-start | session-end"),
     root: Path = typer.Option(Path("."), help="Project root."),
 ) -> None:
     """Stable dispatcher the on-disk hook scripts call — so scripts never change
@@ -758,20 +765,22 @@ def hooks_run(
     store = Store(tp)
     if event == "post-commit":
         ops.on_commit(store, config)
+    elif event == "session-start":
+        import json
+
+        payload = _hook_payload()
+        text = ops.session_start_context(store, config, how=payload.get("how_session_started") or "startup")
+        if text:
+            # Claude Code's context-injection contract for SessionStart.
+            typer.echo(json.dumps({
+                "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": text},
+            }))
     elif event == "session-end":
-        import sys
-
-        session_id = transcript_path = None
-        if not sys.stdin.isatty():
-            import json
-
-            try:
-                payload = json.loads(sys.stdin.read() or "{}")
-                session_id = payload.get("session_id")
-                transcript_path = payload.get("transcript_path")
-            except ValueError:
-                pass
-        ops.auto_handoff(store, config, session_id=session_id, transcript_path=transcript_path)
+        payload = _hook_payload()
+        ops.auto_handoff(
+            store, config,
+            session_id=payload.get("session_id"), transcript_path=payload.get("transcript_path"),
+        )
     elif event == "pre-push":
         result = ops.pre_push(store, config)
         if result["failed"]:
@@ -781,6 +790,21 @@ def hooks_run(
     else:
         typer.echo(f"unknown hook event {event!r}", err=True)
         raise typer.Exit(code=2)
+
+
+def _hook_payload() -> dict:
+    """The JSON Claude Code pipes to a hook on stdin; {} when absent or malformed
+    (a hook must never fail the agent lifecycle over its own input)."""
+    import json
+    import sys
+
+    if sys.stdin.isatty():
+        return {}
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+    except ValueError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def main() -> None:

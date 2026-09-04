@@ -6,6 +6,15 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🚪 Memory that arrives on its own: `SessionStart` injection (+ re-injection after `/compact`)
+- `torsor hooks install` now also registers a Claude Code **`SessionStart`** hook (matcher `startup|resume|compact`) that pipes a **~500-token project digest** straight into context via `hookSpecificOutput.additionalContext` — the agent no longer has to remember to call `bootstrap_session()`, and the digest comes back **after every context compaction**, which is the documented way instructions silently vanish mid-session. Same deterministic composition as `bootstrap_session`, under a new `budgets.session_start_tokens` (default 500 — the "core tier" size the ETH Zurich instruction-file study recommends); `bootstrap_session()` stays as the fuller on-demand form. Off switch: `automation.auto_bootstrap = false`. No LLM, no daemon — one `torsor hooks run session-start` per event, exit.
+
+### 🎯 Path-scoped rules: `torsor rules --scoped`
+- Exports the standing rules as **one Claude Code rule file per ADR** under `.claude/rules/torsor/`, each with `paths:` frontmatter derived from the rule's guard `scope` — so an architecture rule enters context **only when the agent touches a file it governs**, instead of every session as one monolithic CLAUDE.md block (monolithic instruction files measurably dilute attention and add ~20% inference cost). Charter principles have no scope and become an unscoped `principles.md`. The subdirectory is fully managed (stale files removed); nothing beside it is touched. `guard.load_rules_by_note` is the single rule parser both the guard and the exporter use.
+
+### 🔧 Build
+- Pinned `mcp<2` (2.x removed `mcp.server.fastmcp`; migrating to `MCPServer` is a deliberate follow-up) and made ruff's rule set explicit (`E4,E7,E9,F`) so `uv run --with ruff ruff check` is deterministic across ruff versions. Both had CI red on a fresh resolve.
+
 ### 🧹 `torsor clean` — plan-then-apply garbage collection (+ `clean` MCP tool)
 - Nothing ever removed what torsor stopped needing. `render_map` writes one note per module and **never deleted**, so renaming or deleting a source file left an orphaned map note behind — and since `map/` is committed, that orphan got pushed to git. `path_access` / `complexity_snapshot` accumulated rows for files that no longer exist, SQLite never returned freed pages, and `memory/journal/` grew one file per active day forever.
 - New pure `cleaner.py` reclaims exactly four categories: **orphaned map notes**, **index rows whose source path is gone** (then `VACUUM`), **journals past `clean.journal_retention_days`** (new config, default 90; `0` disables), and — behind `--deep` — the whole disposable `.index/`.
