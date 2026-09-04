@@ -6,6 +6,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Callable
 
+from torsor_helper.languages import javascript as _js
 from torsor_helper.languages import python as _py
 from torsor_helper.models import Symbol, SymbolEdge
 
@@ -26,6 +27,10 @@ class LanguageSpec:
 
 LANGUAGES: dict[str, LanguageSpec] = {
     "python": LanguageSpec("python", (".py",), _py.extract, complexity=_py.complexity),
+    "javascript": LanguageSpec("javascript", (".js", ".jsx", ".mjs", ".cjs"), _js.extract,
+                               requires=("tree_sitter", "tree_sitter_javascript")),
+    "typescript": LanguageSpec("typescript", (".ts", ".tsx"), _js.extract,
+                               requires=("tree_sitter", "tree_sitter_typescript")),
 }
 
 
