@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -47,3 +48,49 @@ def test_unknown_imports_mixed_python_and_ts_reports_python_phantom(tmp_path):
 
     found = deps.unknown_imports(tmp_path, ["a.py", "a.ts"])
     assert {f["name"] for f in found if f["file"] == "a.py"} == {"totallyfakepkg"}
+
+
+@needs_ts
+def test_js_subpath_import_not_flagged(tmp_path):
+    # '#internal/x' is a Node subpath import (package.json "imports" field),
+    # not a bare package specifier — must not be flagged as phantom (ADR 0006).
+    (tmp_path / "a.ts").write_text("import x from '#internal/x';\n")
+    assert deps.unknown_imports(tmp_path, ["a.ts"]) == []
+
+
+@needs_ts
+def test_js_known_survives_node_modules_permission_error(tmp_path, monkeypatch):
+    (tmp_path / "package.json").write_text(json.dumps({"dependencies": {"lodash": "^4"}}))
+    (tmp_path / "node_modules").mkdir()
+    (tmp_path / "a.ts").write_text("import _ from 'lodash/fp';\nimport ghost from 'left-padd';\n")
+
+    real_iterdir = Path.iterdir
+
+    def raising_iterdir(self):
+        if self.name == "node_modules":
+            raise PermissionError("denied")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", raising_iterdir)
+
+    result = deps.unknown_imports(tmp_path, ["a.ts"])
+    assert [(u["name"], u["line"]) for u in result] == [("left-padd", 2)]
+
+
+@needs_ts
+def test_js_known_computed_once_per_call(tmp_path, monkeypatch):
+    (tmp_path / "package.json").write_text(json.dumps({"dependencies": {"lodash": "^4"}}))
+    (tmp_path / "a.ts").write_text("import _ from 'lodash';\n")
+    (tmp_path / "b.ts").write_text("import _ from 'lodash';\n")
+
+    calls = []
+    original = deps._js_known
+
+    def counting(root):
+        calls.append(root)
+        return original(root)
+
+    monkeypatch.setattr(deps, "_js_known", counting)
+
+    deps.unknown_imports(tmp_path, ["a.ts", "b.ts"])
+    assert len(calls) == 1

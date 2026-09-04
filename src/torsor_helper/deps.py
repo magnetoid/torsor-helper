@@ -178,8 +178,9 @@ def _top_imports(text: str) -> list[tuple[str, int]]:
 
 def _js_package(spec: str) -> str | None:
     """Bare specifier → package name ('lodash/fp' → 'lodash', '@s/p/x' → '@s/p');
-    None for relative/absolute paths and node: builtins."""
-    if spec.startswith((".", "/", "node:")):
+    None for relative/absolute paths, node: builtins, and '#'-prefixed subpath
+    imports (package.json "imports" field — internal, not a dependency)."""
+    if spec.startswith((".", "/", "node:", "#")):
         return None
     parts = spec.split("/")
     return "/".join(parts[:2]) if spec.startswith("@") and len(parts) >= 2 else parts[0]
@@ -196,19 +197,24 @@ def _js_known(root: Path) -> set[str]:
         for key in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
             known.update((data.get(key) or {}).keys())
     nm = root / "node_modules"
-    if nm.is_dir():
-        for entry in nm.iterdir():
-            if entry.name.startswith("@") and entry.is_dir():
-                known.update(f"{entry.name}/{sub.name}" for sub in entry.iterdir() if sub.is_dir())
-            elif entry.is_dir():
-                known.add(entry.name)
+    try:
+        if nm.is_dir():
+            for entry in nm.iterdir():
+                try:
+                    if entry.name.startswith("@") and entry.is_dir():
+                        known.update(f"{entry.name}/{sub.name}" for sub in entry.iterdir() if sub.is_dir())
+                    elif entry.is_dir():
+                        known.add(entry.name)
+                except OSError:
+                    continue  # unreadable entry — best-effort, keep what we have
+    except OSError:
+        pass  # unreadable node_modules — fall back to package.json + builtins only
     return known
 
 
-def _unknown_js_imports(root: Path, relpath: str, text: str) -> list[dict]:
+def _unknown_js_imports(root: Path, relpath: str, text: str, known: set[str]) -> list[dict]:
     from torsor_helper import languages
 
-    known = _js_known(root)
     out = []
     for spec, line in languages.import_specifiers(relpath, text):
         name = _js_package(spec)
@@ -225,6 +231,7 @@ def unknown_imports(root: Path, files) -> list[dict]:
     package (e.g. `numpy.fake`) is not caught — verify suggestions independently."""
     root = Path(root)
     known = stdlib_names() | installed_import_names(root) | first_party_names(root) | declared_import_names(root)
+    js_known: set[str] | None = None
     out: list[dict] = []
     seen: set[tuple[str, str]] = set()
     for f in files:
@@ -241,7 +248,9 @@ def unknown_imports(root: Path, files) -> list[dict]:
 
         suffix = path.suffix
         if suffix in _JS_SUFFIXES:
-            found = _unknown_js_imports(root, rel, text)
+            if js_known is None:  # computed at most once per call, lazily
+                js_known = _js_known(root)
+            found = _unknown_js_imports(root, rel, text, js_known)
         elif suffix == ".go":
             # Task 10 wires up a Go-specific check; skip for now rather than
             # falling through to the Python ast parser (which would just fail
