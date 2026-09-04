@@ -4,7 +4,10 @@ reliable cases (ADR 0004): same-file top-level definitions and names bound by a
 relative `import … from './x'` / `require('./x')`."""
 from __future__ import annotations
 
+import posixpath
+
 from torsor_helper.languages import treesitter as ts
+from torsor_helper.languages.modules import norm_module
 from torsor_helper.models import Symbol, SymbolEdge
 
 
@@ -135,8 +138,112 @@ def _doc_anchor(node):
     return node.parent if node.parent is not None and node.parent.type == "export_statement" else node
 
 
+_IMPORTS = """
+(import_statement (import_clause (identifier) @name) source: (string) @source)
+(import_statement (import_clause (named_imports (import_specifier name: (identifier) @name))) source: (string) @source)
+(import_statement (import_clause (namespace_import (identifier) @name)) source: (string) @source)
+(variable_declarator name: (identifier) @name
+  value: (call_expression function: (identifier) @_req arguments: (arguments (string) @source)))
+"""
+
+
+def _refs_query(grammar: str) -> str:
+    # `class X extends Base`: plain JS puts the identifier directly in
+    # class_heritage; TS/TSX wrap it in an extends_clause with a `value` field.
+    heritage = ("(extends_clause value: (identifier) @read)" if grammar in ("typescript", "tsx")
+                else "(class_heritage (identifier) @read)")
+    return f"""
+(call_expression function: (identifier) @call)
+(new_expression constructor: (identifier) @call)
+{heritage}
+(call_expression function: (member_expression object: (identifier) @receiver property: (property_identifier) @member))
+"""
+
+
+def _def_names_query(grammar: str) -> str:
+    class_name = "(type_identifier)" if grammar in ("typescript", "tsx") else "(identifier)"
+    return f"""
+(function_declaration name: (identifier) @n)
+(lexical_declaration (variable_declarator name: (identifier) @n value: [(arrow_function) (function_expression)]))
+(class_declaration name: {class_name} @n)
+"""
+
+
+def resolve_relative(specifier: str, module: str) -> str | None:
+    """`'./x'` / `'../x'` relative to the importing file → module key (suffix
+    stripped, `index` collapsed by norm_module). Bare specifiers and paths that
+    climb out of the repo → None (ADR 0004: only the reliable cases)."""
+    spec = specifier.strip("'\"`")
+    if not spec.startswith("."):
+        return None
+    rel = posixpath.normpath(posixpath.join(posixpath.dirname(module), spec))
+    if rel.startswith(".."):
+        return None
+    return norm_module(rel)
+
+
+def _aliases(grammar: str, root, module: str) -> dict[str, str | None]:
+    out: dict[str, str | None] = {}
+    for m in ts.matches(grammar, root, _IMPORTS):
+        if "_req" in m and ts.text(m["_req"][0]) != "require":
+            continue
+        if "name" in m and "source" in m:
+            out[ts.text(m["name"][0])] = resolve_relative(ts.text(m["source"][0]), module)
+    return out
+
+
+def _owner(node) -> str:
+    """The enclosing symbol a reference is attributed to. Walks up from `node`
+    and stops at the OUTERMOST qualifying container — a top-level function/arrow/
+    class, or `Class.method` for a direct class-body member — never at a nested
+    local function, which `_is_top_level`/`_is_class_member` isn't a symbol
+    (mirrors python.py's `_owners`: a call inside a nested helper inside `run()`
+    is attributed to `run`, not to `helper`)."""
+    cur = node.parent
+    while cur is not None:
+        if cur.type == "function_declaration" and _is_top_level(cur):
+            return _class_name(cur)
+        if cur.type == "method_definition" and _is_class_member(cur):
+            cls = ts.enclosing(cur, ("class_declaration", "class"))
+            name = _class_name(cur)
+            return f"{_class_name(cls)}.{name}" if cls is not None else name
+        if cur.type == "variable_declarator":
+            value = cur.child_by_field_name("value")
+            if value is not None and value.type in ("arrow_function", "function_expression"):
+                anchor = cur.parent  # lexical_declaration; _doc_anchor climbs past `export` itself
+                if _is_top_level(anchor):
+                    return _class_name(cur)
+        if cur.type == "class_declaration" and _is_top_level(cur):
+            return _class_name(cur)
+        cur = cur.parent
+    return "<module>"
+
+
 def extract_edges(source: str, module: str) -> list[SymbolEdge]:
-    return []  # Task 3
+    grammar = grammar_for(module)
+    root = ts.parse(grammar, source).root_node
+    own = norm_module(module)
+    top_defs = {ts.text(n) for n in ts.captures(grammar, root, _def_names_query(grammar)).get("n", [])}
+    aliases = _aliases(grammar, root, module)
+
+    def resolve(name: str) -> str | None:
+        if name in top_defs:
+            return own
+        return aliases.get(name)
+
+    edges: list[SymbolEdge] = []
+    caps = ts.captures(grammar, root, _refs_query(grammar))
+    for role in ("call", "read"):
+        for node in caps.get(role, []):
+            name = ts.text(node)
+            edges.append(SymbolEdge(caller=_owner(node), referenced_name=name, role=role,
+                                    module=module, resolved_module=resolve(name)))
+    # `ns.fn()` where `ns` came from `import * as ns from './x'` → edge to fn in x.
+    for receiver, member in zip(caps.get("receiver", []), caps.get("member", [])):
+        target = aliases.get(ts.text(receiver))
+        edges.append(SymbolEdge(caller=_owner(member), referenced_name=ts.text(member), role="call",
+                                module=module, resolved_module=target))
+    return edges
 
 
 def extract(source: str, module: str) -> tuple[list[Symbol], list[SymbolEdge]]:

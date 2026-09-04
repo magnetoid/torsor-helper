@@ -79,3 +79,51 @@ export class Widget {
 
     js_syms = _symbols("class Widget {\n  onClick = (e) => { return e; };\n}\n", "w.js")
     assert js_syms["Widget.onClick"].kind == "method"
+
+
+def _edges(text, module="app.ts"):
+    return js.extract(text, module)[1]
+
+
+def test_calls_are_attributed_to_their_enclosing_symbol():
+    edges = _edges(TS)
+    assert any(e.caller == "greet" and e.referenced_name == "format" and e.role == "call" for e in edges)
+    assert any(e.caller == "helper" and e.referenced_name == "greet" for e in edges)
+    assert any(e.caller == "Widget.render" and e.referenced_name == "greet" for e in edges)
+
+
+def test_same_file_and_relative_imports_resolve_bare_does_not():
+    edges = {(e.referenced_name, e.resolved_module) for e in _edges(
+        "import { a } from './lib/a';\nimport React from 'react';\nimport './pkg';\n"
+        "function f() { a(); React.x(); g(); }\nfunction g() {}\n", "src/app.ts")}
+    assert ("a", "lib.a") in edges          # relative import → module key
+    assert ("g", "app") in edges            # same file → own key (src/ stripped)
+    assert not any(name == "x" and mod for name, mod in edges)  # bare package stays unresolved
+
+
+def test_new_and_extends_are_edges():
+    edges = _edges("import Base from '../base';\nclass S extends Base { m() { return new Base(); } }\n", "x/s.ts")
+    assert any(e.referenced_name == "Base" and e.role == "read" and e.resolved_module == "base" for e in edges)
+    assert any(e.referenced_name == "Base" and e.role == "call" and e.caller == "S.m" for e in edges)
+
+
+def test_require_binds_like_an_import():
+    edges = _edges("const h = require('./helper');\nfunction r() { h(); }\n", "a.js")
+    assert any(e.referenced_name == "h" and e.resolved_module == "helper" for e in edges)
+
+
+def test_resolve_relative_collapses_index_and_rejects_escapes():
+    assert js.resolve_relative("./pkg", "src/app.ts") == "pkg"
+    assert js.resolve_relative("../x/y.js", "src/a/b.ts") == "x.y"
+    assert js.resolve_relative("../../escape", "a.ts") is None
+    assert js.resolve_relative("lodash", "a.ts") is None
+
+
+def test_call_inside_nested_helper_is_attributed_to_outer_function():
+    edges = _edges(
+        "function run() {\n"
+        "  function helper() { return util(); }\n"
+        "  return helper();\n"
+        "}\n", "app.ts")
+    assert any(e.caller == "run" and e.referenced_name == "util" for e in edges)
+    assert not any(e.caller == "helper" for e in edges)

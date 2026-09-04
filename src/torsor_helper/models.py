@@ -88,6 +88,7 @@ class SymbolEdge(BaseModel):
     role: str               # "call" | "read" | "write"
     module: str             # module (relpath) the reference lives in
     resolved_module: str | None = None  # module the name resolves to, or None if best-effort failed
+    hint: str | None = None  # language-specific resolution hint (e.g. a Go import path); never persisted
 
 
 class Rule(BaseModel):

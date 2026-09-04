@@ -15,6 +15,7 @@ _norm_module = norm_module  # back-compat alias
 DEFAULT_IGNORE = {
     ".torsor", ".git", ".venv", "venv", "__pycache__", "node_modules",
     "build", "dist", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".eggs",
+    ".next", ".turbo", "coverage", "vendor", "target",
 }
 
 
