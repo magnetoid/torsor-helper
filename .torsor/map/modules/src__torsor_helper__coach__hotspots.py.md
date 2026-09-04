@@ -4,15 +4,15 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-04T05:04:02'
-updated: '2026-09-04T05:04:02'
+created: '2026-09-04T15:38:11'
+updated: '2026-09-04T15:38:11'
 ---
 
 # src/torsor_helper/coach/hotspots.py
 
 Symbols in `src/torsor_helper/coach/hotspots.py`.
 
-- L16 `_is_git_repo(root: Path)` (function)
-- L27 `_churn(root: Path)` (function)
-- L38 `_complexity(path: Path)` (function)
-- L48 `find_hotspots(root: Path, limit: int=3)` (function) — Rank current source files by churn × complexity and surface the top few as
+- L12 `_is_git_repo(root: Path)` (function)
+- L23 `_churn(root: Path)` (function)
+- L36 `_complexity(path: Path)` (function)
+- L40 `find_hotspots(root: Path, limit: int=3)` (function) — Rank current source files by churn × complexity and surface the top few as

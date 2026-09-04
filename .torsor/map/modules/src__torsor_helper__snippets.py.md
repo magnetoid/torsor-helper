@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-04T05:04:02'
-updated: '2026-09-04T05:04:02'
+created: '2026-09-04T15:38:12'
+updated: '2026-09-04T15:38:12'
 ---
 
 # src/torsor_helper/snippets.py

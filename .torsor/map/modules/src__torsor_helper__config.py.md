@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-04T05:04:02'
-updated: '2026-09-04T05:04:02'
+created: '2026-09-04T15:38:11'
+updated: '2026-09-04T15:38:11'
 ---
 
 # src/torsor_helper/config.py
@@ -17,7 +17,7 @@ Symbols in `src/torsor_helper/config.py`.
 - L41 `IndexConfig` (class)
 - L50 `ModelsConfig` (class)
 - L58 `AutomationConfig` (class)
-- L75 `CleanConfig` (class)
-- L84 `TorsorConfig` (class)
-- L94 `load_config(paths: TorsorPaths)` (function)
-- L102 `save_config(paths: TorsorPaths, config: TorsorConfig)` (function)
+- L80 `CleanConfig` (class)
+- L89 `TorsorConfig` (class)
+- L99 `load_config(paths: TorsorPaths)` (function)
+- L107 `save_config(paths: TorsorPaths, config: TorsorConfig)` (function)

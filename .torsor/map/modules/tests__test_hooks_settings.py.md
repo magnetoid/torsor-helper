@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-04T05:04:02'
-updated: '2026-09-04T05:04:02'
+created: '2026-09-04T15:38:13'
+updated: '2026-09-04T15:38:13'
 ---
 
 # tests/test_hooks_settings.py
@@ -22,3 +22,4 @@ Symbols in `tests/test_hooks_settings.py`.
 - L65 `test_non_dict_input_resets()` (function)
 - L70 `test_install_adds_session_start_entry_for_startup_resume_and_compact()` (function)
 - L78 `test_session_start_entry_is_idempotent_and_removable()` (function)
+- L86 `test_install_adds_pre_tool_use_edit_gate()` (function)

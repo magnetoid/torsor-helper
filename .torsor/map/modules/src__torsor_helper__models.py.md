@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-04T05:04:02'
-updated: '2026-09-04T05:04:02'
+created: '2026-09-04T15:38:11'
+updated: '2026-09-04T15:38:11'
 ---
 
 # src/torsor_helper/models.py
@@ -20,6 +20,6 @@ Symbols in `src/torsor_helper/models.py`.
 - L69 `RecallResult` (class)
 - L75 `Symbol` (class)
 - L85 `SymbolEdge` (class)
-- L93 `Rule` (class)
-- L104 `Violation` (class)
-- L115 `Recommendation` (class)
+- L103 `Rule` (class)
+- L114 `Violation` (class)
+- L125 `Recommendation` (class)

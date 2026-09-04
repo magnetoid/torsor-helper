@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-04T05:04:02'
-updated: '2026-09-04T05:04:02'
+created: '2026-09-04T15:38:11'
+updated: '2026-09-04T15:38:11'
 ---
 
 # src/torsor_helper/export.py
@@ -17,5 +17,5 @@ Symbols in `src/torsor_helper/export.py`.
 - L26 `render_llms_txt(store: Store)` (function) — Serialize the pyramid to the llms.txt convention (https://llmstxt.org):
 - L70 `_node_id(name: str)` (function)
 - L74 `render_module_mermaid(conn)` (function) — A GitHub-renderable Mermaid `graph TD` of module->module dependency edges,
-- L98 `_strip_mermaid(body: str)` (function)
-- L102 `export_project(store: Store, config)` (function) — Write .torsor/llms.txt and inject a Mermaid module diagram into the
+- L100 `_strip_mermaid(body: str)` (function)
+- L104 `export_project(store: Store, config)` (function) — Write .torsor/llms.txt and inject a Mermaid module diagram into the
