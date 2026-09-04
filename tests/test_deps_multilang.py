@@ -161,3 +161,22 @@ def test_unknown_imports_mixed_python_and_go_reports_python_phantom(tmp_path):
 
     found = deps.unknown_imports(tmp_path, ["a.py", "a.go"])
     assert {f["name"] for f in found if f["file"] == "a.py"} == {"totallyfakepkg"}
+
+
+@needs_go
+def test_go_known_prefixes_computed_once_per_call(tmp_path, monkeypatch):
+    (tmp_path / "go.mod").write_text("module example.com/app\n\ngo 1.22\n")
+    (tmp_path / "a.go").write_text('package a\nimport "github.com/ghost/pkg"\n')
+    (tmp_path / "b.go").write_text('package a\nimport "github.com/ghost/pkg"\n')
+
+    calls = []
+    original = deps._go_known_prefixes
+
+    def counting(root):
+        calls.append(root)
+        return original(root)
+
+    monkeypatch.setattr(deps, "_go_known_prefixes", counting)
+
+    deps.unknown_imports(tmp_path, ["a.go", "b.go"])
+    assert len(calls) == 1
