@@ -6,6 +6,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Callable
 
+from torsor_helper.languages import go as _go
 from torsor_helper.languages import javascript as _js
 from torsor_helper.languages import python as _py
 from torsor_helper.models import Symbol, SymbolEdge
@@ -31,6 +32,8 @@ LANGUAGES: dict[str, LanguageSpec] = {
                                requires=("tree_sitter", "tree_sitter_javascript")),
     "typescript": LanguageSpec("typescript", (".ts", ".tsx"), _js.extract,
                                requires=("tree_sitter", "tree_sitter_typescript")),
+    "go": LanguageSpec("go", (".go",), _go.extract, requires=("tree_sitter", "tree_sitter_go"),
+                       cross_file_resolver=_go.resolve_cross_file, imports=_go.imports),
 }
 
 

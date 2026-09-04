@@ -89,6 +89,9 @@ def compute_refs(symbols: list[Symbol], edges: list[SymbolEdge]) -> None:
     the old substring heuristic. Reused when merging a partial map into the full
     graph, so the whole (symbols, edges) union must be passed for counts to be
     correct — a subset would undercount cross-module references."""
+    for spec in languages.LANGUAGES.values():
+        if spec.cross_file_resolver is not None and languages.is_available(spec.name):
+            spec.cross_file_resolver(symbols, edges)
     # e.resolved_module is already the canonical dotted key (see SymbolEdge) —
     # never re-normalize it, only sym.module (a file path).
     counts: Counter[tuple[str, str]] = Counter(
