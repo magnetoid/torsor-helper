@@ -23,17 +23,17 @@ class LanguageSpec:
     requires: tuple[str, ...] = ()               # importable modules the extractor needs
     cross_file_resolver: Resolver | None = None  # run inside compute_refs over the whole graph
     complexity: Callable[[str, str], int] | None = None  # (text, module) -> proxy score
-    imports: Callable[[str], list[tuple[str, int]]] | None = None  # (specifier, line) for guard/deps
+    imports: Callable[[str, str], list[tuple[str, int]]] | None = None  # (text, module) -> (specifier, line)
 
 
 LANGUAGES: dict[str, LanguageSpec] = {
     "python": LanguageSpec("python", (".py",), _py.extract, complexity=_py.complexity),
     "javascript": LanguageSpec("javascript", (".js", ".jsx", ".mjs", ".cjs"), _js.extract,
                                requires=("tree_sitter", "tree_sitter_javascript"),
-                               complexity=_js.complexity),
+                               complexity=_js.complexity, imports=_js.imports),
     "typescript": LanguageSpec("typescript", (".ts", ".tsx"), _js.extract,
                                requires=("tree_sitter", "tree_sitter_typescript"),
-                               complexity=_js.complexity),
+                               complexity=_js.complexity, imports=_js.imports),
     "go": LanguageSpec("go", (".go",), _go.extract, requires=("tree_sitter", "tree_sitter_go"),
                        cross_file_resolver=_go.resolve_cross_file, imports=_go.imports,
                        complexity=_go.complexity),
@@ -96,4 +96,4 @@ def import_specifiers(relpath: str, text: str) -> list[tuple[str, int]]:
     spec = spec_for(relpath)
     if spec is None or spec.imports is None:
         return []
-    return spec.imports(text)
+    return spec.imports(text, relpath)

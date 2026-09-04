@@ -165,6 +165,24 @@ _IMPORTS = """
 """
 
 
+def imports(source: str, module: str = "") -> list[tuple[str, int]]:
+    """Every import/require specifier with its line, for guard/deps. Parses with
+    the grammar `module`'s extension implies (see `grammar_for`) — annotated
+    TypeScript on the same line as an import can error out of the plain JS
+    grammar (R12), so this must not hardcode the javascript grammar."""
+    grammar = grammar_for(module)
+    root = ts.parse(grammar, source).root_node
+    out: list[tuple[str, int]] = []
+    for m in ts.matches(grammar, root, _IMPORTS):
+        if "source" in m:
+            out.append((ts.text(m["source"][0]).strip("'\"`"), ts.line(m["source"][0])))
+    for n in ts.captures(grammar, root, "(import_statement source: (string) @s)").get("s", []):
+        pair = (ts.text(n).strip("'\"`"), ts.line(n))
+        if pair not in out:
+            out.append(pair)  # side-effect imports (`import './pkg'`) have no clause
+    return sorted(set(out), key=lambda p: p[1])
+
+
 def _refs_query(grammar: str) -> str:
     # `class X extends Base`: plain JS puts the identifier directly in
     # class_heritage; TS/TSX wrap it in an extends_clause with a `value` field.

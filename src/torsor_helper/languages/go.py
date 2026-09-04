@@ -49,7 +49,7 @@ def extract_symbols(source: str, module: str) -> list[Symbol]:
     return sorted(out, key=lambda s: s.line)
 
 
-def imports(source: str) -> list[tuple[str, int]]:
+def imports(source: str, module: str = "") -> list[tuple[str, int]]:
     root = ts.parse("go", source).root_node
     return [(ts.text(n).strip('"'), ts.line(n)) for n in ts.captures("go", root, _IMPORTS).get("path", [])]
 

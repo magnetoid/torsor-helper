@@ -47,6 +47,8 @@ def load_rules(store: Store) -> list[Rule]:
 
 
 def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
+    if not relpath.endswith(".py"):
+        return _forbid_import_specifiers(relpath, text, rule)
     try:
         tree = ast.parse(text)
     except SyntaxError:
@@ -76,6 +78,20 @@ def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
                 if hit(full):
                     out.append(_violation(rule, relpath, node.lineno, f"imports forbidden module '{full}'"))
                     break  # one violation per import statement
+    return out
+
+
+def _forbid_import_specifiers(relpath: str, text: str, rule: Rule) -> list[Violation]:
+    """Non-Python: match the rule's target as a prefix of the import specifier
+    string ('lodash', '../internal/db', 'example.com/app/internal'). Silent
+    when the language isn't available — never an error."""
+    from torsor_helper import languages
+
+    target = rule.target.rstrip("/")
+    out: list[Violation] = []
+    for spec, line in languages.import_specifiers(relpath, text):
+        if spec == target or spec.startswith(target + "/") or spec.startswith(target + "."):
+            out.append(_violation(rule, relpath, line, f"imports forbidden module '{spec}'"))
     return out
 
 
