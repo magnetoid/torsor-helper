@@ -22,7 +22,7 @@ class LanguageSpec:
     extractor: Extractor
     requires: tuple[str, ...] = ()               # importable modules the extractor needs
     cross_file_resolver: Resolver | None = None  # run inside compute_refs over the whole graph
-    complexity: Callable[[str], int] | None = None
+    complexity: Callable[[str, str], int] | None = None  # (text, module) -> proxy score
     imports: Callable[[str], list[tuple[str, int]]] | None = None  # (specifier, line) for guard/deps
 
 
@@ -79,12 +79,14 @@ def extractor_for(path) -> Extractor | None:
 
 def complexity(path: Path) -> int:
     """File-grained complexity proxy for any registered language; 0 when the
-    file is unreadable or its language isn't available."""
+    file is unreadable or its language isn't available. Passes the module name
+    through so a spec whose extensions span multiple grammars (JS/TS/TSX) can
+    pick the right one."""
     spec = spec_for(path)
     if spec is None or spec.complexity is None:
         return 0
     try:
-        return spec.complexity(Path(path).read_text(encoding="utf-8-sig"))
+        return spec.complexity(Path(path).read_text(encoding="utf-8-sig"), Path(path).name)
     except (OSError, UnicodeDecodeError):
         return 0
 

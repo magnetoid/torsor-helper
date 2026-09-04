@@ -49,6 +49,13 @@ def captures(name: str, node, query: str) -> dict[str, list]:
     return QueryCursor(_query(name, query)).captures(node)
 
 
+def branch_count(name: str, text: str, query: str) -> int:
+    """Number of `@b` captures a branch-node query matches over `text` — the
+    shared building block for each language's file-grained complexity proxy."""
+    root = parse(name, text).root_node
+    return len(captures(name, root, query).get("b", []))
+
+
 def matches(name: str, node, query: str) -> list[dict[str, list]]:
     from tree_sitter import QueryCursor
 

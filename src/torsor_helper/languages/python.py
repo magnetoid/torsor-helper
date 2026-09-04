@@ -177,7 +177,7 @@ def extract(source: str, module: str) -> tuple[list[Symbol], list[SymbolEdge]]:
 _DECISION_NODES = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.BoolOp)
 
 
-def complexity(text: str) -> int:
+def complexity(text: str, module: str = "") -> int:
     try:
         tree = ast.parse(text)
     except SyntaxError:

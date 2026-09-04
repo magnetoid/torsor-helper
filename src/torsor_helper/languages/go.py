@@ -132,6 +132,5 @@ _BRANCHES = """
 """
 
 
-def complexity(text: str) -> int:
-    root = ts.parse("go", text).root_node
-    return text.count("\n") + 1 + len(ts.captures("go", root, _BRANCHES).get("b", []))
+def complexity(text: str, module: str = "") -> int:
+    return text.count("\n") + 1 + ts.branch_count("go", text, _BRANCHES)

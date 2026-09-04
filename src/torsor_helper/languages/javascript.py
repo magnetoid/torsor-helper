@@ -18,13 +18,15 @@ _BRANCHES = """
 """
 
 
-def complexity(text: str) -> int:
+def complexity(text: str, module: str = "") -> int:
     """File-grained complexity proxy (ADR-consistent with python.py's): newline
-    count plus a branch-node count. The JS grammar parses TS/TSX branch
-    structure well enough for this count, keeping the proxy stable across
-    `.ts`/`.tsx`/`.js` with one grammar."""
-    root = ts.parse("javascript", text).root_node
-    return text.count("\n") + 1 + len(ts.captures("javascript", root, _BRANCHES).get("b", []))
+    count plus a branch-node count. Parses with the grammar `module`'s
+    extension implies (`.ts` → typescript, `.tsx` → tsx, else javascript) —
+    annotated TypeScript (type annotations, generics) reliably errors out of
+    the plain JS grammar, dropping branches inside the malformed subtree, so
+    picking the matching grammar is required, not just nice-to-have."""
+    grammar = grammar_for(module)
+    return text.count("\n") + 1 + ts.branch_count(grammar, text, _BRANCHES)
 
 
 def grammar_for(module: str) -> str:
