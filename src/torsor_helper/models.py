@@ -93,7 +93,11 @@ class SymbolEdge(BaseModel):
     # against another canonical key (e.g. norm_module(sym.module) for a symbol's
     # own file path).
     resolved_module: str | None = None
-    hint: str | None = None  # language-specific resolution hint (e.g. a Go import path); never persisted
+    # Language-specific resolution hint (e.g. the Go import path a `pkg.Fn` call
+    # was qualified by). PERSISTED (schema 7): the Go cross-file resolver branches
+    # on it, so an edge that lost its hint on the DB round-trip would look like a
+    # bare same-package call and resolve to the wrong symbol on a partial remap.
+    hint: str | None = None
 
 
 class Rule(BaseModel):

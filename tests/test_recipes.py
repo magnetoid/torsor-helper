@@ -21,7 +21,7 @@ def _store(tmp_path):
 
 def test_log_op_and_top_ops(tmp_path):
     conn = db.connect(tmp_path / "i.db")
-    assert db.SCHEMA_VERSION == 6
+    assert db.SCHEMA_VERSION == 7
     db.log_op(conn, "recall", "auth")
     db.log_op(conn, "recall", "auth")
     db.log_op(conn, "get_intent", "payments")

@@ -159,3 +159,17 @@ def test_this_method_and_reexport_do_not_error():
         "export { a } from './b';\nclass C { m() { return this.other(); } }\n", "c.ts")
     assert not any(e.referenced_name == "other" and e.resolved_module for e in edges)
     assert not any(e.referenced_name == "a" for e in edges)
+
+
+def test_imports_only_treats_require_calls_as_specifiers():
+    # A single-string call argument is not an import — `t('hello.world')` was
+    # reported as a specifier, inventing a phantom dependency.
+    out = js.imports("const g = t('hello.world');\nconst x = require('./x');\n", "a.ts")
+    assert out == [("./x", 2)]
+
+
+def test_imports_are_sorted_by_line_then_specifier():
+    src = "import b from './b';\nimport a from './a';\n"
+    assert js.imports(src, "a.ts") == [("./b", 1), ("./a", 2)]
+    same_line = "import {a} from './z'; import {b} from './y';\n"
+    assert js.imports(same_line, "a.ts") == [("./y", 1), ("./z", 1)]

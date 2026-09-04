@@ -174,13 +174,19 @@ def imports(source: str, module: str = "") -> list[tuple[str, int]]:
     root = ts.parse(grammar, source).root_node
     out: list[tuple[str, int]] = []
     for m in ts.matches(grammar, root, _IMPORTS):
+        # The last _IMPORTS pattern matches ANY single-string call assigned to a
+        # variable, so `const g = t('hello.world')` would otherwise be reported
+        # as the specifier "hello.world" (a phantom dep). Same gate _aliases uses.
+        if "_req" in m and ts.text(m["_req"][0]) != "require":
+            continue
         if "source" in m:
             out.append((ts.text(m["source"][0]).strip("'\"`"), ts.line(m["source"][0])))
     for n in ts.captures(grammar, root, "(import_statement source: (string) @s)").get("s", []):
         pair = (ts.text(n).strip("'\"`"), ts.line(n))
         if pair not in out:
             out.append(pair)  # side-effect imports (`import './pkg'`) have no clause
-    return sorted(set(out), key=lambda p: p[1])
+    # (line, spec): two imports on one line must come back in a stable order.
+    return sorted(set(out), key=lambda p: (p[1], p[0]))
 
 
 def _refs_query(grammar: str) -> str:

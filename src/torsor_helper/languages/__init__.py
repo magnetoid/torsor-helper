@@ -56,6 +56,16 @@ def available() -> dict[str, bool]:
     return {name: is_available(name) for name in LANGUAGES}
 
 
+def all_extensions() -> tuple[str, ...]:
+    """Every registered extension, whether or not the language is available —
+    for callers that need to recognise a source file (change discovery, the
+    unavailable-language count) rather than to extract from it."""
+    out: list[str] = []
+    for spec in LANGUAGES.values():
+        out.extend(spec.extensions)
+    return tuple(out)
+
+
 def source_extensions() -> tuple[str, ...]:
     out: list[str] = []
     for spec in LANGUAGES.values():

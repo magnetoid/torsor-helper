@@ -9,7 +9,7 @@ import numpy as np
 
 from torsor_helper.models import Symbol, SymbolEdge
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -45,7 +45,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE TABLE IF NOT EXISTS symbol_edges (
             caller TEXT, referenced_name TEXT, role TEXT,
-            module TEXT, resolved_module TEXT
+            module TEXT, resolved_module TEXT, hint TEXT
         );
         CREATE TABLE IF NOT EXISTS complexity_snapshot (
             file TEXT PRIMARY KEY, complexity INTEGER
@@ -65,6 +65,12 @@ def _create_schema(conn: sqlite3.Connection) -> None:
     for col, decl in (("status", "TEXT"), ("mtime_ns", "INTEGER"), ("size", "INTEGER")):
         if col not in cols:
             conn.execute(f"ALTER TABLE notes ADD COLUMN {col} {decl}")
+    # Same additive migration for `symbol_edges.hint` (schema 7): the Go
+    # resolver branches on it, so an edge that loses its hint on the round-trip
+    # is silently mis-resolved on the next partial map.
+    edge_cols = {r["name"] for r in conn.execute("PRAGMA table_info(symbol_edges)")}
+    if "hint" not in edge_cols:
+        conn.execute("ALTER TABLE symbol_edges ADD COLUMN hint TEXT")
     # Always stamp the current version: tables are created additively via
     # CREATE TABLE IF NOT EXISTS, so an upgraded DB must report the live version.
     meta_set(conn, "schema_version", str(SCHEMA_VERSION))
@@ -263,8 +269,9 @@ def replace_all_symbols(conn, symbols):
 def replace_all_edges(conn, edges):
     conn.execute("DELETE FROM symbol_edges")
     conn.executemany(
-        "INSERT INTO symbol_edges(caller, referenced_name, role, module, resolved_module) VALUES(?,?,?,?,?)",
-        [(e.caller, e.referenced_name, e.role, e.module, e.resolved_module) for e in edges],
+        "INSERT INTO symbol_edges(caller, referenced_name, role, module, resolved_module, hint) "
+        "VALUES(?,?,?,?,?,?)",
+        [(e.caller, e.referenced_name, e.role, e.module, e.resolved_module, e.hint) for e in edges],
     )
     conn.commit()
 
@@ -357,11 +364,11 @@ def load_symbols(conn) -> list[Symbol]:
 def load_edges(conn) -> list[SymbolEdge]:
     """Full SymbolEdge objects for every recorded reference edge."""
     rows = conn.execute(
-        "SELECT caller, referenced_name, role, module, resolved_module FROM symbol_edges"
+        "SELECT caller, referenced_name, role, module, resolved_module, hint FROM symbol_edges"
     ).fetchall()
     return [
         SymbolEdge(caller=r["caller"], referenced_name=r["referenced_name"], role=r["role"],
-                   module=r["module"], resolved_module=r["resolved_module"])
+                   module=r["module"], resolved_module=r["resolved_module"], hint=r["hint"])
         for r in rows
     ]
 

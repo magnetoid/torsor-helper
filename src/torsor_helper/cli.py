@@ -183,17 +183,21 @@ def map(
     config = load_config(paths)
     store = Store(paths)
     stats = ops.map_repo(store, config, force=force)
-    lang_summary = ", ".join(f"{k} {v}" for k, v in stats["languages"].items())
+    langs = dict(stats["languages"])
+    unavailable = langs.pop("unavailable", {})
+    parts = [f"{k} {v}" for k, v in langs.items()]
+    parts += [f"{k} {v} — install torsor-helper[languages]" for k, v in unavailable.items()]
+    lang_summary = f" · {', '.join(parts)}" if parts else ""
     if stats.get("skipped"):
         typer.echo(
             f"Map up to date ({stats['symbols']} symbol(s), {stats['modules']} module(s)) — nothing changed."
-            f" · {lang_summary}"
+            f"{lang_summary}"
         )
     else:
         typer.echo(
             f"Mapped {stats['symbols']} symbol(s) across {stats['modules']} module(s) "
             f"({stats['edges']} reference edge(s))."
-            f" · {lang_summary}"
+            f"{lang_summary}"
         )
 
 

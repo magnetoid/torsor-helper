@@ -188,7 +188,7 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
                 "modules": len(db.modules(conn)),
                 "symbols": conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0],
                 "edges": conn.execute("SELECT COUNT(*) FROM symbol_edges").fetchone()[0],
-                "languages": _language_counts(db.modules(conn)),
+                "languages": _language_counts(db.modules(conn), store.paths.root),
             }
 
         symbols, edges = cartographer.scan_repo_with_edges(store.paths.root, paths)
@@ -231,19 +231,39 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
         "modules": len({s.module for s in symbols}),
         "symbols": len(symbols),
         "edges": len(edges),
-        "languages": _language_counts(sorted({s.module for s in symbols})),
+        "languages": _language_counts(sorted({s.module for s in symbols}), store.paths.root),
     }
 
 
-def _language_counts(modules) -> dict[str, int]:
+def _language_counts(modules, root=None) -> dict:
+    """Mapped module count per available language, plus — under "unavailable" —
+    the number of files of each language the map CANNOT see because the
+    `[languages]` extra isn't installed. Zero-file languages are omitted, so the
+    gap is surfaced only when it's real (spec: Degradation & discoverability)."""
     from torsor_helper import languages
 
-    counts: dict[str, int] = {}
+    counts: dict = {}
     for m in modules:
         spec = languages.spec_for(m)
         if spec is not None:
             counts[spec.name] = counts.get(spec.name, 0) + 1
+    counts["unavailable"] = _unavailable_language_counts(root) if root is not None else {}
     return counts
+
+
+def _unavailable_language_counts(root) -> dict[str, int]:
+    from torsor_helper import languages
+
+    missing = {name for name in languages.LANGUAGES if not languages.is_available(name)}
+    if not missing:
+        return {}
+    by_ext = {ext: name for name in missing for ext in languages.LANGUAGES[name].extensions}
+    counts: dict[str, int] = {}
+    for path in cartographer.iter_files(root, skip_hidden=True):  # one walk
+        name = by_ext.get(path.suffix)
+        if name is not None:
+            counts[name] = counts.get(name, 0) + 1
+    return dict(sorted(counts.items()))
 
 
 def export_project(store: Store, config: TorsorConfig) -> dict:
@@ -759,10 +779,15 @@ def record_decision(store, title, context, decision, consequences="", rules=None
     return str(target)
 
 
-# Extensions the default git-changed discovery feeds to guard/deps. Non-Python
-# files only ever match forbid_pattern rules scoped to them (AST checkers and
-# the deps check no-op gracefully on non-Python sources).
-_SOURCE_EXTS = (".py", ".pyi", ".js", ".jsx", ".mjs", ".ts", ".tsx", ".go", ".rs")
+def _source_exts() -> tuple[str, ...]:
+    """Extensions the default git-changed discovery feeds to guard/deps. Derived
+    from the language registry (every registered extension, available or not —
+    an unavailable language's files still match `forbid_pattern` rules scoped to
+    them), plus `.pyi` and `.rs`, which no extractor claims but which teams do
+    write `forbid_pattern` rules against."""
+    from torsor_helper import languages
+
+    return tuple(dict.fromkeys(languages.all_extensions() + (".pyi", ".rs")))
 
 
 def list_practices(store, config, language=None) -> str:
@@ -821,9 +846,10 @@ def _rel_to_root(root, toplevel, files) -> list[str]:
     from pathlib import Path
 
     top, base = Path(toplevel), Path(root).resolve()
+    exts = _source_exts()
     out: list[str] = []
     for f in files:
-        if not f.endswith(_SOURCE_EXTS):
+        if not f.endswith(exts):
             continue
         try:
             out.append((top / f).relative_to(base).as_posix())

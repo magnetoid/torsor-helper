@@ -88,6 +88,8 @@ def _forbid_import_specifiers(relpath: str, text: str, rule: Rule) -> list[Viola
     from torsor_helper import languages
 
     target = rule.target.rstrip("/")
+    if not target:
+        return []  # an empty target would prefix-match every specifier
     out: list[Violation] = []
     for spec, line in languages.import_specifiers(relpath, text):
         if spec == target or spec.startswith(target + "/") or spec.startswith(target + "."):

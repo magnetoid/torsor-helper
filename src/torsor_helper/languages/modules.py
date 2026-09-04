@@ -7,6 +7,14 @@ SOURCE_SUFFIXES = (".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".go")
 
 
 def strip_suffix(module: str) -> str:
+    """`.py` comes off any key. A NON-Python suffix comes off only a path-shaped
+    key (one containing "/"), because a dotted *module* name may legitimately end
+    in a foreign suffix — `torsor_helper.languages.go`, `app.models.js` — and
+    truncating it to `torsor_helper.languages` breaks reference resolution."""
+    if module.endswith(".py"):
+        return module[: -len(".py")]
+    if "/" not in module:
+        return module
     for suffix in SOURCE_SUFFIXES:
         if module.endswith(suffix):
             return module[: -len(suffix)]

@@ -180,3 +180,12 @@ def test_go_known_prefixes_computed_once_per_call(tmp_path, monkeypatch):
 
     deps.unknown_imports(tmp_path, ["a.go", "b.go"])
     assert len(calls) == 1
+
+
+@needs_ts
+def test_translation_helper_call_is_not_a_phantom_import(tmp_path):
+    # `t('nav.home')` is a plain function call, not a require() — it used to be
+    # reported as the phantom dependency "nav.home".
+    (tmp_path / "package.json").write_text(json.dumps({"dependencies": {}}))
+    (tmp_path / "a.ts").write_text("const label = t('nav.home');\nexport const x = label;\n")
+    assert deps.unknown_imports(tmp_path, ["a.ts"]) == []
