@@ -69,15 +69,12 @@ def check_uncharted_language(store: Store) -> list[Recommendation]:
     from torsor_helper import languages
 
     counts: dict[str, int] = {}
-    for path in store.paths.root.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(store.paths.root).parts
-        if any(part in cartographer.DEFAULT_IGNORE or part.startswith(".") for part in rel[:-1]):
-            continue
+    for path in cartographer.iter_files(store.paths.root, skip_hidden=True):
         for spec in languages.LANGUAGES.values():
-            if path.suffix in spec.extensions and not languages.is_available(spec.name):
-                counts[spec.name] = counts.get(spec.name, 0) + 1
+            if path.suffix in spec.extensions:
+                if not languages.is_available(spec.name):
+                    counts[spec.name] = counts.get(spec.name, 0) + 1
+                break
     out: list[Recommendation] = []
     for name, n in sorted(counts.items()):
         if n >= _UNCHARTED_LANGUAGE_MIN_FILES:

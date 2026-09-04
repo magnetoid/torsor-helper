@@ -231,7 +231,7 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
         "modules": len({s.module for s in symbols}),
         "symbols": len(symbols),
         "edges": len(edges),
-        "languages": _language_counts({s.module for s in symbols}),
+        "languages": _language_counts(sorted({s.module for s in symbols})),
     }
 
 

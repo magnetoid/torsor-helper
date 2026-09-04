@@ -15,9 +15,8 @@ absorbs pre-existing debt.
 from __future__ import annotations
 
 from collections import Counter
-from pathlib import Path
 
-from torsor_helper.cartographer import DEFAULT_IGNORE
+from torsor_helper.cartographer import iter_files
 
 # ---------------------------------------------------------------------------
 # Pack data. `rule` is a guard-rule dict (kind/target/scope/severity/message)
@@ -427,15 +426,9 @@ def available_languages() -> list[str]:
 def detect_languages(root) -> list[str]:
     """Languages present in the repo (by source-file extension count, ignoring
     vendored/dot dirs), restricted to languages we ship a pack for."""
-    root = Path(root)
     counts: Counter[str] = Counter()
     ext_to_lang = {ext: lang for lang, p in PACKS.items() for ext in p["extensions"]}
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root).parts
-        if any(part in DEFAULT_IGNORE or part.startswith(".") for part in rel[:-1]):
-            continue
+    for path in iter_files(root, skip_hidden=True):
         lang = ext_to_lang.get(path.suffix)
         if lang:
             counts[lang] += 1

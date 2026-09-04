@@ -19,18 +19,27 @@ DEFAULT_IGNORE = {
 }
 
 
-def iter_source_files(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> list[Path]:
+def iter_files(root: Path, ignore: set[str] = DEFAULT_IGNORE, *, skip_hidden: bool = False) -> list[Path]:
+    """Every file under `root` not inside an ignored directory, sorted. With
+    skip_hidden, dot-directories are skipped too (the Coach/practices walks
+    want that; the map does not — `.github/scripts/x.py` is real code)."""
     root = Path(root)
-    exts = set(languages.source_extensions())
     out: list[Path] = []
     for path in sorted(root.rglob("*")):
-        if path.suffix not in exts or not path.is_file():
+        if not path.is_file():
             continue
-        rel_parts = path.relative_to(root).parts
-        if any(part in ignore for part in rel_parts):
+        dir_parts = path.relative_to(root).parts[:-1]
+        if any(part in ignore for part in dir_parts):
+            continue
+        if skip_hidden and any(part.startswith(".") for part in dir_parts):
             continue
         out.append(path)
     return out
+
+
+def iter_source_files(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> list[Path]:
+    exts = set(languages.source_extensions())
+    return [p for p in iter_files(root, ignore) if p.suffix in exts]
 
 
 def repo_fingerprint(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> str:
