@@ -392,6 +392,41 @@ ADR 0013, `[languages]` extra, `__version__ = "0.7.0"`, +3,131/−777 lines, 12 
 Verified today in the worktree: tests green **with and without** `--extra languages`,
 `torsor guard --strict` clean, ruff clean. This is the highest-value single action in the plan.
 
+> **Review outcome (2026-09-20, after this plan was written): DO NOT MERGE YET.**
+> A review plus two hand-built reproductions found two confirmed, silent correctness
+> bugs. Both are small fixes; both are untested by the branch's own suite.
+>
+> **Blocker 1 — JS/TS reference resolution breaks for files at the repo root.**
+> `languages/modules.py:strip_suffix` strips a non-Python suffix only from a key
+> containing `/`, so a root-level `helper.ts` normalizes to `helper.ts` while the
+> import resolver's `./helper` normalizes to `helper`. The two keys for the same
+> file never meet. Reproduced: identical code in `web/` gives `impact=1`, at the
+> repo root gives `impact=0`, with `refs=0` and no error. This silently breaks
+> `impact`, `refs`, `connect`, hub detection and the Mermaid export for any flat
+> JS/TS layout — the exact consumers the branch advertises as widening for free.
+> The `/` gate does protect a real case (`norm_module("torsor_helper.languages.go")`
+> must not truncate to `torsor_helper.languages`), so the fix is to strip when the
+> stem contains no `.`, not to strip unconditionally. Add a regression test that
+> mirrors `test_multilang_seams.py` with both files at `tmp_path` root.
+>
+> **Blocker 2 — Go's cross-file resolver is sticky, violating ADR 0008.**
+> `languages/go.py:resolve_cross_file` skips any edge whose `resolved_module` is
+> already set, and the partial-map merge reloads old edges from the index with
+> their resolutions intact. Move a Go function to a sibling file in the same
+> package and let the post-commit hook partial-map only the two touched files:
+> the untouched caller's edge still points at the old file. Reproduced — partial
+> gives `pkg.a`, a full remap gives `pkg.b`. ADR 0008 requires the two to be
+> byte-identical, and this returns a *wrong* answer, not a missing one. Fix:
+> either re-resolve unconditionally in `resolve_cross_file`, or clear
+> `resolved_module` on edges of languages that have a cross-file resolver before
+> `compute_refs` runs on the merged graph.
+>
+> Non-blocking, worth folding in: `practices.py`'s `PACKS` still lists JavaScript
+> extensions without `.cjs`, which the new registry has — the two-registry drift
+> (D9) is now real. And the design spec's example scope `src/**/*.ts` does not
+> match `src/index.ts` under `fnmatch` (B6); the branch's own tests correctly use
+> `**/*.ts`, but the spec example will mislead anyone who copies it.
+
 Steps:
 1. Run `/code-review` (or a reviewer agent) on `main..worktree-feat-multi-language-map` with
    the spec as the contract; pay attention to B6 (fnmatch `**` — check how the branch's
