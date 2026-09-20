@@ -9,7 +9,7 @@ updated: '2026-09-03T21:10:00'
 rules:
 - kind: forbid_pattern
   target: shutil\.rmtree
-  scope: src/torsor_helper/operations.py
+  scope: src/torsor_helper/operations/*.py
   severity: error
   message: "recursive deletion belongs in cleaner.py (ADR 0011) — operations.py orchestrates a plan, it never removes trees itself"
 ---

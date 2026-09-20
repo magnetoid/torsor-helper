@@ -13,7 +13,7 @@ rules:
   message: nothing should import the CLI entry point
 - kind: forbid_import
   target: torsor_helper.server
-  scope: src/torsor_helper/operations.py
+  scope: src/torsor_helper/operations/*.py
   message: operations (core) must not import the MCP server adapter
 - kind: forbid_import
   target: torsor_helper.operations
