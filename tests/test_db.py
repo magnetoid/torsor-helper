@@ -102,3 +102,34 @@ def test_hot_queries_are_index_backed_not_full_scans(tmp_path):
             assert "USING INDEX" in plan or "USING COVERING INDEX" in plan, f"{label}: {plan}"
     finally:
         conn.close()
+
+
+def test_connect_skips_the_schema_pass_on_an_already_current_db(tmp_path):
+    """_create_schema is a write transaction, and every CLI command and every
+    recall opens a connection — running it unconditionally meant a write before
+    any read."""
+    path = tmp_path / "i.db"
+    db.connect(path).close()
+
+    calls = []
+    original = db._create_schema
+    db._create_schema = lambda conn: (calls.append(1), original(conn))[1]
+    try:
+        db.connect(path).close()
+    finally:
+        db._create_schema = original
+    assert calls == []
+
+
+def test_connect_still_runs_the_schema_pass_when_the_stamp_is_older(tmp_path):
+    path = tmp_path / "i.db"
+    conn = db.connect(path)
+    db.meta_set(conn, "schema_version", "1")
+    conn.commit()
+    conn.close()
+
+    conn = db.connect(path)
+    try:
+        assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION
+    finally:
+        conn.close()

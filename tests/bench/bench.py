@@ -22,11 +22,17 @@ from torsor_helper import db, operations as ops  # noqa: E402
 from torsor_helper.config import TorsorConfig  # noqa: E402
 
 
-def timed(label, fn, repeat=3):
+def timed(label, fn, repeat=6):
+    """Report min AND spread. Some of these paths swing 4x run to run on the
+    same code and the same corpus (find and impact both walk the filesystem),
+    so a single number reads as precision that is not there — and a change
+    inside the spread proves nothing either way."""
     fn()  # warm
-    best = min(_once(fn) for _ in range(repeat))
-    print(f"{label:<44} {best * 1000:8.1f} ms")
-    return best
+    times = sorted(_once(fn) for _ in range(repeat))
+    lo, hi = times[0] * 1000, times[-1] * 1000
+    flag = "   <- noisy, do not compare" if hi > lo * 1.5 else ""
+    print(f"{label:<40} {lo:8.1f} ms  (max {hi:7.1f}){flag}")
+    return lo
 
 
 def _once(fn):

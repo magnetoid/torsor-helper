@@ -22,8 +22,36 @@ def connect(path: Path) -> sqlite3.Connection:
     # "database is locked" failures under that contention.
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=10000")
+    # WAL already gives durability across process crashes; FULL additionally
+    # fsyncs on every commit, which recall pays on its access bumps.
+    conn.execute("PRAGMA synchronous=NORMAL")
+    if _schema_is_current(conn):
+        return conn
     _create_schema(conn)
     return conn
+
+
+def _schema_is_current(conn: sqlite3.Connection) -> bool:
+    """True when this DB was already built by this version.
+
+    Every CLI command and every recall opens a connection, and _create_schema is
+    a write transaction — ten CREATEs, two PRAGMA table_info, a meta write and a
+    commit — so running it unconditionally meant a write (and an fsync) before
+    any read. A missing meta table, an older stamp or any error all fall through
+    to the full path, which is idempotent.
+
+    The trade-off: the stamp is now trusted, so **a change to the schema must
+    come with a SCHEMA_VERSION bump**. An unbumped change used to be absorbed
+    silently by the unconditional rebuild; now it would never reach an index
+    that already exists."""
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+    except sqlite3.Error:
+        return False
+    try:
+        return row is not None and int(row["value"]) == SCHEMA_VERSION
+    except (TypeError, ValueError):
+        return False
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:

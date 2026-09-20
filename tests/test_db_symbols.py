@@ -52,15 +52,21 @@ def test_edge_hint_round_trips(tmp_path):
 def test_edge_hint_column_is_added_to_a_pre_existing_db(tmp_path):
     # Additive migration: a DB created before `hint` existed must gain the
     # column rather than blow up (the index is disposable, but not deleted).
+    #
+    # A real old DB carries an old stamp as well as an old shape, and both
+    # matter: connect() now skips the schema build when the stamp already says
+    # current, so a schema change MUST come with a SCHEMA_VERSION bump.
     path = tmp_path / "torsor.db"
     conn = db.connect(path)
     conn.execute("ALTER TABLE symbol_edges DROP COLUMN hint")
+    db.meta_set(conn, "schema_version", str(db.SCHEMA_VERSION - 1))
     conn.commit()
     conn.close()
 
     conn = db.connect(path)
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(symbol_edges)")}
     assert "hint" in cols
+    assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION
 
 
 def test_replace_all_symbols_is_idempotent(tmp_path):
