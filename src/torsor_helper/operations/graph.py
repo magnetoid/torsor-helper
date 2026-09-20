@@ -1,0 +1,216 @@
+"""Everything that reads or writes the symbol graph.
+
+map_repo builds it, and impact/connect/find/export consume it. The graph
+queries live beside the mapper rather than in the facade because they share one
+non-obvious rule: `SymbolEdge.resolved_module` is already a canonical dotted
+key, so a consumer compares it against `norm_path(sym.module)` and never
+re-normalizes it."""
+from __future__ import annotations
+
+from collections import deque
+
+from torsor_helper import cartographer, db, export as _export, finder, languages
+from torsor_helper.budget import cap_items
+from torsor_helper.config import TorsorConfig
+from torsor_helper.indexer import reindex
+from torsor_helper.operations._shared import _embedder_for, _log_op
+from torsor_helper.paths import contained
+from torsor_helper.models import Frontmatter
+from torsor_helper.store import Store
+
+
+def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None, force: bool = False) -> dict:
+    full_scan = paths is None
+    fingerprint = cartographer.repo_fingerprint(store.paths.root) if full_scan else None
+
+    conn = db.connect(store.paths.index_db)
+    try:
+        # Skip the whole scan+render+reindex when the repo is byte-for-byte
+        # unchanged since the last full map (a partial `paths` map never skips).
+        if full_scan and not force and fingerprint == db.meta_get(conn, "map_fingerprint"):
+            return {
+                "skipped": True,
+                "modules": len(db.modules(conn)),
+                "symbols": conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0],
+                "edges": conn.execute("SELECT COUNT(*) FROM symbol_edges").fetchone()[0],
+                "languages": _language_counts(db.modules(conn), store.paths.root),
+            }
+
+        symbols, edges = cartographer.scan_repo_with_edges(store.paths.root, paths)
+        if not full_scan:
+            # Merge the rescanned modules into the existing graph rather than
+            # replacing it wholesale, then recompute refs across the union so
+            # cross-module counts to/from unscanned modules stay correct. The
+            # result is identical to a pristine full remap. (Truly incremental,
+            # skip-unchanged mapping is I-20 / the tree-sitter fast-follow.)
+            scanned = cartographer.scanned_modules(store.paths.root, paths)
+            symbols = [s for s in db.load_symbols(conn) if s.module not in scanned] + symbols
+            edges = [e for e in db.load_edges(conn) if e.module not in scanned] + edges
+            cartographer.compute_refs(symbols, edges)
+
+        rendered = cartographer.render_map(
+            symbols,
+            overview_tokens=config.budgets.bootstrap_tokens,
+            chars_per_token=config.budgets.chars_per_token,
+        )
+        for relpath, (title, body) in rendered.items():
+            # The key is rendered from a module path, so it should never escape
+            # map/ — but this is a write, and a rendering bug would make it an
+            # arbitrary one. Cheap to assert, expensive to discover.
+            target = contained(store.paths.map_dir, relpath)
+            if target is None:
+                continue
+            store.write_note(target, Frontmatter(type="map", status="derived", tags=["map"]), title, body)
+
+        db.replace_all_symbols(conn, symbols)
+        db.replace_all_edges(conn, edges)
+        reindex(store, conn, _embedder_for(config))
+        if full_scan:
+            db.meta_set(conn, "map_fingerprint", fingerprint)
+        else:
+            # The stored fingerprint reflects the last full scan; a partial map
+            # doesn't re-verify the whole tree, so clear it to force the next
+            # full map to actually run rather than falsely skip.
+            db.meta_set(conn, "map_fingerprint", "")
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "skipped": False,
+        "modules": len({s.module for s in symbols}),
+        "symbols": len(symbols),
+        "edges": len(edges),
+        "languages": _language_counts(sorted({s.module for s in symbols}), store.paths.root),
+    }
+
+def _language_counts(modules, root=None) -> dict:
+    """Mapped module count per available language, plus — under "unavailable" —
+    the number of files of each language the map CANNOT see because the
+    `[languages]` extra isn't installed. Zero-file languages are omitted, so the
+    gap is surfaced only when it's real (spec: Degradation & discoverability)."""
+    counts: dict = {}
+    for m in modules:
+        spec = languages.spec_for(m)
+        if spec is not None:
+            counts[spec.name] = counts.get(spec.name, 0) + 1
+    counts["unavailable"] = _unavailable_language_counts(root) if root is not None else {}
+    return counts
+
+def _unavailable_language_counts(root) -> dict[str, int]:
+    missing = {name for name in languages.LANGUAGES if not languages.is_available(name)}
+    if not missing:
+        return {}
+    by_ext = {ext: name for name in missing for ext in languages.LANGUAGES[name].extensions}
+    counts: dict[str, int] = {}
+    for path in cartographer.iter_files(root, skip_hidden=True):  # one walk
+        name = by_ext.get(path.suffix)
+        if name is not None:
+            counts[name] = counts.get(name, 0) + 1
+    return dict(sorted(counts.items()))
+
+def export_project(store: Store, config: TorsorConfig) -> dict:
+    return _export.export_project(store, config)
+
+def find_targets(store: Store, config: TorsorConfig, query: str, *, mode: str = "fuzzy",
+                 limit: int = 20, include_files: bool = True, include_symbols: bool = True) -> list:
+    """Fuzzy/literal/regex find over repo files + mapped symbols, frecency-ranked."""
+    _log_op(store, "find_files", query)
+    return finder.find(store, config, query, mode=mode, limit=limit,
+                       include_files=include_files, include_symbols=include_symbols)
+
+def impact(store: Store, config: TorsorConfig, symbol: str, *, limit: int | None = None) -> dict:
+    """Blast radius of a symbol: who references it, across files, via the
+    cartographer's resolved reference edges. Read-only over the existing index
+    (run `torsor map` first). Empty when the index/symbol is absent.
+
+    `count` is always the true number of callers — that is the signal worth
+    paying for. `callers` is capped at `limit` (default `budgets.max_items`)
+    because a hub symbol otherwise renders hundreds of lines; `truncated` says
+    how many were withheld."""
+    _log_op(store, "impact", symbol)
+    empty = {"symbol": symbol, "callers": [], "count": 0, "truncated": 0}
+    if not store.paths.index_db.exists():
+        return empty
+    base = symbol.split(".")[-1]
+    conn = db.connect(store.paths.index_db)
+    try:
+        syms = db.search_symbols(conn, base, limit=50)
+        exact = [s for s in syms if s.name == symbol]
+        matches = exact or [s for s in syms if s.name.split(".")[-1] == base]
+        modules = {cartographer.norm_path(s.module) for s in matches}
+
+        callers: list[dict] = []
+        seen: set[tuple[str, str]] = set()
+        for dotted in modules:
+            for caller, module in db.who_references(conn, dotted, base):
+                if (caller, module) not in seen:
+                    seen.add((caller, module))
+                    callers.append({"caller": caller, "module": module})
+    finally:
+        conn.close()
+
+    callers.sort(key=lambda c: (c["module"], c["caller"]))
+    cap = config.budgets.max_items if limit is None else limit
+    kept, _ = cap_items(callers, cap)
+    return {"symbol": symbol, "callers": kept, "count": len(callers),
+            "truncated": len(callers) - len(kept)}
+
+def connect(store: Store, config: TorsorConfig, source: str, target: str, *, max_hops: int | None = None) -> dict:
+    """Shortest directed path through the symbol call graph from `source` to
+    `target` (who-calls-what), via the cartographer's resolved reference edges.
+    Read-only over the existing index (run `torsor map` first). `found` is False
+    when the index is absent, either endpoint is unknown, or no directed path
+    exists. Bounded by `max_hops` so output stays token-thrifty on dense graphs."""
+    max_hops = config.index.connect_max_hops if max_hops is None else max_hops
+    _log_op(store, "connect", f"{source} -> {target}")
+    empty = {"source": source, "target": target, "path": [], "hops": 0, "found": False}
+    if not store.paths.index_db.exists():
+        return empty
+    src = source.split(".")[-1]
+    dst = target.split(".")[-1]
+
+    conn = db.connect(store.paths.index_db)
+    try:
+        src_syms = [s for s in db.search_symbols(conn, src, limit=50)
+                    if s.name.split(".")[-1] == src]
+        if not src_syms:
+            return empty
+        start_module = cartographer.norm_path(src_syms[0].module)
+        if src == dst:
+            return {"source": source, "target": target,
+                    "path": [{"symbol": src, "module": start_module}], "hops": 0, "found": True}
+        # adjacency: caller name -> [(referenced_name, resolved_module)]
+        # `mod` is already the canonical resolved_module key — never re-normalize it.
+        adj: dict[str, list[tuple[str, str]]] = {}
+        for caller, ref, mod in db.call_graph_edges(conn):
+            adj.setdefault(caller, []).append((ref, mod))
+    finally:
+        conn.close()
+
+    # Breadth-first search yields the shortest hop-count path. `prev` doubles as
+    # the visited set and records each node's parent + the module it resolved into.
+    prev: dict[str, tuple[str | None, str]] = {src: (None, start_module)}
+    queue: deque[tuple[str, int]] = deque([(src, 0)])
+    while queue:
+        node, depth = queue.popleft()
+        if node == dst:
+            break
+        if depth >= max_hops:
+            continue
+        for ref, mod in adj.get(node, []):
+            if ref not in prev:
+                prev[ref] = (node, mod)
+                queue.append((ref, depth + 1))
+
+    if dst not in prev:
+        return empty
+
+    chain: list[dict] = []
+    node: str | None = dst
+    while node is not None:
+        parent, mod = prev[node]
+        chain.append({"symbol": node, "module": mod})
+        node = parent
+    chain.reverse()
+    return {"source": source, "target": target, "path": chain, "hops": len(chain) - 1, "found": True}

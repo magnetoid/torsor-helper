@@ -168,3 +168,16 @@ def test_primer_write(tmp_path):
     result = runner.invoke(app, ["primer", "--root", str(tmp_path), "--write", str(target)])
     assert result.exit_code == 0, result.output
     assert target.exists() and "torsor:primer" in target.read_text()
+
+
+def test_root_falls_back_to_the_torsor_root_env_var(tmp_path, monkeypatch):
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setenv("TORSOR_ROOT", str(tmp_path))
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 0, result.output
+
+
+def test_root_has_a_short_flag(tmp_path):
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["doctor", "-r", str(tmp_path)])
+    assert result.exit_code == 0, result.output

@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-04T15:38:11'
-updated: '2026-09-04T15:38:11'
+created: '2026-09-20T21:54:01'
+updated: '2026-09-20T21:54:01'
 ---
 
 # src/torsor_helper/languages/go.py
@@ -20,4 +20,4 @@ Symbols in `src/torsor_helper/languages/go.py`.
 - L75 `extract_edges(source: str, module: str)` (function)
 - L98 `extract(source: str, module: str)` (function)
 - L102 `resolve_cross_file(symbols: list[Symbol], edges: list[SymbolEdge])` (function) — Fill `resolved_module` for Go edges the single-file pass couldn't: a bare
-- L135 `complexity(text: str, module: str='')` (function)
+- L143 `complexity(text: str, module: str='')` (function)

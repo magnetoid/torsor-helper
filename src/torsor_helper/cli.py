@@ -7,6 +7,7 @@ import typer
 
 from torsor_helper import db
 from torsor_helper import operations as ops
+from torsor_helper import render
 from torsor_helper.clients import SUPPORTED_CLIENTS, config_location, config_snippet, instructions_file
 from torsor_helper.config import TorsorConfig, load_config, save_config
 from torsor_helper.embeddings import get_embedder
@@ -49,9 +50,35 @@ def _main(
     """torsor-helper: persistent memory + architectural intent over MCP."""
 
 
+def _load(root: Path, *, config: bool = True):
+    """(paths, config, store) for a command, or exit 1 if the project is not
+    initialized. Every command needs exactly this, and copy-pasting it 21 times
+    is how `recipes` ended up skipping load_config and silently diverging.
+
+    `config=False` keeps the two commands that never read torsor.toml working on
+    a project whose config is malformed — they have no reason to care.
+    """
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
+        raise typer.Exit(code=1)
+    return tp, (load_config(tp) if config else None), Store(tp)
+
+
+def _emit(payload, as_json: bool) -> bool:
+    """Print `payload` as JSON when asked. Returns True when it did, so a caller
+    can skip its prose rendering: `if _emit(x, as_json): return`."""
+    if not as_json:
+        return False
+    import json
+
+    typer.echo(json.dumps(payload, default=str))
+    return True
+
+
 @app.command()
 def init(
-    root: Path = typer.Option(Path("."), help="Project root to scaffold .torsor/ in."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root to scaffold .torsor/ in."),
     client: Optional[str] = typer.Option(None, help=f"Print MCP config for: {', '.join(SUPPORTED_CLIENTS)}"),
     write: bool = typer.Option(False, "--write", help="Write/merge a project .mcp.json so clients (Claude Code, Cursor, ...) auto-detect torsor-helper."),
     force: bool = typer.Option(False, help="Overwrite existing seed files."),
@@ -83,7 +110,7 @@ _LOOPBACK = ("127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1")
 
 @app.command()
 def mcp(
-    root: Path = typer.Option(Path("."), help="Project root containing .torsor/."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     http: bool = typer.Option(False, "--http", help="Serve over HTTP (streamable-http) instead of stdio — for shared/remote/team use."),
     host: str = typer.Option("127.0.0.1", help="Host to bind when --http."),
     port: int = typer.Option(8000, help="Port to bind when --http."),
@@ -139,7 +166,7 @@ def update(
 
 
 @app.command()
-def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) -> None:
+def doctor(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/.")) -> None:
     """Verify a torsor-helper project is healthy."""
     paths = TorsorPaths(root)
     if not paths.base.exists():
@@ -167,16 +194,11 @@ def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) 
 
 @app.command()
 def index(
-    root: Path = typer.Option(Path("."), help="Project root containing .torsor/."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     full: bool = typer.Option(False, help="Rebuild every note's embedding, ignoring the hash cache."),
 ) -> None:
     """Build or refresh the derived search index."""
-    paths = TorsorPaths(root)
-    if not paths.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(paths)
-    store = Store(paths)
+    paths, config, store = _load(root)
     conn = db.connect(paths.index_db)
     try:
         stats = reindex(store, conn, get_embedder(config), full=full)
@@ -187,16 +209,11 @@ def index(
 
 @app.command()
 def map(
-    root: Path = typer.Option(Path("."), help="Project root to map."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     force: bool = typer.Option(False, "--force", help="Re-scan even if no source file changed."),
 ) -> None:
     """Generate the repository symbol map under .torsor/map/."""
-    paths = TorsorPaths(root)
-    if not paths.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(paths)
-    store = Store(paths)
+    paths, config, store = _load(root)
     stats = ops.map_repo(store, config, force=force)
     langs = dict(stats["languages"])
     unavailable = langs.pop("unavailable", {})
@@ -219,23 +236,18 @@ def map(
 @app.command()
 def impact(
     symbol: str = typer.Argument(..., help="Symbol name to trace (e.g. a function/class name)."),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     limit: int = typer.Option(0, "--limit", help="Max callers to list (0 = budgets.max_items)."),
 ) -> None:
     """Show the blast radius of a symbol — who references it, across files (run `torsor map` first)."""
-    paths = TorsorPaths(root)
-    if not paths.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(paths)
-    store = Store(paths)
+    paths, config, store = _load(root)
     res = ops.impact(store, config, symbol, limit=limit or None)
     if res["count"] == 0:
         typer.echo(f"No references to {symbol!r} found (is the map current? run `torsor map`).")
         return
     typer.echo(f"{res['count']} reference(s) to {symbol!r}:")
     for c in res["callers"]:
-        typer.echo(f"  {c['module']} :: {c['caller']}")
+        typer.echo(f"  {render.caller(c)}")
     if res["truncated"]:
         typer.echo(f"  … +{res['truncated']} more (--limit to list them)")
 
@@ -244,16 +256,11 @@ def impact(
 def connect(
     source: str = typer.Argument(..., help="Start symbol (e.g. a function/class name)."),
     target: str = typer.Argument(..., help="Destination symbol to reach."),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     max_hops: int = typer.Option(12, help="Maximum path length to search."),
 ) -> None:
     """Trace the shortest call-graph path from one symbol to another (run `torsor map` first)."""
-    paths = TorsorPaths(root)
-    if not paths.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(paths)
-    store = Store(paths)
+    paths, config, store = _load(root)
     res = ops.connect(store, config, source, target, max_hops=max_hops)
     if not res["found"]:
         typer.echo(
@@ -262,25 +269,20 @@ def connect(
         )
         return
     typer.echo(f"{res['hops']} hop(s) from {source!r} to {target!r}:")
-    typer.echo("  " + " -> ".join(f"{s['symbol']} ({s['module']})" for s in res["path"]))
+    typer.echo("  " + render.call_path(res["path"]))
 
 
 @app.command()
 def find(
     query: str = typer.Argument(..., help="Fuzzy query for files and mapped symbols."),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     mode: str = typer.Option("fuzzy", help="Match mode: fuzzy | literal | regex."),
     limit: int = typer.Option(20, help="Max results."),
     files_only: bool = typer.Option(False, "--files-only", help="Only repo files."),
     symbols_only: bool = typer.Option(False, "--symbols-only", help="Only mapped symbols."),
 ) -> None:
     """Fuzzy, frecency-ranked search over the repo's files and mapped symbols."""
-    paths = TorsorPaths(root)
-    if not paths.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(paths)
-    store = Store(paths)
+    paths, config, store = _load(root)
     res = ops.find_targets(
         store, config, query, mode=mode, limit=limit,
         include_files=not symbols_only, include_symbols=not files_only,
@@ -290,20 +292,15 @@ def find(
         return
     for r in res:
         if r["type"] == "file":
-            typer.echo(f"  {r['path']}")
+            typer.echo(f"  {render.find_hit(r)}")
         else:
-            typer.echo(f"  {r['module']}:{r['line']}  {r['name']} ({r['kind']})")
+            typer.echo(f"  {render.find_hit(r)}")
 
 
 @app.command()
-def export(root: Path = typer.Option(Path("."), help="Project root to export.")) -> None:
+def export(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/.")) -> None:
     """Export the pyramid to a portable llms.txt + a Mermaid module diagram."""
-    paths = TorsorPaths(root)
-    if not paths.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(paths)
-    store = Store(paths)
+    paths, config, store = _load(root)
     result = ops.export_project(store, config)
     msg = f"Wrote {result['llms_txt']}"
     if result["diagram"]:
@@ -313,18 +310,13 @@ def export(root: Path = typer.Option(Path("."), help="Project root to export."))
 
 @app.command()
 def rules(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     write: Optional[Path] = typer.Option(None, "--write", help="Write/refresh a managed rules block in this file (e.g. AGENTS.md or CLAUDE.md). Idempotent."),
     client: Optional[str] = typer.Option(None, "--client", help=f"Write to a client's conventional instructions file instead of --write ({', '.join(SUPPORTED_CLIENTS)})."),
     scoped: bool = typer.Option(False, "--scoped", help="Claude Code only: write one path-scoped rule file per ADR under .claude/rules/torsor/ (loaded only when a governed file is touched)."),
 ) -> None:
     """Print a compact agent-rules digest (charter principles + ADR rules) — paste it into AGENTS.md/CLAUDE.md so agents follow the rules without spending tool-call tokens."""
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     if scoped:
         written = ops.write_scoped_rules(store, config)
         rel = tp.claude_rules_dir.relative_to(tp.root).as_posix()
@@ -346,15 +338,10 @@ def rules(
 def practices(
     language: Optional[str] = typer.Argument(None, help="python · javascript · typescript · go · rust · agent (default: auto-detect from the repo)."),
     apply: bool = typer.Option(False, "--apply", help="Adopt the pack: record an ADR whose rules `torsor guard` enforces."),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
 ) -> None:
     """List or adopt curated, research-backed best-practice packs (consensus style-guide + linter rules, weighted toward documented AI-coding failure modes)."""
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     if apply:
         if not language:
             typer.echo("Pass a language to adopt, e.g. `torsor practices python --apply`.", err=True)
@@ -369,18 +356,13 @@ def practices(
 
 @app.command()
 def primer(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     write: Optional[Path] = typer.Option(None, "--write", help="Write/refresh a managed primer block in this file (e.g. AGENTS.md or CLAUDE.md). Idempotent."),
     client: Optional[str] = typer.Option(None, "--client", help="Write to a client's conventional instructions file instead of --write."),
     tokens: int = typer.Option(800, "--tokens", help="Token budget for the primer."),
 ) -> None:
     """Token-saver: print a budgeted prompt-time project primer (charter + architecture + repo map + token-efficiency habits) — content in the prompt file costs zero discovery tool-calls per session."""
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     dest = _resolve_block_target(root, write, client)
     if dest is not None:
         target = ops.write_primer_block(store, config, dest, max_tokens=tokens)
@@ -392,42 +374,41 @@ def primer(
 @app.command()
 def guard(
     paths: list[str] = typer.Argument(None, help="Files to check (default: git-changed .py files)."),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     strict: bool = typer.Option(False, help="Exit non-zero if NEW drift fails the threshold (for CI)."),
     severity: Optional[str] = typer.Option(None, "--severity", help="Strict threshold: hint|info|warning|error. Default: fail on any."),
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON findings."),
     update_baseline: bool = typer.Option(False, "--update-baseline", help="Record current violations as the accepted baseline (grandfather existing debt)."),
 ) -> None:
     """Check changes against declared architectural intent (ADR rules)."""
-    import json
 
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     result = ops.guard_run(
         store, config, paths or None,
         update_baseline=update_baseline, strict=strict, severity=severity,
     )
     violations = result["violations"]
 
-    if update_baseline:
-        typer.echo(f"Baselined {len(violations)} violation(s) → {tp.baseline_file}")
-        return
-
-    if as_json:
-        typer.echo(json.dumps([v.model_dump() for v in violations]))
+    # --json is honoured even when baselining: returning first meant
+    # `guard --json --update-baseline` printed nothing at all.
+    new_files = {(v.file, v.line, v.message) for v in result["new"]}
+    if _emit([{**v.model_dump(), "new": (v.file, v.line, v.message) in new_files}
+              for v in violations], as_json):
+        if update_baseline:
+            return
         if result["failed"]:
             raise typer.Exit(code=1)
+        return
+
+    if update_baseline:
+        typer.echo(f"Baselined {len(violations)} violation(s) → {tp.baseline_file}")
         return
 
     if not violations:
         typer.echo("No drift from declared intent detected.")
         return
     for v in violations:
-        typer.echo(f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})")
+        typer.echo(render.violation(v))
     tail = f" ({result['baselined']} baselined)" if result["baselined"] else ""
     typer.echo(f"\n{len(violations)} drift violation(s){tail}.")
     if result["failed"]:
@@ -437,22 +418,17 @@ def guard(
 @app.command()
 def deps(
     files: list[str] = typer.Argument(None, help="Files to check (default: git-changed .py files)."),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     strict: bool = typer.Option(False, help="Exit non-zero if any unknown import is found (for CI)."),
 ) -> None:
     """Flag imports that resolve to no known package — possible hallucinated dependencies (slopsquatting). Offline."""
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     findings = ops.check_dependencies(store, config, files or None)
     if not findings:
         typer.echo("No unknown imports — every import resolves to a known package.")
         return
     for f in findings:
-        typer.echo(f"{f['file']}:{f['line']} — unknown import '{f['name']}' (possible hallucinated dependency)")
+        typer.echo(f"{render.unknown_import(f)} (possible hallucinated dependency)")
     typer.echo(f"\n{len(findings)} unknown import(s). Verify each exists before installing.")
     if strict:
         raise typer.Exit(code=1)
@@ -461,24 +437,17 @@ def deps(
 @app.command()
 def verify(
     paths: list[str] = typer.Argument(None, help="Files to check (default: git-changed)."),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     severity: Optional[str] = typer.Option(None, "--severity", help="Guard threshold: hint|info|warning|error."),
     run_tests: bool = typer.Option(False, "--run-tests", help="Also run a recorded `test` command."),
     as_json: bool = typer.Option(False, "--json", help="Emit the machine-readable verdict."),
 ) -> None:
     """The deterministic verification gate (guard + deps + staleness [+ tests]).
     Exits non-zero on failure — a loop-engineering / CI / Stop-hook completion check."""
-    import json
 
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     verdict = ops.verify(store, config, paths or None, severity=severity, run_tests=run_tests)
-    if as_json:
-        typer.echo(json.dumps(verdict))
+    if _emit(verdict, as_json):
         raise typer.Exit(code=verdict["exit_code"])
     for c in verdict["checks"]:
         tail = f" ({c['count']})" if c["count"] else ""
@@ -494,7 +463,7 @@ def verify(
 
 @app.command()
 def stale(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     mark: bool = typer.Option(False, "--mark", help="Set status: stale on notes with findings (reversible)."),
     unmark: bool = typer.Option(False, "--unmark", help="Restore status: active on all stale-marked notes."),
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON findings."),
@@ -502,19 +471,13 @@ def stale(
 ) -> None:
     """Flag memory that contradicts current code: dangling [[wikilinks]] and dead
     file-path references. Read-only unless --mark/--unmark. Deterministic, offline."""
-    import json
 
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     result = ops.check_staleness(store, config, mark=mark, unmark=unmark)
     findings = result["findings"]
 
-    if as_json:
-        typer.echo(json.dumps([r.model_dump() for r in findings]))
+    if _emit([r.model_dump() for r in findings], as_json):
+        pass
     elif not findings:
         typer.echo("No staleness detected — memory matches the code.")
     else:
@@ -531,16 +494,11 @@ def stale(
 @app.command()
 def coach(
     context: list[str] = typer.Argument(None, help="Optional context for best-practice hints (e.g. what you're building)."),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     dismiss: str = typer.Option(None, help="Dismiss a recommendation by its key."),
 ) -> None:
     """Show health + best-practice recommendations (the Coach). Advisory; never blocks."""
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     if dismiss:
         ops.dismiss_recommendation(store, dismiss)
         typer.echo(f"Dismissed {dismiss}.")
@@ -550,13 +508,12 @@ def coach(
         typer.echo("No recommendations right now — the project looks healthy.")
         return
     for r in recs:
-        tail = f" -> {r.action}" if r.action else ""
-        typer.echo(f"[{r.severity}/{r.kind}] {r.message}{tail}  (key: {r.key})")
+        typer.echo(render.recommendation(r, arrow="->"))
 
 
 @app.command()
 def clean(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     apply: bool = typer.Option(False, "--apply", help="Actually delete (default is a dry run)."),
     deep: bool = typer.Option(False, "--deep", help="Also drop the whole disposable index."),
     yes: bool = typer.Option(False, "--yes", help="Confirm a destructive --apply --deep."),
@@ -570,12 +527,7 @@ def clean(
             err=True,
         )
         raise typer.Exit(code=2)
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     stats = ops.clean(store, config, apply=apply, deep=deep)
 
     for note in stats["notes"]:
@@ -609,14 +561,9 @@ def _human_bytes(n: int) -> str:
 
 
 @app.command()
-def consolidate(root: Path = typer.Option(Path("."), help="Project root.")) -> None:
+def consolidate(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/.")) -> None:
     """Self-improving maintenance: mine journal insights, reindex, report duplicates."""
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     stats = ops.consolidate(store, config)
     typer.echo(
         f"Mined {stats['insights']} insight file(s); reindexed {stats['indexed']} note(s); "
@@ -629,15 +576,11 @@ def consolidate(root: Path = typer.Option(Path("."), help="Project root.")) -> N
 
 @app.command()
 def recipes(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     limit: int = typer.Option(10, help="Max recipes to show."),
 ) -> None:
     """Show the deterministic torsor lookups you run most — prime candidates to route to the cheap model."""
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    store = Store(tp)
+    tp, _, store = _load(root, config=False)
     recs = ops.recipes(store, limit)
     if not recs:
         typer.echo("No recorded operations yet — use torsor for a while, then check back.")
@@ -650,17 +593,13 @@ def recipes(
 
 @app.command()
 def commands(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     add: Optional[str] = typer.Option(None, "--add", help="Record a command as 'name=command' (e.g. --add 'test=uv run pytest')."),
     note: str = typer.Option("", help="Optional description for --add."),
     run: Optional[str] = typer.Option(None, "--run", help="Run a recorded command by name."),
 ) -> None:
     """Record & replay the project's commands so agents don't re-derive them each session."""
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    store = Store(tp)
+    tp, _, store = _load(root, config=False)
     if add is not None:
         if "=" not in add:
             typer.echo("Use --add 'name=command' (e.g. 'test=uv run pytest').", err=True)
@@ -680,13 +619,12 @@ def commands(
         typer.echo("No commands recorded yet. Add one:  torsor commands --add 'test=uv run pytest'")
         return
     for c in cmds:
-        tail = f"  — {c['note']}" if c["note"] else ""
-        typer.echo(f"  {c['name']}: {c['command']}{tail}")
+        typer.echo(f"  {render.command(c)}")
 
 
 @app.command()
 def models(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     cheap: Optional[str] = typer.Option(None, help="Model id for basic, deterministic work (torsor lookups, command replays)."),
     smart: Optional[str] = typer.Option(None, help="Model id for thinking & construction (design, code, decisions)."),
     fast: Optional[str] = typer.Option(None, help="Optional mid-tier model id."),
@@ -697,12 +635,7 @@ def models(
     """Set cheap/smart model tiers and publish the routing policy (token thrift). App-agnostic: any MCP client, any agent rules file, or any programmatic router can consume it."""
     import json as _json
 
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    config = load_config(tp)
-    store = Store(tp)
+    tp, config, store = _load(root)
     if cheap is not None or smart is not None or fast is not None:
         if cheap is not None:
             config.models.cheap = cheap
@@ -735,17 +668,9 @@ hooks_app = typer.Typer(help="Auto-capture: wire memory to the git / Claude Code
 app.add_typer(hooks_app, name="hooks")
 
 
-def _load(root: Path):
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    return tp, load_config(tp), Store(tp)
-
-
 @hooks_app.command("install")
 def hooks_install(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     no_git: bool = typer.Option(False, "--no-git", help="Skip git hooks."),
     no_claude: bool = typer.Option(False, "--no-claude", help="Skip Claude Code settings."),
     local: bool = typer.Option(False, "--local", help="Write .claude/settings.local.json (git-ignored) instead."),
@@ -766,7 +691,7 @@ def hooks_install(
 
 @hooks_app.command("uninstall")
 def hooks_uninstall(
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     local: bool = typer.Option(False, "--local", help="Accepted for compatibility; both settings files are always cleaned."),
 ) -> None:
     """Remove only torsor-owned git hooks and Claude Code hook entries.
@@ -784,7 +709,7 @@ def hooks_uninstall(
 
 
 @hooks_app.command("status")
-def hooks_status_cmd(root: Path = typer.Option(Path("."), help="Project root.")) -> None:
+def hooks_status_cmd(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/.")) -> None:
     """Show which git hooks and Claude Code events currently carry a torsor entry."""
     _, config, store = _load(root)
     status = ops.hooks_status(store, config)
@@ -800,7 +725,7 @@ def hooks_status_cmd(root: Path = typer.Option(Path("."), help="Project root."))
 @hooks_app.command("run")
 def hooks_run(
     event: str = typer.Argument(..., help="post-commit | pre-push | pre-edit | session-start | session-end"),
-    root: Path = typer.Option(Path("."), help="Project root."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
 ) -> None:
     """Stable dispatcher the on-disk hook scripts call — so scripts never change
     across upgrades. Best-effort; a missing project just exits 0."""

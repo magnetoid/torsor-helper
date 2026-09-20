@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-04T15:38:12'
-updated: '2026-09-04T15:38:12'
+created: '2026-09-20T21:54:01'
+updated: '2026-09-20T21:54:01'
 ---
 
 # tests/test_cli_guard.py
@@ -22,3 +22,5 @@ Symbols in `tests/test_cli_guard.py`.
 - L72 `test_guard_json_strict_fails_on_new(tmp_path)` (function)
 - L80 `test_guard_json_strict_passes_when_baselined(tmp_path)` (function)
 - L89 `test_guard_baseline_grandfathers_then_fails_on_new(tmp_path)` (function)
+- L106 `test_guard_json_is_emitted_even_when_baselining(tmp_path)` (function)
+- L122 `test_guard_json_marks_which_violations_are_new(tmp_path)` (function)

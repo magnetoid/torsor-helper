@@ -101,3 +101,31 @@ def test_guard_baseline_grandfathers_then_fails_on_new(tmp_path):
     (tmp_path / "domain" / "other.py").write_text("import requests\n")
     r3 = runner.invoke(app, ["guard", "--root", str(tmp_path), "--strict", "domain/svc.py", "domain/other.py"])
     assert r3.exit_code == 1
+
+
+def test_guard_json_is_emitted_even_when_baselining(tmp_path):
+    # Regression: --update-baseline returned before the --json branch, so the
+    # combination printed nothing at all to a CI consumer.
+    import json
+
+    _seed(tmp_path)
+    (tmp_path / "domain" / "svc.py").write_text("import requests\n")
+    result = runner.invoke(
+        app, ["guard", "--root", str(tmp_path), "--json", "--update-baseline", "domain/svc.py"]
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload and all("new" in v for v in payload)
+
+
+def test_guard_json_marks_which_violations_are_new(tmp_path):
+    import json
+
+    _seed(tmp_path)
+    (tmp_path / "domain" / "svc.py").write_text("import requests\n")
+    runner.invoke(app, ["guard", "--root", str(tmp_path), "--update-baseline", "domain/svc.py"])
+    result = runner.invoke(app, ["guard", "--root", str(tmp_path), "--json", "domain/svc.py"])
+
+    payload = json.loads(result.output)
+    assert payload and not any(v["new"] for v in payload)   # all grandfathered now
