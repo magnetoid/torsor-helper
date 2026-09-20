@@ -7,12 +7,14 @@ from pathlib import Path
 
 from torsor_helper import languages
 from torsor_helper.budget import truncate_to_tokens
-from torsor_helper.languages.modules import norm_module, norm_path
+# norm_module is re-exported deliberately: operations, export, hubs and
+# coupling all reach it through cartographer, and the two functions must be
+# picked apart by the caller (see languages/modules.py).
+from torsor_helper.languages.modules import norm_module, norm_path  # noqa: F401
 from torsor_helper.languages.python import absolute_from_module, extract_edges, extract_symbols  # noqa: F401  (back-compat re-exports)
 from torsor_helper.models import Symbol, SymbolEdge
 from torsor_helper.paths import contained
 
-_norm_module = norm_module  # back-compat alias
 
 DEFAULT_IGNORE = {
     ".torsor", ".git", ".venv", "venv", "__pycache__", "node_modules",

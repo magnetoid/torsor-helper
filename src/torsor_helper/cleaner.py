@@ -28,10 +28,6 @@ class CleanPlan:
         VACUUM actually returns isn't knowable before it runs."""
         return sum(_size(p) for p in self.files)
 
-    @property
-    def is_empty(self) -> bool:
-        return not self.files and not any(self.dead_rows.values())
-
 
 def _size(path: Path) -> int:
     if path.is_dir():

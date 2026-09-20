@@ -156,12 +156,13 @@ def impact(store: Store, config: TorsorConfig, symbol: str, *, limit: int | None
     return {"symbol": symbol, "callers": kept, "count": len(callers),
             "truncated": len(callers) - len(kept)}
 
-def connect(store: Store, config: TorsorConfig, source: str, target: str, *, max_hops: int = 12) -> dict:
+def connect(store: Store, config: TorsorConfig, source: str, target: str, *, max_hops: int | None = None) -> dict:
     """Shortest directed path through the symbol call graph from `source` to
     `target` (who-calls-what), via the cartographer's resolved reference edges.
     Read-only over the existing index (run `torsor map` first). `found` is False
     when the index is absent, either endpoint is unknown, or no directed path
     exists. Bounded by `max_hops` so output stays token-thrifty on dense graphs."""
+    max_hops = config.index.connect_max_hops if max_hops is None else max_hops
     _log_op(store, "connect", f"{source} -> {target}")
     empty = {"source": source, "target": target, "path": [], "hops": 0, "found": False}
     if not store.paths.index_db.exists():

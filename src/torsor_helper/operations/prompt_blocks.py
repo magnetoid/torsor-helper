@@ -27,7 +27,7 @@ def _charter_section(body: str, heading: str) -> str:
     match = _re.search(rf"^##\s+{_re.escape(heading)}\s*$\n(.*?)(?=^##\s|\Z)", body, _re.MULTILINE | _re.DOTALL)
     return match.group(1).strip() if match else ""
 
-def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int = 600) -> str:
+def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int | None = None) -> str:
     """A compact, token-budgeted digest of the project's standing constraints —
     charter principles + machine-readable ADR rules — for agent prompt files
     (AGENTS.md / CLAUDE.md). Rules the agent sees at prompt time cost zero
@@ -54,7 +54,8 @@ def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int = 600) ->
     if not sections:
         return ""
     digest = "## Project rules (torsor-helper)\n\n" + "\n\n".join(sections)
-    return truncate_to_tokens(digest, max_tokens, config.budgets.chars_per_token)
+    budget = config.budgets.rules_tokens if max_tokens is None else max_tokens
+    return truncate_to_tokens(digest, budget, config.budgets.chars_per_token)
 
 def _write_managed_block(target, start: str, end: str, content: str) -> str:
     """Write/refresh a marker-delimited block in `target` (AGENTS.md,
@@ -146,11 +147,12 @@ _TOKEN_PLAYBOOK = """### Work token-efficiently
 - Don't re-derive what's in this primer; it is current as of the last `torsor primer --write`.
 - `remember()` decisions and `handoff()` at session end so the next session skips rediscovery entirely."""
 
-def project_primer(store: Store, config: TorsorConfig, *, max_tokens: int = 800) -> str:
+def project_primer(store: Store, config: TorsorConfig, *, max_tokens: int | None = None) -> str:
     """Token-saver: a budgeted, prompt-time project primer (what this is, how
     it's shaped, where things live, and token-efficient tool habits). Content
     an agent reads in the prompt file costs zero discovery tool-calls per
     session — the cheapest tokens are the ones never spent."""
+    max_tokens = config.budgets.primer_tokens if max_tokens is None else max_tokens
     cpt = config.budgets.chars_per_token
     sections: list[str] = []
 
@@ -174,7 +176,7 @@ def project_primer(store: Store, config: TorsorConfig, *, max_tokens: int = 800)
     primer = "## Project primer (torsor-helper)\n\n" + "\n\n".join(sections)
     return truncate_to_tokens(primer, max_tokens, cpt)
 
-def write_primer_block(store: Store, config: TorsorConfig, target, *, max_tokens: int = 800) -> str:
+def write_primer_block(store: Store, config: TorsorConfig, target, *, max_tokens: int | None = None) -> str:
     return _write_managed_block(
         target, _PRIMER_START, _PRIMER_END, project_primer(store, config, max_tokens=max_tokens)
     )

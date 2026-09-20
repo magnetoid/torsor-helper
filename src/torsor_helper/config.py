@@ -47,11 +47,14 @@ class BudgetConfig(_Strict):
     # verify reasons, drift/dep/staleness findings). What is hidden is always
     # counted in the response, so the agent knows the list is partial.
     max_items: int = 25
+    # The rules digest and the primer are meant to be written into a prompt file
+    # once, not fetched per session, so their ceilings are smaller than recall's.
+    rules_tokens: int = 600
+    primer_tokens: int = 800
     chars_per_token: int = 4
 
 
 class EmbeddingConfig(_Strict):
-    # Placeholder for Phase 2; unused in Phase 1.
     provider: str = "fastembed"
     model: str = "BAAI/bge-small-en-v1.5"
     dim: int = 384
@@ -64,6 +67,9 @@ class IndexConfig(_Strict):
     auto_index: bool = True
     mmr_lambda: float = 0.7  # MMR relevance/diversity trade-off (1.0 = pure relevance)
     importance_floors: dict[str, float] = Field(default_factory=lambda: dict(_DEFAULT_IMPORTANCE_FLOORS))
+    # Depth bound for `connect`: a dense graph would otherwise render a path no
+    # one reads, and the search cost grows with it.
+    connect_max_hops: int = 12
 
 
 class ModelsConfig(_Strict):

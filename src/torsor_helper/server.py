@@ -87,7 +87,7 @@ def build_server(root: Path | str) -> FastMCP:
         return out
 
     @mcp.tool()
-    def connect(source: str, target: str, max_hops: int = 12) -> str:
+    def connect(source: str, target: str, max_hops: int = config.index.connect_max_hops) -> str:
         """Trace the shortest directed call-graph path from one symbol to another ("how does X reach Y?") — who-calls-what across files (run map_repo first)."""
         res = ops.connect(store, config, source, target, max_hops=max_hops)
         if not res["found"]:
@@ -158,7 +158,7 @@ def build_server(root: Path | str) -> FastMCP:
         return ops.model_policy(store, config)
 
     @mcp.tool()
-    def get_primer(max_tokens: int = 800) -> str:
+    def get_primer(max_tokens: int = config.budgets.primer_tokens) -> str:
         """Token-saver: a budgeted project primer (charter + architecture + repo map + token-efficient tool habits). Load once instead of exploring; `torsor primer --write AGENTS.md` makes it free."""
         return ops.project_primer(store, config, max_tokens=max_tokens)
 
