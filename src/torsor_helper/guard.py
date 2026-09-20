@@ -8,6 +8,7 @@ from pathlib import Path
 from torsor_helper.cartographer import absolute_from_module
 from torsor_helper.models import Rule, Violation
 from torsor_helper.store import Store
+from torsor_helper.paths import contained
 
 
 def load_rules_by_note(store: Store) -> list[tuple[Path, str, list[Rule]]]:
@@ -213,17 +214,15 @@ def check_drift(store: Store, files) -> list[Violation]:
     root = store.paths.root
     out: list[Violation] = []
     for raw in files:
-        path = Path(raw)
-        abs_path = path if path.is_absolute() else root / path
+        abs_path = contained(root, raw)
+        if abs_path is None:
+            continue  # outside the project — not ours to read, let alone judge
         try:
             # utf-8-sig: a BOM would make ast.parse fail and the file silently pass
             text = abs_path.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
             continue
-        try:
-            relpath = abs_path.relative_to(root).as_posix()
-        except ValueError:
-            relpath = abs_path.name
+        relpath = abs_path.relative_to(Path(root).resolve()).as_posix()
         for rule in rules:
             if fnmatch.fnmatch(relpath, rule.scope):
                 out.extend(violations_for_file(relpath, text, rule))

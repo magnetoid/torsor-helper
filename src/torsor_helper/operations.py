@@ -15,6 +15,7 @@ from torsor_helper.models import Frontmatter, RecallResult
 from torsor_helper.recall import keyword_recall
 from torsor_helper.search import hybrid_search
 from torsor_helper.store import Store
+from torsor_helper.paths import contained
 
 # Fractions of the bootstrap budget allocated per section (must sum to <= 1.0).
 _BOOTSTRAP_ALLOC = [
@@ -1100,9 +1101,9 @@ def _set_note_status(store, rels: list[str], status: str) -> list[str]:
     (mirrors the record_decision supersede rewrite). Returns the notes changed."""
     changed: list[str] = []
     for rel in rels:
-        path = store.paths.root / rel
-        if not path.exists():
-            continue
+        path = contained(store.paths.root, rel)
+        if path is None or not path.exists():
+            continue  # a finding's source must name a note inside the project
         note = store.read_note(path)
         if note.frontmatter.status == status:
             continue
