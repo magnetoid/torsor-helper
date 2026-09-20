@@ -62,6 +62,7 @@ from torsor_helper.operations.memory import (  # noqa: F401  (facade re-exports)
 from torsor_helper.operations._state import _coach_state_path, _state_file  # noqa: F401
 from torsor_helper.operations.maintenance import (  # noqa: F401  (facade re-exports)
     _set_note_status,
+    stats,
     _snapshot_complexity,
     check_staleness,
     clean,

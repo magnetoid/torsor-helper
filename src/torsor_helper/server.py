@@ -25,9 +25,11 @@ def build_server(root: Path | str) -> FastMCP:
         return ops.bootstrap_session(store, config)
 
     @mcp.tool()
-    def recall(query: str, limit: int = 8) -> str:
-        """Hybrid keyword search across memory, wiki and map. Returns ranked snippets."""
-        result = ops.recall(store, config, query, limit=limit)
+    def recall(query: str, limit: int = 8, type: str | None = None, kind: str | None = None,
+               include_superseded: bool = False) -> str:
+        """Hybrid search across memory, wiki and map — ranked snippets. Narrow it with type (e.g. "decision") or kind (e.g. "learning") instead of filtering the results yourself; superseded decisions are excluded unless you ask for them."""
+        result = ops.recall(store, config, query, limit=limit, type_=type, kind=kind,
+                            include_superseded=include_superseded)
         if not result.hits:
             return f"No matches for: {query!r}"
         lines = [render.recall_hit(h) for h in result.hits]
@@ -242,10 +244,21 @@ def build_server(root: Path | str) -> FastMCP:
             f"Mined {stats['insights']} insight file(s); reindexed {stats['indexed']} note(s); "
             f"found {stats['duplicates']} duplicate entr(y/ies)."
         )
+        if stats["duplicate_entries"]:
+            msg += "\nDuplicated: " + "; ".join(
+                f"{text[:60]}… ({n}x)" for text, n in stats["duplicate_entries"][:3]
+            )
         if stats["top_accessed"]:
             hot = ", ".join(f"{path} ({n}x)" for path, n in stats["top_accessed"])
             msg += f"\nMost-recalled: {hot}"
         return msg
+
+    @mcp.tool()
+    def stats() -> str:
+        """How big this project's memory is, what gets recalled most, and whether the symbol map is current. Read-only."""
+        import json
+
+        return json.dumps(ops.stats(store, config))
 
     @mcp.tool()
     def recommend(context: str = "", limit: int = 8) -> str:

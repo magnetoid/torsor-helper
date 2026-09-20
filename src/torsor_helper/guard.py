@@ -21,6 +21,7 @@ def load_rules_by_note(store: Store) -> list[tuple[Path, str, list[Rule]]]:
         notes.append(store.paths.system_patterns)
 
     out: list[tuple[Path, str, list[Rule]]] = []
+    rule_errors: list[tuple[Path, str]] = []
     for path in notes:
         try:
             note = store.read_note(path)
@@ -35,10 +36,15 @@ def load_rules_by_note(store: Store) -> list[tuple[Path, str, list[Rule]]]:
                 continue
             try:
                 rules.append(Rule.model_validate({**item, "source": note.title}))
-            except Exception:
-                continue  # malformed rule: skip, never fatal
+            except Exception as exc:  # noqa: BLE001 - one bad ADR must not break the guard
+                # Still skipped, so the guard keeps working — but recorded, so
+                # `torsor doctor` can say the rule the author wrote is not
+                # being enforced. Silently dropping it looked like it passed.
+                rule_errors.append((path, str(exc).splitlines()[0]))
+                continue
         if rules:
             out.append((path, note.title, rules))
+    load_rules_by_note.errors = rule_errors  # read by `torsor doctor`
     return out
 
 
