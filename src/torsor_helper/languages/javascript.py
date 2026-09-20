@@ -7,7 +7,7 @@ from __future__ import annotations
 import posixpath
 
 from torsor_helper.languages import treesitter as ts
-from torsor_helper.languages.modules import norm_module
+from torsor_helper.languages.modules import norm_path
 from torsor_helper.models import Symbol, SymbolEdge
 
 
@@ -224,7 +224,7 @@ def _top_level_def_names(grammar: str, root) -> set[str]:
 
 def resolve_relative(specifier: str, module: str) -> str | None:
     """`'./x'` / `'../x'` relative to the importing file → module key (suffix
-    stripped, `index` collapsed by norm_module). Bare specifiers and paths that
+    stripped, `index` collapsed by norm_path). Bare specifiers and paths that
     climb out of the repo → None (ADR 0004: only the reliable cases)."""
     spec = specifier.strip("'\"`")
     if not spec.startswith("."):
@@ -232,7 +232,7 @@ def resolve_relative(specifier: str, module: str) -> str | None:
     rel = posixpath.normpath(posixpath.join(posixpath.dirname(module), spec))
     if rel.startswith(".."):
         return None
-    return norm_module(rel)
+    return norm_path(rel)
 
 
 def _aliases(grammar: str, root, module: str) -> dict[str, str | None]:
@@ -293,7 +293,7 @@ def _owner(node) -> str:
 def extract_edges(source: str, module: str) -> list[SymbolEdge]:
     grammar = grammar_for(module)
     root = ts.parse(grammar, source).root_node
-    own = norm_module(module)
+    own = norm_path(module)
     top_defs = _top_level_def_names(grammar, root)
     aliases = _aliases(grammar, root, module)
 

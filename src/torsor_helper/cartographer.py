@@ -7,7 +7,7 @@ from pathlib import Path
 
 from torsor_helper import languages
 from torsor_helper.budget import truncate_to_tokens
-from torsor_helper.languages.modules import norm_module
+from torsor_helper.languages.modules import norm_module, norm_path
 from torsor_helper.languages.python import absolute_from_module, extract_edges, extract_symbols  # noqa: F401  (back-compat re-exports)
 from torsor_helper.models import Symbol, SymbolEdge
 
@@ -118,7 +118,7 @@ def compute_refs(symbols: list[Symbol], edges: list[SymbolEdge]) -> None:
         if "." in sym.name:
             sym.refs = 0  # methods score 0 by design (ADR 0004) — resolution only targets top-level names
             continue
-        sym.refs = counts.get((norm_module(sym.module), sym.name), 0)
+        sym.refs = counts.get((norm_path(sym.module), sym.name), 0)
 
 
 def scanned_modules(root: Path, paths: list[str]) -> set[str]:

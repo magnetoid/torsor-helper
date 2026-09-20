@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ast
 
-from torsor_helper.languages.modules import norm_module
+from torsor_helper.languages.modules import norm_module, norm_path
 from torsor_helper.models import Symbol, SymbolEdge
 
 
@@ -52,7 +52,7 @@ def absolute_from_module(node: ast.ImportFrom, module: str) -> str:
     base = node.module or ""
     if not node.level:
         return base
-    parts = norm_module(module).split(".")[:-1]  # the file's package ("__init__" is a module name too)
+    parts = norm_path(module).split(".")[:-1]  # the file's package ("__init__" is a module name too)
     climb = node.level - 1
     if climb > len(parts):
         return base  # climbs past the repo root — leave as written
@@ -129,7 +129,7 @@ def extract_edges(source: str, module: str) -> list[SymbolEdge]:
         # Always return the canonical dotted form — consumers (who_references,
         # module_edges) must never see a mix of relpaths and dotted names.
         if name in top_defs:
-            return norm_module(module)
+            return norm_path(module)
         target = aliases.get(name)
         return norm_module(target) if target else None
 

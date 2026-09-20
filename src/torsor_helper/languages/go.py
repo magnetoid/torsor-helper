@@ -7,7 +7,7 @@ from __future__ import annotations
 import posixpath
 
 from torsor_helper.languages import treesitter as ts
-from torsor_helper.languages.modules import norm_module
+from torsor_helper.languages.modules import norm_path
 from torsor_helper.models import Symbol, SymbolEdge
 
 _DEFS = """
@@ -74,7 +74,7 @@ def _walk(node):
 
 def extract_edges(source: str, module: str) -> list[SymbolEdge]:
     root = ts.parse("go", source).root_node
-    own = norm_module(module)
+    own = norm_path(module)
     top = {s.name for s in extract_symbols(source, module) if "." not in s.name}
     # package alias → import path ("util" → "example.com/app/util"); explicit aliases too
     paths: dict[str, str] = {}
@@ -103,27 +103,35 @@ def resolve_cross_file(symbols: list[Symbol], edges: list[SymbolEdge]) -> None:
     """Fill `resolved_module` for Go edges the single-file pass couldn't: a bare
     call to a top-level symbol in another file of the same directory, or
     `pkg.Fn` whose import path ends with a directory that exists in the scanned
-    repo. Idempotent — only touches edges still unresolved. `resolved_module` is
-    always the canonical dotted key (norm_module of the target file), matching
-    what `extract_edges`'s same-file case already stores."""
+    repo. `resolved_module` is always the canonical dotted key (norm_path of
+    the target file), matching what `extract_edges`'s same-file case stores.
+
+    Runs over EVERY Go edge, not only the unresolved ones. Skipping the resolved
+    ones looked idempotent but was sticky: the partial-map merge (ADR 0008)
+    reloads untouched edges from the index with their old resolution intact, so
+    moving a top-level function to a sibling file in the same package left every
+    untouched caller pointing at the file it had left — a wrong answer, produced
+    automatically by the post-commit hook. Re-resolving is safe because both
+    branches below only ever *assign* a target they actually found; an edge this
+    pass cannot see keeps whatever it had."""
     by_dir: dict[str, dict[str, str]] = {}
     for s in symbols:
         if s.module.endswith(".go") and "." not in s.name:
             by_dir.setdefault(posixpath.dirname(s.module), {})[s.name] = s.module
     dirs = sorted(by_dir, key=len, reverse=True)  # longest suffix wins
     for e in edges:
-        if not e.module.endswith(".go") or e.resolved_module is not None:
+        if not e.module.endswith(".go"):
             continue
         if e.hint:
             target_dir = next((d for d in dirs if d and (e.hint == d or e.hint.endswith("/" + d))), None)
             if target_dir is not None:
                 target = by_dir[target_dir].get(e.referenced_name)
                 if target is not None:
-                    e.resolved_module = norm_module(target)
+                    e.resolved_module = norm_path(target)
             continue
         target = by_dir.get(posixpath.dirname(e.module), {}).get(e.referenced_name)
         if target is not None:
-            e.resolved_module = norm_module(target)
+            e.resolved_module = norm_path(target)
 
 
 _BRANCHES = """

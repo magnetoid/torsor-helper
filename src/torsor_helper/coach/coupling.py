@@ -6,7 +6,7 @@ from itertools import combinations
 from pathlib import Path
 
 from torsor_helper import db, languages
-from torsor_helper.cartographer import norm_module
+from torsor_helper.cartographer import norm_path
 from torsor_helper.coach.hotspots import _is_git_repo
 from torsor_helper.models import Recommendation
 
@@ -75,15 +75,15 @@ def find_coupling_recs(root: Path, conn, limit: int = 3) -> list[Recommendation]
     edges: set[tuple[str, str]] = set()
     if conn is not None:
         for m, r in db.module_edges(conn):
-            # `m` is a file relpath (needs norm_module); `r` is already the
+            # `m` is a file relpath (needs norm_path); `r` is already the
             # canonical resolved_module key — never re-normalize it.
-            nm, nr = norm_module(m), r
+            nm, nr = norm_path(m), r
             if nm != nr:  # ignore self-edges (a module referencing its own symbols)
                 edges.add((nm, nr))
 
     out: list[Recommendation] = []
     for a, b, co, degree in pairs:
-        na, nb = norm_module(a), norm_module(b)
+        na, nb = norm_path(a), norm_path(b)
         if na == nb:  # distinct files that collapse to one module — can't import-explain reliably
             continue
         if (na, nb) in edges or (nb, na) in edges:

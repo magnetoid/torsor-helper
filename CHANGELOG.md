@@ -4,6 +4,28 @@ All notable changes to **torsor-helper** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); the project is pre-1.0 and ships
 in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
+## [Unreleased]
+
+### Fixed — two silent bugs in the polyglot map, found by review before merge
+- **A JS/TS file at the repo root never resolved its own references.** A file's module key is derived from its
+  path, while its importers' key is derived from the import specifier, and the two only met when the path
+  contained a `/`. A flat repo therefore reported `impact = 0`, `refs = 0`, no hubs, no `connect` path and no
+  Mermaid edge — silently, with a green test suite (every fixture nested its files). The ambiguity is real:
+  `pkg.go` is both a plausible Python import target and a plausible root-level Go file, and no string rule
+  separates them. So it is now resolved by the caller instead — `norm_path` for a file path (always strips the
+  suffix), `norm_module` for a key that may be a dotted import target (keeps it). Every path-side call site was
+  moved over.
+- **Go's cross-file resolver was sticky, breaking ADR 0008.** It skipped edges that already had a
+  `resolved_module`, and the partial-map merge reloads untouched edges from the index with their old resolution
+  intact. Moving a top-level function to a sibling file in the same package left every untouched caller pointing
+  at the file it had left — a *wrong* answer, not a missing one, produced automatically by the post-commit hook.
+  It now re-resolves every Go edge; both branches only ever assign a target they actually found, so an edge this
+  pass cannot see keeps what it had.
+- `practices.py` listed JavaScript's extensions without `.cjs`, which the new `languages/` registry has — a
+  `.cjs`-only repo got no best-practice pack while the map and guard saw it fine.
+- The design spec's example guard scope `src/**/*.ts` does not match `src/index.ts`: `fnmatch` has no recursive
+  `**`, so a leading `src/**/` demands a further `/`. Corrected to `**/*.ts`, which is what the tests already use.
+
 ## [0.7.0] — Polyglot Map (2026-09-04)
 
 The map stops being Python-only. JavaScript, TypeScript/TSX and Go join the symbol

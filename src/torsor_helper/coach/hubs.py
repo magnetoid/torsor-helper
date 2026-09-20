@@ -3,7 +3,7 @@ from __future__ import annotations
 from statistics import pstdev
 
 from torsor_helper import db
-from torsor_helper.cartographer import norm_module
+from torsor_helper.cartographer import norm_path
 from torsor_helper.models import Recommendation
 
 
@@ -21,7 +21,7 @@ def find_hubs(conn, *, min_fan_in: int = 8, sigma: float = 2.0):
         return []
     # Only first-party symbols are actionable — flagging stdlib/third-party hubs
     # (pathlib.Path, datetime) as "stabilize behind a seam" is noise.
-    first_party = {norm_module(m) for m in db.modules(conn)}
+    first_party = {norm_path(m) for m in db.modules(conn)}
     fanins = [fi for _m, _n, fi in counts]
     mean = sum(fanins) / len(fanins)
     floor = max(float(min_fan_in), mean + sigma * pstdev(fanins))

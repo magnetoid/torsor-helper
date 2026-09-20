@@ -410,7 +410,7 @@ _AGENT = [
 
 PACKS: dict[str, dict] = {
     "python": {"label": "Python", "extensions": (".py", ".pyi"), "practices": _PYTHON},
-    "javascript": {"label": "JavaScript", "extensions": (".js", ".jsx", ".mjs"), "practices": _JAVASCRIPT},
+    "javascript": {"label": "JavaScript", "extensions": (".js", ".jsx", ".mjs", ".cjs"), "practices": _JAVASCRIPT},
     "typescript": {"label": "TypeScript", "extensions": (".ts", ".tsx"),
                    "practices": _JAVASCRIPT + _TYPESCRIPT},
     "go": {"label": "Go", "extensions": (".go",), "practices": _GO},
