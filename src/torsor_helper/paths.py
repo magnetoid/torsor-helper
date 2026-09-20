@@ -3,6 +3,28 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def contained(root, candidate) -> Path | None:
+    """`candidate` resolved against `root`, or None when it lands outside it.
+
+    The single containment check for every caller-supplied path. Two of those
+    callers are MCP tools (`check_drift`, `verify`), so the path can come from a
+    prompt-injected agent; without this, a `forbid_pattern` rule turns into a
+    read oracle for any file on the machine, and `guard --update-baseline` then
+    writes what it found into a committed file.
+
+    Resolves before comparing, so `../`, an absolute path and a symlink pointing
+    out of the tree are all rejected."""
+    try:
+        root = Path(root).resolve()
+        path = Path(candidate)
+        path = path if path.is_absolute() else root / path
+        path = path.resolve()
+        path.relative_to(root)
+    except (OSError, ValueError):
+        return None
+    return path
+
+
 class TorsorPaths:
     """Resolves the .torsor/ directory layout relative to a project root."""
 
@@ -87,6 +109,16 @@ class TorsorPaths:
     @property
     def index_dir(self) -> Path:
         return self.base / ".index"
+
+    @property
+    def state_dir(self) -> Path:
+        # Small, machine-local state that does NOT rebuild from Markdown: the
+        # user's Coach dismissals and the auto-handoff watermark. It lived in
+        # .index/ until `clean --deep` (which rmtree's that directory, correctly,
+        # because everything else in it IS derivable) started silently
+        # un-dismissing every recommendation. Git-ignored — the watermark is a
+        # local git HEAD and means nothing on another machine.
+        return self.base / "state"
 
     @property
     def index_db(self) -> Path:

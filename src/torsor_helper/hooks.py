@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -12,9 +15,15 @@ _GIT_START = "# >>> torsor managed >>>"
 _GIT_END = "# <<< torsor managed <<<"
 _SHEBANG = "#!/bin/sh"
 
-# Substring that identifies a torsor-owned entry inside .claude/settings.json —
-# lets install filter+re-add (idempotent) and uninstall remove surgically.
+# A torsor-owned entry in .claude/settings.json is one whose command IS a
+# torsor invocation, not merely one that mentions it. Matching the bare
+# substring claimed ownership of any foreign wrapper that happened to call us
+# (`my-wrapper --then 'torsor hooks run …'`) and removed it on uninstall.
 _SENTINEL = "torsor hooks run"
+
+
+def _is_torsor_command(command) -> bool:
+    return str(command).strip().startswith(_SENTINEL + " ")
 
 
 def _managed_block(inner: str) -> str:
@@ -26,7 +35,7 @@ def post_commit_script(root: str) -> str:
     `torsor` binary must never break a commit, so guard on it and always exit 0."""
     inner = (
         "command -v torsor >/dev/null 2>&1 || exit 0\n"
-        f'torsor hooks run post-commit --root "{root}" >/dev/null 2>&1 || true'
+        f"torsor hooks run post-commit --root {shlex.quote(str(root))} >/dev/null 2>&1 || true"
     )
     return _managed_block(inner)
 
@@ -36,7 +45,7 @@ def pre_push_script(root: str) -> str:
     propagate so a failing guard blocks the push, but never break on a missing binary."""
     inner = (
         "command -v torsor >/dev/null 2>&1 || exit 0\n"
-        f'torsor hooks run pre-push --root "{root}"'
+        f"torsor hooks run pre-push --root {shlex.quote(str(root))}"
     )
     return _managed_block(inner)
 
@@ -46,7 +55,7 @@ def claude_command(root: str) -> str:
     Relative `--root` by default: Claude Code runs hooks with cwd = project root,
     so a relative root avoids baking a machine-specific path into a settings.json
     that may be committed."""
-    return f"torsor hooks run session-end --root {root}"
+    return f"torsor hooks run session-end --root {shlex.quote(str(root))}"
 
 
 # SessionStart fires on a fresh start, a --resume, and after every context
@@ -59,7 +68,7 @@ SESSION_START_MATCHER = "startup|resume|compact"
 
 def claude_start_command(root: str) -> str:
     """The command torsor registers for the Claude Code SessionStart hook."""
-    return f"torsor hooks run session-start --root {root}"
+    return f"torsor hooks run session-start --root {shlex.quote(str(root))}"
 
 
 # The edit gate watches the two tools that write source. Bash is deliberately
@@ -70,7 +79,7 @@ EDIT_GATE_MATCHER = "Edit|Write"
 
 def claude_edit_command(root: str) -> str:
     """The command torsor registers for the Claude Code PreToolUse edit gate."""
-    return f"torsor hooks run pre-edit --root {root}"
+    return f"torsor hooks run pre-edit --root {shlex.quote(str(root))}"
 
 
 def _strip_block(text: str) -> tuple[str, bool]:
@@ -120,12 +129,29 @@ def write_git_hook(hooks_dir, name: str, block: str, *, remove=False) -> Path | 
 
 
 def _is_torsor_group(group) -> bool:
+    """True when every hook in the group is torsor's, i.e. the whole group is
+    ours to drop. A group that also holds a foreign hook is NOT ours."""
+    entries = _group_hooks(group)
+    return bool(entries) and all(_is_torsor_command(h.get("command", "")) for h in entries)
+
+
+def _group_hooks(group) -> list[dict]:
     if not isinstance(group, dict):
-        return False
-    for h in group.get("hooks") or []:
-        if isinstance(h, dict) and _SENTINEL in str(h.get("command", "")):
-            return True
-    return False
+        return []
+    return [h for h in (group.get("hooks") or []) if isinstance(h, dict)]
+
+
+def _without_torsor_hooks(group):
+    """The group with torsor's own hook entries removed, or None when nothing
+    of the user's is left. Filtering INSIDE the group is the point: dropping the
+    whole group deleted foreign hooks that merely shared it with ours."""
+    entries = _group_hooks(group)
+    kept = [h for h in entries if not _is_torsor_command(h.get("command", ""))]
+    if not kept:
+        return None
+    out = dict(group)
+    out["hooks"] = kept
+    return out
 
 
 def merge_settings_hooks(data, *, root: str = ".", on_stop=False, remove=False) -> dict:
@@ -140,7 +166,8 @@ def merge_settings_hooks(data, *, root: str = ".", on_stop=False, remove=False) 
     hooks_map = dict(out.get("hooks") or {})
 
     for event in list(hooks_map):
-        kept = [g for g in (hooks_map.get(event) or []) if not _is_torsor_group(g)]
+        kept = [g for g in (_without_torsor_hooks(g) for g in (hooks_map.get(event) or []))
+                if g is not None]
         if kept:
             hooks_map[event] = kept
         else:
@@ -168,6 +195,32 @@ def merge_settings_hooks(data, *, root: str = ".", on_stop=False, remove=False) 
     return out
 
 
+def read_settings(path) -> tuple[dict, bool]:
+    """Parse a Claude Code settings file. Returns (data, ok). `ok` is False when
+    the file exists but is not parseable JSON — Claude Code tolerates comments
+    and trailing commas, `json.loads` does not, and a settings file holds the
+    user's permissions, env and model. Callers must abort on False rather than
+    merge into {}: doing the latter replaced the whole file with torsor's hooks."""
+    path = Path(path)
+    if not path.exists():
+        return {}, True
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}, False
+    return (loaded if isinstance(loaded, dict) else {}), True
+
+
+def write_settings(path, data: dict) -> None:
+    """Write a settings file atomically, so an interrupted write cannot leave the
+    user with a truncated one."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".torsor-tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def is_managed_git_hook(text: str) -> bool:
     """True when a hook file carries torsor's managed block."""
     return _GIT_START in text
@@ -179,7 +232,8 @@ def settings_events_with_torsor(data) -> list[str]:
     if not isinstance(data, dict):
         return events
     for event, groups in (data.get("hooks") or {}).items():
-        if any(_is_torsor_group(g) for g in (groups or [])):
+        if any(any(_is_torsor_command(h.get("command", "")) for h in _group_hooks(g))
+               for g in (groups or [])):
             events.append(event)
     return events
 

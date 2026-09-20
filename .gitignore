@@ -8,7 +8,9 @@ dist/
 
 # Virtual envs / uv
 .venv/
-uv.lock
+# uv.lock IS committed: torsor is an application, and every runtime dep
+# except mcp is unbounded, so an unpinned resolve can break a fresh
+# install with no code change.
 
 # Test / tooling caches
 .pytest_cache/

@@ -10,13 +10,14 @@ from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.languages.modules import norm_module, norm_path
 from torsor_helper.languages.python import absolute_from_module, extract_edges, extract_symbols  # noqa: F401  (back-compat re-exports)
 from torsor_helper.models import Symbol, SymbolEdge
+from torsor_helper.paths import contained
 
 _norm_module = norm_module  # back-compat alias
 
 DEFAULT_IGNORE = {
     ".torsor", ".git", ".venv", "venv", "__pycache__", "node_modules",
     "build", "dist", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".eggs",
-    ".next", ".turbo", "coverage", "vendor", "target",
+    ".next", ".turbo", "coverage", "vendor", "target", ".claude",
 }
 
 
@@ -70,7 +71,9 @@ def repo_fingerprint(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> str:
 def _scan(root: Path, paths: list[str] | None, ignore: set[str]) -> tuple[list[Symbol], list[SymbolEdge]]:
     root = Path(root)
     if paths is not None:
-        files = [(root / p) if not Path(p).is_absolute() else Path(p) for p in paths]
+        # An explicit path list reaches here from map_repo (an MCP tool) and the
+        # post-commit hook; anything outside the repo is not ours to parse.
+        files = [f for f in (contained(root, p) for p in paths) if f is not None]
     else:
         files = iter_source_files(root, ignore)
 

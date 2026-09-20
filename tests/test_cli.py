@@ -81,14 +81,18 @@ def test_end_to_end_remember_then_bootstrap(tmp_path):
     assert "Picked FastMCP" in out
 
 
-def test_mcp_http_warns_on_non_loopback_host(tmp_path, monkeypatch):
+def test_mcp_http_refuses_a_non_loopback_host_without_allow_remote(tmp_path, monkeypatch):
+    # Was a warning it then ignored; an unauthenticated read/write server does
+    # not go on a routable interface because a line of stderr scrolled past.
+    served = []
     import torsor_helper.server as server_mod
 
-    monkeypatch.setattr(server_mod, "run", lambda *a, **k: None)
+    monkeypatch.setattr(server_mod, "run", lambda *a, **k: served.append(k))
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http", "--host", "0.0.0.0"])
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 2, result.output
     assert "no authentication" in result.output
+    assert served == []
 
 
 def test_mcp_http_loopback_does_not_warn(tmp_path, monkeypatch):

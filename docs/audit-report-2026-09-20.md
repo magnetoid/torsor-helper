@@ -172,7 +172,17 @@ make everything else cheap (render layer, result types, module split) → perfor
 `uv run --extra dev pytest -q`, `ruff`, and `torsor guard --strict` green. TDD per CLAUDE.md:
 failing test first for every bug.
 
-### Phase 0 — Safety fixes (≈1 day, all Small, release as 0.6.1)
+### Phase 0 — Safety fixes — **DONE (2026-09-20)**
+
+> Shipped on `feat/safety-fixes`: A1, A2, A3, A4, A5, A6, A7, A8, I7, I12, G6, H1, H2, E10/G1,
+> plus B3 which shipped earlier with the token-budget work. 25 regression tests; 569 pass, ruff
+> and `torsor guard --strict` clean.
+>
+> **A9 was not a bug.** The audit read `merge_settings_hooks(data, root=".")` as wrong for a
+> project whose `.torsor/` sits in a subdirectory. `.claude/settings.json` resolves under the
+> same root, so Claude Code's cwd is that root and `"."` is correct. Verified, not assumed.
+>
+> Still open from this phase's neighbourhood: nothing. The original list follows for the record.
 
 1. **A1** `install_hooks`/`uninstall_hooks`: on `json.loads` failure **abort with a message**, never write. Write via tmp+`os.replace`. Test: malformed settings.json is left byte-identical.
 2. **A2** `merge_settings_hooks`: filter *hooks inside a group*, drop the group only when it becomes empty. Tighten `_SENTINEL` to a `command.startswith(...)`/regex-anchored check. Tests: mixed group keeps the foreign hook.

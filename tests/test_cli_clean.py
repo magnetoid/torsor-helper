@@ -37,7 +37,7 @@ def test_clean_apply_removes_the_orphan(tmp_path):
 def test_clean_deep_drops_the_index(tmp_path):
     _project_with_orphan(tmp_path)
 
-    result = runner.invoke(app, ["clean", "--root", str(tmp_path), "--apply", "--deep"])
+    result = runner.invoke(app, ["clean", "--root", str(tmp_path), "--apply", "--deep", "--yes"])
 
     assert result.exit_code == 0, result.output
     assert not (tmp_path / ".torsor" / ".index").exists()

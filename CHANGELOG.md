@@ -6,6 +6,50 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🔒 Safety pass: the operations that touch files torsor does not own
+- **`hooks install` could replace a user's entire `.claude/settings.json`.** Claude Code tolerates comments and
+  trailing commas; `json.loads` does not, and on a parse failure the code fell back to `{}` and wrote the merge
+  result — losing the user's permissions, env and model. Install and uninstall now abort and leave the file
+  byte-identical; writes go through a tmp file and `os.replace`.
+- **It also deleted foreign hooks.** Ownership was decided per hook *group*, and a group counted as torsor's if
+  any hook in it matched, so a group holding one torsor hook and one of yours lost yours. Filtering now happens
+  inside the group. Ownership is anchored too: a command must *be* a torsor invocation, not merely mention one
+  (`my-wrapper --then 'torsor hooks run …'` is yours, and stays).
+- `hooks uninstall` cleans **both** settings files — it used to clean one and leave the other firing — and
+  `install --local` clears a prior global install instead of doubling every hook.
+- Git-hook scripts `shlex.quote` the project root instead of interpolating it into a double-quoted shell string.
+- **Every caller-supplied path is contained to the project root** (new `paths.contained`). `check_drift` and
+  `verify` are MCP tools that take a file list, so an absolute path or a `../` escape used to be read and matched
+  against the ADR rules — and a `forbid_pattern` rule reports the line it matched on, which makes it a read
+  oracle. `stale --mark`, `map_repo`'s note writes and the cartographer's explicit-paths mode were equally open.
+- **Running the project's recorded commands is CLI-only.** `verify(run_tests=True)` reached `shell=True`
+  execution of `.torsor/commands.md` over MCP; that parameter is gone from the tool.
+- `mcp --http` **refuses** a non-loopback host without `--allow-remote` (it used to warn and serve anyway);
+  `clean --apply --deep` requires `--yes`; `torsor update` confirms before replacing the running binary.
+- **A typo in `torsor.toml` is now an error.** Every config model forbids unknown keys and `guard_on_edit` is a
+  `Literal`, so `[automaton]` or `guard_on_edit = "blok"` fails loudly; `doctor` prints the file and the detail.
+
+### 🗂 Non-derivable state left the disposable index
+- Coach dismissals and the auto-handoff watermark moved from `.torsor/.index/` to `.torsor/state/`. `clean --deep`
+  removes the index wholesale — correctly, since everything else in it rebuilds from Markdown — and was therefore
+  silently un-dismissing every recommendation and making the next handoff replay the whole history. Migration
+  happens on read, and `.torsor/.gitignore` is updated in place for projects scaffolded before this existed.
+
+### 🔧 Build & CI
+- **`uv.lock` is now committed.** Every runtime dependency except `mcp` was unbounded and the lockfile was
+  git-ignored, so a fresh resolve could break CI and every new install with no code change. Dependabot opens the
+  update PRs.
+- **A GitHub Release no longer publishes an untested commit.** `publish.yml` gained a `verify` job (lint, both
+  test matrices, `torsor guard --strict`, and a check that the tag matches the packaged version) that the publish
+  job now `needs:`, plus a smoke test that installs the built wheel into a clean venv and runs `torsor --version`,
+  `init` and `doctor`. CI runs the same wheel check, adds Python 3.13, and dogfoods the guard.
+
+#### Fixed
+- `torsor coach` no longer reports dangling `[[wikilinks]]` inside generated map notes: those are copied out of
+  docstrings, not authored, and a false positive in the one detector built for precision (ADR 0010) trains people
+  to ignore it. `.claude/` is excluded from the map walk.
+
+
 ### 💸 Token budgets that are actually enforced
 - `budget.py` claimed every context-returning path was budgeted; several were not, and the ones that were
   under-counted. Fixed end to end, with a test per path (`tests/test_token_budgets.py`):

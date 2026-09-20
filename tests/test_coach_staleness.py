@@ -80,3 +80,39 @@ def test_findings_have_stable_keys(tmp_path):
     keys = [r.key for r in staleness.check_dangling_links(store) + staleness.check_path_refs(store)]
     assert len(keys) == len(set(keys))  # stable + unique for dismissal/decay
     assert all(":" in k for k in keys)
+
+
+def test_dangling_links_ignores_generated_map_notes(tmp_path):
+    """A map note is rendered from code, not authored. A `[[...]]` inside a
+    docstring it copied is not the user's memory rotting, and reporting it
+    trains people to ignore the one detector built to be high-precision."""
+    from torsor_helper import operations as ops
+    from torsor_helper.coach import staleness
+    from torsor_helper.config import TorsorConfig
+    from torsor_helper.paths import TorsorPaths
+    from torsor_helper.store import Store
+
+    store = Store(TorsorPaths(tmp_path))
+    store.scaffold()
+    (tmp_path / "mod.py").write_text(
+        'def f():\n    """Docs that mention [[a-note-that-does-not-exist]]."""\n    return 1\n'
+    )
+    ops.map_repo(store, TorsorConfig())
+
+    recs = staleness.check_dangling_links(store)
+
+    assert [r for r in recs if "does-not-exist" in r.message] == []
+
+
+def test_dangling_links_still_fires_on_an_authored_note(tmp_path):
+    from torsor_helper.coach import staleness
+    from torsor_helper.paths import TorsorPaths
+    from torsor_helper.store import Store
+
+    store = Store(TorsorPaths(tmp_path))
+    store.scaffold()
+    (store.paths.memory_dir / "n.md").write_text(
+        "---\ntype: note\n---\n\n# N\n\nSee [[gone]].\n", encoding="utf-8"
+    )
+
+    assert any("gone" in r.message for r in staleness.check_dangling_links(store))

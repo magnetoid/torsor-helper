@@ -212,14 +212,16 @@ def build_server(root: Path | str) -> FastMCP:
                 + "\n".join([*lines, tail] if tail else lines))
 
     @mcp.tool()
-    def verify(files: list[str] | None = None, severity: str | None = None, run_tests: bool = False) -> str:
+    def verify(files: list[str] | None = None, severity: str | None = None) -> str:
         """The deterministic verification gate (guard + deps + staleness [+ tests]) as
         one machine-checkable verdict — a loop completion condition. Returns JSON
         {ok, exit_code, checks, summary}; each check carries a true `count` and a
-        capped `reasons`. Defaults to git-changed files; run_tests runs a recorded `test`."""
+        capped `reasons`. Defaults to git-changed files. Static analysis only —
+        running the project's recorded commands is CLI-only (`torsor verify
+        --run-tests`), the rule that keeps hook installers off this surface too."""
         import json
 
-        return json.dumps(ops.verify(store, config, files, severity=severity, run_tests=run_tests))
+        return json.dumps(ops.verify(store, config, files, severity=severity))
 
     @mcp.tool()
     def stale(mark: bool = False) -> str:

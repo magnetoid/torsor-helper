@@ -3,7 +3,8 @@ from __future__ import annotations
 import tomllib
 
 import tomli_w
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Literal
 
 from torsor_helper.paths import TorsorPaths
 
@@ -20,7 +21,15 @@ _DEFAULT_IMPORTANCE_FLOORS = {
 }
 
 
-class BudgetConfig(BaseModel):
+class _Strict(BaseModel):
+    """Reject unknown keys. Pydantic ignores them by default, so a typo'd section
+    or field (`[automaton]`, `guard_on_edit = "blok"`) silently left the default
+    in place while the user believed they had configured something."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class BudgetConfig(_Strict):
     bootstrap_tokens: int = 2000
     recall_tokens: int = 1500
     # The SessionStart hook digest. Deliberately small: it lands in *every*
@@ -41,14 +50,14 @@ class BudgetConfig(BaseModel):
     chars_per_token: int = 4
 
 
-class EmbeddingConfig(BaseModel):
+class EmbeddingConfig(_Strict):
     # Placeholder for Phase 2; unused in Phase 1.
     provider: str = "fastembed"
     model: str = "BAAI/bge-small-en-v1.5"
     dim: int = 384
 
 
-class IndexConfig(BaseModel):
+class IndexConfig(_Strict):
     rrf_k: int = 60
     recency_weight: float = 0.1
     graph_boost: float = 0.1
@@ -57,7 +66,7 @@ class IndexConfig(BaseModel):
     importance_floors: dict[str, float] = Field(default_factory=lambda: dict(_DEFAULT_IMPORTANCE_FLOORS))
 
 
-class ModelsConfig(BaseModel):
+class ModelsConfig(_Strict):
     # Model-tier policy (token thrift). torsor never calls models — it publishes
     # this routing policy for the orchestrating agent/harness to follow.
     cheap: str = ""   # basic, deterministic work (torsor lookups, command replays)
@@ -65,7 +74,7 @@ class ModelsConfig(BaseModel):
     fast: str = ""    # optional middle tier
 
 
-class AutomationConfig(BaseModel):
+class AutomationConfig(_Strict):
     # Event-driven auto-capture (see `torsor hooks install`). Capture behaviors
     # default ON: installing the hooks is itself the explicit opt-in, and each
     # only writes .torsor/ Markdown (the source of truth) or the disposable
@@ -83,11 +92,11 @@ class AutomationConfig(BaseModel):
     # before it lands. "advise" (default) only adds context — the guard stays
     # advisory (ADR 0009/0012); "block" denies on new severity=error drift;
     # "off" silences it without uninstalling.
-    guard_on_edit: str = "advise"      # off | advise | block
+    guard_on_edit: Literal["off", "advise", "block"] = "advise"
     parse_transcript: bool = False     # opt-in transcript enrichment for auto-handoff
 
 
-class CleanConfig(BaseModel):
+class CleanConfig(_Strict):
     # `torsor clean` retention. Journals are the only episodic tier that grows
     # unboundedly (one file per active day) and the only category clean can
     # discard that isn't re-derivable, so the window is explicit and tunable;
@@ -96,7 +105,7 @@ class CleanConfig(BaseModel):
     journal_retention_days: int = 90
 
 
-class TorsorConfig(BaseModel):
+class TorsorConfig(_Strict):
     version: int = 1
     budgets: BudgetConfig = Field(default_factory=BudgetConfig)
     embeddings: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
