@@ -198,7 +198,30 @@ failing test first for every bug.
 12. **H1** Commit `uv.lock` (remove from `.gitignore`); add `.github/dependabot.yml` (pip + github-actions, weekly). **H2** `publish.yml`: add lint+test steps before `uv build`, then install the built wheel into a clean venv and run `torsor --help` / `python -c "import torsor_helper"`.
 13. **E10/G1** Fix CLAUDE.md `self-update`→`update`; README badges/test counts/"What's new"→link to CHANGELOG; mark edit gate as unreleased or cut 0.6.1 with it; tag `v0.5.0` retroactively or note it in CHANGELOG.
 
-### Phase 1 — Structural seams (≈1–2 weeks, the enabler for everything after)
+### Phase 1 — Structural seams — **mostly DONE (2026-09-20)**
+
+> Shipped on `feat/operations-split`, in the order below: PR 1 (hoist imports,
+> un-shadow `guard`), PR 2 (`gitinfo.py`, which also fixed silently-skipped paths
+> with spaces or non-ASCII names), PR 3 (CLI loader + `_emit` + `-r`/`TORSOR_ROOT`,
+> which surfaced and fixed B12), PR 4 (the split: `operations/__init__.py` went
+> 1560 → 108 lines across eleven modules, with ADR 0014 and the rescoped ADR 0002
+> and 0011 rules), PR 6 (`render.py`), PR 7 (config ceilings, dead code).
+>
+> Measured effect: the Coach no longer lists `operations.py` among the repo's
+> hotspots at all. 607 tests pass with and without `--extra languages`.
+>
+> **PR 5 (result dataclasses) is deliberately not done.** It would convert the
+> ~10 untyped dict returns into models and touch 16 test files. The benefit is
+> real but narrow — a renamed key becomes a type error instead of a runtime
+> KeyError — and it is cleanly separable from everything above, which is what
+> actually unblocked the rest of the plan. Do it when something else forces a
+> pass over those call sites.
+>
+> **`--root` stayed a per-command option.** Promoting it to a callback option,
+> as sketched below, would turn `torsor map --root X` into `torsor --root X map`
+> and break every documented invocation. It gained `-r` and `TORSOR_ROOT` instead.
+
+### Phase 1 — the original plan (for the record)
 
 Goal: make the adapters genuinely thin and split `operations.py` with **zero behaviour change**.
 Six PRs, each a green-suite commit series. Verified facts that shape the order: none of the 29
