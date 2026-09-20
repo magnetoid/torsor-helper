@@ -102,6 +102,14 @@ class AutomationConfig(_Strict):
     parse_transcript: bool = False     # opt-in transcript enrichment for auto-handoff
 
 
+class CoachConfig(_Strict):
+    # How far back churn and temporal-coupling read. Unbounded, these walked the
+    # entire history twice on every `torsor coach`, so the cost grew with the
+    # repo's age forever — and a file that was hot three years ago is not the
+    # signal either check is looking for. 0 means no bound.
+    history_days: int = 365
+
+
 class CleanConfig(_Strict):
     # `torsor clean` retention. Journals are the only episodic tier that grows
     # unboundedly (one file per active day) and the only category clean can
@@ -118,6 +126,7 @@ class TorsorConfig(_Strict):
     index: IndexConfig = Field(default_factory=IndexConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     automation: AutomationConfig = Field(default_factory=AutomationConfig)
+    coach: CoachConfig = Field(default_factory=CoachConfig)
     clean: CleanConfig = Field(default_factory=CleanConfig)
 
 

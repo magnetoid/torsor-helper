@@ -41,9 +41,10 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
     # only in the explicit `torsor stale` command, not the always-on Coach.
     recs += staleness.check_dangling_links(store)
     if conn is not None:  # indexed path; these self-skip outside a git repo / on a clean project
-        recs += hotspots.find_hotspots(store.paths.root)
+        days = config.coach.history_days if config is not None else 365
+        recs += hotspots.find_hotspots(store.paths.root, history_days=days)
         recs += _phantom_dep_recs(store)
-        recs += coupling.find_coupling_recs(store.paths.root, conn)
+        recs += coupling.find_coupling_recs(store.paths.root, conn, history_days=days)
         recs += hubs.find_hub_recs(conn)
         recs += trend.find_regressions(store.paths.root, conn)
     if context:

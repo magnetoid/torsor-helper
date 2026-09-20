@@ -6,6 +6,12 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+- **`torsor coach` no longer reads the whole git history, twice.** Churn and temporal coupling each walked
+  every commit ever made, so the Coach got slower every year regardless of how much code there was — and a
+  file that was hot three years ago is not the signal either check looks for. New `coach.history_days`
+  (default 365; `0` disables the bound). Both also moved onto the shared `gitinfo` wrapper, so they stop
+  silently skipping paths with spaces or non-ASCII names.
+
 ### ⚡ Performance: recall was 7.6 s on a 5 000-note project, and is now under half a second
 Measured, not guessed. A new `tests/bench/` builds a deterministic 5 000-note, 200-module corpus so every
 number below is reproducible, and each fix was picked by profiling — every assumption carried in from the

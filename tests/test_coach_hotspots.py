@@ -43,3 +43,33 @@ def test_assemble_no_hotspot_offline_non_git(tmp_project):
     finally:
         conn.close()
     assert not any(r.kind == "hotspot" for r in recs)
+
+
+def test_history_args_bounds_the_git_log_window():
+    from torsor_helper.coach.hotspots import history_args
+
+    assert history_args(365) == ["--since", "365 days ago"]
+    assert history_args(0) == []      # 0 disables the bound
+    assert history_args(-1) == []
+
+
+def test_churn_respects_the_window(git_project):
+    """A commit outside the window must not count toward churn — otherwise
+    `torsor coach` gets slower every year and reports files that went quiet
+    long ago."""
+    import subprocess
+
+    from torsor_helper.coach.hotspots import _churn
+
+    old = git_project / "ancient.py"
+    old.write_text("x = 1\n")
+    subprocess.run(["git", "-C", str(git_project), "add", "ancient.py"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(git_project), "commit", "-m", "ancient", "--date", "2020-01-01T00:00:00"],
+        check=True, capture_output=True,
+        env={"PATH": "/usr/bin:/bin:/usr/local/bin", "GIT_COMMITTER_DATE": "2020-01-01T00:00:00",
+             "GIT_AUTHOR_DATE": "2020-01-01T00:00:00", "HOME": str(git_project)},
+    )
+
+    assert "ancient.py" not in _churn(git_project, history_days=30)
+    assert "ancient.py" in _churn(git_project, history_days=0)   # unbounded still sees it
