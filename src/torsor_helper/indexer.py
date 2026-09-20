@@ -13,7 +13,7 @@ from torsor_helper.store import Store
 # and adding a secondary index or a lookup table has no bearing on whether a
 # stored vector is still valid. Tying the two meant a pure-DDL change re-embedded
 # the whole corpus.
-INDEX_FORMAT_VERSION = 1
+INDEX_FORMAT_VERSION = 2
 
 
 def _is_fallback(stored: str | None, embedder) -> bool:
@@ -72,7 +72,11 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
     pending: list[tuple[str, str]] = []  # (path, body) to embed
 
     for md in store.iter_note_paths():
-        path = str(md)
+        # as_posix, not str: SlugIndex, _breadcrumb and the wikilink resolver all
+        # split a stored path on "/". On Windows str() gives backslashes, so each
+        # of those saw one segment — no wikilink edge ever resolved, and the
+        # breadcrumb that situates a note for retrieval collapsed to a filename.
+        path = md.as_posix()
         seen.add(path)
         try:
             st = md.stat()

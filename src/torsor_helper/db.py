@@ -247,7 +247,9 @@ class SlugIndex:
         self.by_basename: dict[str, str] = {}
         self.ambiguous: set[str] = set()
         for p in self.paths:
-            name = p.rsplit("/", 1)[-1]
+            # Tolerate a backslash path from an index built by an older version
+            # on Windows; the indexer writes posix now.
+            name = p.replace("\\", "/").rsplit("/", 1)[-1]
             if not name.endswith(".md"):
                 continue
             slug = name[:-3]
@@ -270,7 +272,8 @@ class SlugIndex:
         suffix = f"/{slug}.md"
         exact = f"{slug}.md"
         for p in self.paths:
-            if p == exact or p.endswith(suffix):
+            norm = p.replace("\\", "/")
+            if norm == exact or norm.endswith(suffix):
                 return p
         return None
 
