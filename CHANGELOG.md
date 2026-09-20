@@ -6,6 +6,56 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### ⚡ Performance: recall was 7.6 s on a 5 000-note project, and is now under half a second
+Measured, not guessed. A new `tests/bench/` builds a deterministic 5 000-note, 200-module corpus so every
+number below is reproducible, and each fix was picked by profiling — every assumption carried in from the
+audit pointed somewhere else.
+
+| path | before | after |
+|---|---:|---:|
+| `recall` (warm) | 7 650 ms | 482 ms |
+| `recall` (cold, builds the index) | 14 273 ms | 495 ms |
+| `recall` (filtered by type) | 8 949 ms | 495 ms |
+| `map_repo` (cold) | 163 960 ms | 25 514 ms |
+| `map_repo` (unchanged repo) | 198 ms | 73 ms |
+| `get_intent` | 24 ms | 10 ms |
+| `connect` | 132 ms | 65 ms |
+| `find` (fuzzy) | 2 776 ms | 1 567 ms |
+
+- **The biggest cost was not in search.** `store.iter_note_paths` called `Path.resolve()` — a syscall — once
+  per note just to test whether the note sat inside `.index/`, and `reindex` walks it on every recall: 5.8 s
+  of an 11.8 s recall. It prunes during traversal now, the way `cartographer.iter_files` already did.
+  `store.tier_for_path` had the same shape, resolving four anchor paths per note inside `read_note`: 24 s of a
+  61 s cold map. The anchors are resolved once per project root, and the usual caller matches without touching
+  the filesystem at all.
+- **Wikilink resolution was quadratic.** `_resolve_slug` scanned every note path once per distinct slug, over
+  every edge, on every reindex, and `replace_edges` ran a full `SELECT` of all paths per note indexed. A
+  `SlugIndex` built once replaces both; a slug containing `/` keeps the scan, because it matches a path
+  *suffix* rather than a basename. The healing pass now runs only when the note set actually moved.
+- **Search did work it then threw away.** MMR ran over every hit although only `limit` survive it (a 4×
+  shortlist now, over pre-normalized vectors), and a snippet — an FTS lookup plus a scan of the body — was
+  built for every candidate before the cut rather than for the handful shown. `note_row` and `get_vectors`
+  were N+1; both batch now. Vectors are stored L2-normalized, so `cosine_search` is one matrix multiply
+  instead of a Python loop that re-normalized each row.
+- **`db.connect` ran the full schema pass on every open** — ten `CREATE`s, two `PRAGMA table_info`, a meta
+  write and a commit — so every CLI command and every recall did a write transaction before any read. It
+  trusts the version stamp now. The trade-off is documented in the code: **a schema change must come with a
+  `SCHEMA_VERSION` bump**, where an unbumped one used to be absorbed silently. `PRAGMA synchronous=NORMAL`
+  for the same reason (WAL already survives a process crash).
+- **`map_repo` rewrote every module note on every run**, and `write_note` stamps `updated` from the clock — so
+  the post-commit hook churned ~170 committed files after a one-file change *and* changed their content
+  hashes, which made the next reindex re-embed all of them. Identical renderings are left alone.
+- **Seven missing indexes** (`edges(src)`, `edges(target_path)`, `symbols(module)`, `symbols(name)`,
+  `symbol_edges(resolved_module, referenced_name)`, `symbol_edges(module)`, `notes(type, kind)`) and an
+  `fts_map`, so a body lookup by path is a rowid hit rather than a scan of a table whose `path` column is
+  deliberately `UNINDEXED`. **`SCHEMA_VERSION` 7 → 8**; the index is disposable, so the bump just rebuilds.
+- **A DDL change no longer re-embeds the corpus.** The re-embed trigger was tied to `SCHEMA_VERSION`, so
+  adding an index forced every note through the embedder. A separate `INDEX_FORMAT_VERSION` now governs it
+  and names what actually goes into the index: the breadcrumb, the FTS title, the embedding input.
+- Frontmatter parsing uses libyaml's `CSafeLoader` when PyYAML was built with it (same grammar, C speed),
+  falling back to the pure-Python loader otherwise.
+
+
 ### 🔒 Safety pass: the operations that touch files torsor does not own
 - **`hooks install` could replace a user's entire `.claude/settings.json`.** Claude Code tolerates comments and
   trailing commas; `json.loads` does not, and on a parse failure the code fell back to `{}` and wrote the merge
