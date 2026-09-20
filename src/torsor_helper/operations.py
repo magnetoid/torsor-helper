@@ -14,6 +14,7 @@ from torsor_helper import db
 from torsor_helper import deps as _deps
 from torsor_helper import export as _export
 from torsor_helper import finder
+from torsor_helper import gitinfo
 from torsor_helper import guard
 from torsor_helper import hooks as _hooks
 from torsor_helper import languages
@@ -131,6 +132,16 @@ def _recent_journal(store: Store, max_tokens: int, cpt: int) -> str:
 
 
 _EMBEDDER_CACHE: dict = {}
+
+
+# The git wrapper lives in gitinfo (a leaf module). These aliases keep the
+# private names the capture tests and older call sites use.
+_source_exts = gitinfo.source_extensions
+_rel_to_root = gitinfo.rel_to_root
+_git_changed = gitinfo.changed_source_files
+_git_changed_in_commit = gitinfo.commit_source_files
+_git_out = gitinfo.output
+_git_head = gitinfo.head
 
 
 def _embedder_for(config):
@@ -815,15 +826,6 @@ def record_decision(store, title, context, decision, consequences="", rules=None
     return str(target)
 
 
-def _source_exts() -> tuple[str, ...]:
-    """Extensions the default git-changed discovery feeds to guard/deps. Derived
-    from the language registry (every registered extension, available or not —
-    an unavailable language's files still match `forbid_pattern` rules scoped to
-    them), plus `.pyi` and `.rs`, which no extractor claims but which teams do
-    write `forbid_pattern` rules against."""
-    return tuple(dict.fromkeys(languages.all_extensions() + (".pyi", ".rs")))
-
-
 def list_practices(store, config, language=None) -> str:
     """Render the curated best-practice pack(s): one language, or every pack
     detected in the repo when language is None."""
@@ -870,67 +872,6 @@ def adopt_practices(store, config, language) -> dict:
             "then `torsor rules --write AGENTS.md` to refresh the prompt block."
         ),
     }
-
-
-def _rel_to_root(root, toplevel, files) -> list[str]:
-    """Re-anchor git toplevel-relative paths to the torsor root, keeping only
-    source files that live under it — so a .torsor/ in a subdirectory of the git
-    repo never checks the wrong paths. Shared by the working-tree and per-commit
-    change discovery."""
-    top, base = Path(toplevel), Path(root).resolve()
-    exts = _source_exts()
-    out: list[str] = []
-    for f in files:
-        if not f.endswith(exts):
-            continue
-        try:
-            out.append((top / f).relative_to(base).as_posix())
-        except ValueError:
-            continue  # outside the torsor root — not ours to check
-    return out
-
-
-def _git_changed(root) -> list[str]:
-    try:
-        toplevel = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, timeout=10,
-        ).stdout.strip()
-        changed = subprocess.run(
-            ["git", "-C", str(root), "diff", "--name-only", "HEAD"],
-            capture_output=True, text=True, timeout=10,
-        ).stdout.split()
-        untracked = subprocess.run(
-            # --full-name: toplevel-relative like `diff --name-only`, regardless
-            # of where inside the repo the torsor root sits
-            ["git", "-C", str(root), "ls-files", "--others", "--exclude-standard", "--full-name"],
-            capture_output=True, text=True, timeout=10,
-        ).stdout.split()
-    except (OSError, subprocess.SubprocessError):
-        return []
-    if not toplevel:
-        return []
-    return _rel_to_root(root, toplevel, changed + untracked)
-
-
-def _git_changed_in_commit(root, ref="HEAD") -> list[str]:
-    """Source files touched by a single commit (default HEAD) — what the
-    post-commit hook remaps. Working-tree `_git_changed` diffs uncommitted state;
-    this diffs the commit itself."""
-    try:
-        toplevel = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, timeout=10,
-        ).stdout.strip()
-        names = subprocess.run(
-            ["git", "-C", str(root), "diff-tree", "--no-commit-id", "--name-only", "-r", ref],
-            capture_output=True, text=True, timeout=10,
-        ).stdout.split()
-    except (OSError, subprocess.SubprocessError):
-        return []
-    if not toplevel:
-        return []
-    return _rel_to_root(root, toplevel, names)
 
 
 def check_drift(store, config, files=None) -> list:
@@ -1193,18 +1134,6 @@ def _save_capture_state(store, data: dict) -> None:
     path = _capture_state_path(store)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-
-
-def _git_out(root, *args) -> str:
-    try:
-        r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=10)
-        return r.stdout.strip() if r.returncode == 0 else ""
-    except (OSError, subprocess.SubprocessError):
-        return ""
-
-
-def _git_head(root) -> str:
-    return _git_out(root, "rev-parse", "HEAD")
 
 
 def _op_totals(store) -> dict:
