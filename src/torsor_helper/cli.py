@@ -78,29 +78,39 @@ def init(
         typer.echo(config_snippet(client, root=str(root.resolve())))
 
 
+_LOOPBACK = ("127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1")
+
+
 @app.command()
 def mcp(
     root: Path = typer.Option(Path("."), help="Project root containing .torsor/."),
     http: bool = typer.Option(False, "--http", help="Serve over HTTP (streamable-http) instead of stdio — for shared/remote/team use."),
     host: str = typer.Option("127.0.0.1", help="Host to bind when --http."),
     port: int = typer.Option(8000, help="Port to bind when --http."),
+    allow_remote: bool = typer.Option(False, "--allow-remote", help="Required to bind --http to a non-loopback host; the transport has no authentication."),
 ) -> None:
     """Run the torsor-helper MCP server (stdio by default; --http for a shared service)."""
     from torsor_helper.server import run
 
-    if http and host not in ("127.0.0.1", "localhost", "::1"):
+    if http and host not in _LOOPBACK and not allow_remote:
+        # A warning the user could ignore was not a gate: this serves read AND
+        # write access to the project's memory, unauthenticated, to anyone who
+        # can reach the port.
         typer.echo(
-            "WARNING: the HTTP transport has no authentication. Binding to a non-loopback "
-            f"host ({host}) exposes read/write access to this project's memory to anyone who "
-            "can reach the port. Put it behind a reverse proxy with auth, or use an SSH tunnel.",
+            f"Refusing to bind the HTTP transport to {host}: it has no authentication, so this "
+            "would expose read/write access to this project's memory to anyone who can reach "
+            "the port. Put it behind a reverse proxy or an SSH tunnel, or pass --allow-remote "
+            "if you accept that.",
             err=True,
         )
+        raise typer.Exit(code=2)
     run(root, transport="streamable-http" if http else "stdio", host=host, port=port)
 
 
 @app.command()
 def update(
     print_only: bool = typer.Option(False, "--print-only", help="Show the upgrade command without running it."),
+    yes: bool = typer.Option(False, "--yes", help="Skip the confirmation prompt."),
 ) -> None:
     """Update the torsor CLI itself (detects uv tool / pipx / pip installs)."""
     import subprocess
@@ -115,6 +125,11 @@ def update(
     typer.echo(f"Detected install method: {method}")
     typer.echo("$ " + " ".join(cmd))
     if print_only:
+        return
+    # This replaces the running binary with whatever the package index — or a git
+    # branch HEAD — currently serves, with no signature check. Confirm it.
+    if not yes and not typer.confirm("Run it?", default=True):
+        typer.echo("Cancelled.")
         return
     result = subprocess.run(cmd)
     if result.returncode != 0:
@@ -141,7 +156,7 @@ def doctor(root: Path = typer.Option(Path("."), help="Project root to check.")) 
     try:
         load_config(paths)
     except Exception as exc:  # malformed TOML or invalid schema
-        typer.echo(f"Config malformed: {exc}", err=True)
+        typer.echo(f"Config malformed in {paths.config_file}:\n{exc}", err=True)
         raise typer.Exit(code=1)
     from torsor_helper import languages
 
@@ -544,8 +559,17 @@ def clean(
     root: Path = typer.Option(Path("."), help="Project root."),
     apply: bool = typer.Option(False, "--apply", help="Actually delete (default is a dry run)."),
     deep: bool = typer.Option(False, "--deep", help="Also drop the whole disposable index."),
+    yes: bool = typer.Option(False, "--yes", help="Confirm a destructive --apply --deep."),
 ) -> None:
     """Reclaim orphaned map notes, dead index rows and expired journals. Dry run by default."""
+    if apply and deep and not yes:
+        typer.echo(
+            "--apply --deep removes the entire .torsor/.index/ directory. Most of it rebuilds "
+            "from Markdown, but the learned frecency and op-frequency data do not. Re-run with "
+            "--yes to confirm.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
     tp = TorsorPaths(root)
     if not tp.base.exists():
         typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
