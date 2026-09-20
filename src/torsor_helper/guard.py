@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-import fnmatch
 import re
 from pathlib import Path
 
@@ -41,6 +40,64 @@ def load_rules_by_note(store: Store) -> list[tuple[Path, str, list[Rule]]]:
         if rules:
             out.append((path, note.title, rules))
     return out
+
+
+_SCOPE_CACHE: dict[str, re.Pattern] = {}
+
+
+def _scope_regex(scope: str) -> re.Pattern:
+    """Translate a scope glob to a regex with path-aware semantics.
+
+    `*` and `?` stay inside one path segment, `**` spans directories (including
+    zero of them), and `[...]` classes pass through. fnmatch has none of this:
+    it lets `*` cross `/`, so `src/pkg/*.py` silently governed everything under
+    src/pkg, and it gives `**` no meaning at all, so `src/**/*.ts` matched
+    nothing directly under src/.
+    """
+    out, i, n = [], 0, len(scope)
+    while i < n:
+        c = scope[i]
+        if c == "*":
+            if scope[i:i + 3] == "**/":
+                out.append("(?:[^/]+/)*")   # zero or more directories
+                i += 3
+                continue
+            if scope[i:i + 2] == "**":
+                out.append(".*")
+                i += 2
+                continue
+            out.append("[^/]*")
+        elif c == "?":
+            out.append("[^/]")
+        elif c == "[":
+            j = scope.index("]", i + 1) if "]" in scope[i + 1:] else -1
+            if j == -1:
+                out.append(re.escape(c))
+            else:
+                body = scope[i + 1:j]
+                body = ("^" + body[1:]) if body.startswith("!") else body
+                out.append(f"[{body}]")
+                i = j + 1
+                continue
+        else:
+            out.append(re.escape(c))
+        i += 1
+    return re.compile("".join(out) + r"\Z")
+
+
+def scope_matches(relpath: str, scope: str) -> bool:
+    """Does `relpath` fall inside `scope`?
+
+    A scope containing no "/" matches at any depth, the way a .gitignore
+    pattern does — `scope: "*.py"` has always meant "Python files" and rules in
+    the wild depend on it. A scope with a "/" is anchored at the repo root.
+    """
+    pattern = _SCOPE_CACHE.get(scope)
+    if pattern is None:
+        pattern = _SCOPE_CACHE[scope] = _scope_regex(scope)
+    if "/" not in scope:
+        return bool(pattern.match(relpath.rsplit("/", 1)[-1]))
+    return bool(pattern.match(relpath))
 
 
 def load_rules(store: Store) -> list[Rule]:
@@ -224,6 +281,6 @@ def check_drift(store: Store, files) -> list[Violation]:
             continue
         relpath = abs_path.relative_to(Path(root).resolve()).as_posix()
         for rule in rules:
-            if fnmatch.fnmatch(relpath, rule.scope):
+            if scope_matches(relpath, rule.scope):
                 out.extend(violations_for_file(relpath, text, rule))
     return out

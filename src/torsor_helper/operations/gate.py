@@ -6,7 +6,6 @@ advisory by default and never edit code: pre_push can block only when the user
 opted in, and pre_edit blocks only on new severity=error drift (ADR 0012)."""
 from __future__ import annotations
 
-import fnmatch
 from pathlib import Path
 
 from torsor_helper import baseline as _baseline
@@ -165,7 +164,7 @@ def pre_edit(store, config, tool_name, tool_input) -> dict | None:
     violations = [
         v
         for rule in guard.load_rules(store)
-        if fnmatch.fnmatch(relpath, rule.scope)
+        if guard.scope_matches(relpath, rule.scope)
         for v in guard.violations_for_file(relpath, text, rule)
     ]
     new = _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))

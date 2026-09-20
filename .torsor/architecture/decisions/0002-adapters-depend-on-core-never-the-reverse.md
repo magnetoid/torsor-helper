@@ -9,7 +9,7 @@ updated: '2026-06-02T01:57:25'
 rules:
 - kind: forbid_import
   target: torsor_helper.cli
-  scope: src/torsor_helper/*.py
+  scope: src/torsor_helper/**/*.py
   message: nothing should import the CLI entry point
 - kind: forbid_import
   target: torsor_helper.server
