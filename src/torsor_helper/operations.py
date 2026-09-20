@@ -1468,8 +1468,6 @@ def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=
     """Wire git hooks + Claude Code hook entries so capture fires on the lifecycle.
     Idempotent, foreign-content-preserving, and CLI-only (footgun parity with the
     self-updater — an agent should not rewrite its own hooks; ADR 0009)."""
-    import json
-
     from torsor_helper import hooks as _hooks
 
     root = str(store.paths.root)
@@ -1496,18 +1494,29 @@ def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=
 
     if claude:
         target = store.paths.claude_settings_local if local else store.paths.claude_settings
-        data: dict = {}
-        if target.exists():
-            try:
-                loaded = json.loads(target.read_text(encoding="utf-8"))
-                if isinstance(loaded, dict):
-                    data = loaded
-            except ValueError:
-                data = {}
-        merged = _hooks.merge_settings_hooks(data, root=".", on_stop=on_stop)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
-        result["claude_settings"] = str(target)
+        sibling = store.paths.claude_settings if local else store.paths.claude_settings_local
+        data, ok = _hooks.read_settings(target)
+        if not ok:
+            # The file holds the user's permissions, env and model. Merging into
+            # {} would replace all of it with torsor's hooks, so refuse instead.
+            result["warnings"].append(
+                f"{target} exists but could not be parsed as JSON — left untouched. "
+                "Claude Code tolerates comments and trailing commas; this parser does not. "
+                "Fix or move it, then re-run `torsor hooks install`."
+            )
+            result["skipped"].append("claude")
+        else:
+            _hooks.write_settings(target, _hooks.merge_settings_hooks(data, root=".", on_stop=on_stop))
+            result["claude_settings"] = str(target)
+            # Exactly one install site: entries left behind in the sibling file
+            # would fire every hook a second time (double digest, double handoff).
+            if sibling.exists():
+                other, other_ok = _hooks.read_settings(sibling)
+                if other_ok:
+                    cleaned = _hooks.merge_settings_hooks(other, remove=True)
+                    if cleaned != other:
+                        _hooks.write_settings(sibling, cleaned)
+                        result["warnings"].append(f"removed a previous torsor install from {sibling}")
 
     # Baseline the capture marker at install time so the first auto-handoff is
     # scoped to post-install activity (not a dump of all prior commits/ADRs).
@@ -1522,11 +1531,9 @@ def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=
 
 def uninstall_hooks(store, config, *, local=False) -> dict:
     """Remove only torsor-owned git hooks + Claude Code hook entries."""
-    import json
-
     from torsor_helper import hooks as _hooks
 
-    result = {"removed": [], "claude_settings": None}
+    result = {"removed": [], "claude_settings": None, "cleaned": [], "warnings": []}
     hooks_dir = _hooks.resolve_hooks_dir(str(store.paths.root))
     if hooks_dir is not None:
         for name in ("post-commit", "pre-push"):
@@ -1534,16 +1541,23 @@ def uninstall_hooks(store, config, *, local=False) -> dict:
             if removed is not None:
                 result["removed"].append(str(removed))
 
-    target = store.paths.claude_settings_local if local else store.paths.claude_settings
-    if target.exists():
-        try:
-            loaded = json.loads(target.read_text(encoding="utf-8"))
-            data = loaded if isinstance(loaded, dict) else {}
-        except ValueError:
-            data = {}
+    # Both files, always. `local` used to select one, which left the other one
+    # firing while the user believed the hooks were gone. Uninstall means gone.
+    for target in (store.paths.claude_settings, store.paths.claude_settings_local):
+        if not target.exists():
+            continue
+        data, ok = _hooks.read_settings(target)
+        if not ok:
+            result["warnings"].append(
+                f"{target} exists but could not be parsed as JSON — left untouched; "
+                "remove torsor's hook entries by hand."
+            )
+            continue
         merged = _hooks.merge_settings_hooks(data, remove=True)
-        target.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
-        result["claude_settings"] = str(target)
+        if merged != data:
+            _hooks.write_settings(target, merged)
+            result["cleaned"].append(str(target))
+    result["claude_settings"] = result["cleaned"][0] if result["cleaned"] else None
     return result
 
 

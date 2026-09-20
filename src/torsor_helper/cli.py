@@ -743,16 +743,19 @@ def hooks_install(
 @hooks_app.command("uninstall")
 def hooks_uninstall(
     root: Path = typer.Option(Path("."), help="Project root."),
-    local: bool = typer.Option(False, "--local", help="Also target .claude/settings.local.json."),
+    local: bool = typer.Option(False, "--local", help="Accepted for compatibility; both settings files are always cleaned."),
 ) -> None:
-    """Remove only torsor-owned git hooks and Claude Code hook entries."""
+    """Remove only torsor-owned git hooks and Claude Code hook entries.
+    Cleans settings.json and settings.local.json both, so nothing is left firing."""
     _, config, store = _load(root)
     result = ops.uninstall_hooks(store, config, local=local)
     for h in result["removed"]:
         typer.echo(f"removed: {h}")
-    if result["claude_settings"]:
-        typer.echo(f"cleaned: {result['claude_settings']}")
-    if not result["removed"] and not result["claude_settings"]:
+    for path in result["cleaned"]:
+        typer.echo(f"cleaned: {path}")
+    for w in result["warnings"]:
+        typer.echo(f"warning: {w}", err=True)
+    if not result["removed"] and not result["cleaned"]:
         typer.echo("Nothing to uninstall.")
 
 
