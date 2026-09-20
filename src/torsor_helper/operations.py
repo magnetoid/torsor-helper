@@ -14,6 +14,7 @@ from torsor_helper.indexer import reindex
 from torsor_helper.models import Frontmatter, RecallResult
 from torsor_helper.recall import keyword_recall
 from torsor_helper.search import hybrid_search
+from torsor_helper import store as _store_mod
 from torsor_helper.store import Store
 from torsor_helper.paths import contained
 
@@ -1053,8 +1054,16 @@ def recommend(store, config, context=None, limit=8):
             conn.close()
 
 
+def _state_file(store, name: str):
+    return _store_mod.state_file(store.paths, name)
+
+
+def _coach_state_path(store):
+    return _state_file(store, "coach_state.json")
+
+
 def dismiss_recommendation(store, key) -> None:
-    state = CoachState(store.paths.index_dir / "coach_state.json")
+    state = CoachState(_coach_state_path(store))
     state.dismiss(key)
     state.save()
 
@@ -1185,8 +1194,10 @@ def _snapshot_complexity(store) -> None:
 # Every core is deterministic, offline, and flag-guarded (config.automation).
 
 def _capture_state_path(store):
-    # Disposable session bookkeeping, NOT source of truth — lives under .index/.
-    return store.paths.index_dir / "capture_state.json"
+    # The auto-handoff watermark: a git HEAD plus op counters. Machine-local, but
+    # NOT derivable — losing it makes the next handoff replay the whole history —
+    # so it lives in state/, not in the index `clean --deep` throws away.
+    return _state_file(store, "capture_state.json")
 
 
 def _load_capture_state(store) -> dict:

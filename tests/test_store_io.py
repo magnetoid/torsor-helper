@@ -15,7 +15,9 @@ def test_scaffold_creates_pyramid_and_gitignore(tmp_path):
     assert (paths.decisions_dir / "0001-adopt-torsor-helper.md").exists()
     assert paths.active_context.exists()
     assert paths.journal_dir.is_dir()
-    assert (paths.base / ".gitignore").read_text().strip() == ".index/"
+    # Both derived directories: the index rebuilds from Markdown, and state/
+    # holds machine-local dismissals and a git watermark.
+    assert (paths.base / ".gitignore").read_text().split() == [".index/", "state/"]
 
 
 def test_scaffold_is_idempotent_without_force(tmp_path):

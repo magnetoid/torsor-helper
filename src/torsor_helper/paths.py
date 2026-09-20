@@ -111,6 +111,16 @@ class TorsorPaths:
         return self.base / ".index"
 
     @property
+    def state_dir(self) -> Path:
+        # Small, machine-local state that does NOT rebuild from Markdown: the
+        # user's Coach dismissals and the auto-handoff watermark. It lived in
+        # .index/ until `clean --deep` (which rmtree's that directory, correctly,
+        # because everything else in it IS derivable) started silently
+        # un-dismissing every recommendation. Git-ignored — the watermark is a
+        # local git HEAD and means nothing on another machine.
+        return self.base / "state"
+
+    @property
     def index_db(self) -> Path:
         return self.index_dir / "torsor.db"
 

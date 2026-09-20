@@ -4,9 +4,14 @@ from torsor_helper import cartographer, db, deps
 from torsor_helper.coach import coupling, health, hotspots, hubs, recommender, staleness, trend
 from torsor_helper.coach.state import CoachState
 from torsor_helper.models import Recommendation
-from torsor_helper.store import Store
+from torsor_helper.store import Store, state_file
 
 _SEVERITY_RANK = {"important": 0, "suggest": 1, "info": 2}
+
+
+def _coach_state_path(store):
+    # store.state_file, not operations' — coach/ must not depend on operations.
+    return state_file(store.paths, "coach_state.json")
 
 
 def _phantom_dep_recs(store: Store) -> list[Recommendation]:
@@ -44,7 +49,7 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
     if context:
         recs += recommender.best_practice_recs(store, config, context, conn=conn, embedder=embedder, limit=limit)
 
-    state = CoachState(store.paths.index_dir / "coach_state.json")
+    state = CoachState(_coach_state_path(store))
     recs = [r for r in recs if not state.is_dismissed(r.key)]
     # Rank by severity, then decay (recs shown many times sink within their band
     # so the Coach never nags), then score, then key for a stable total order.
@@ -63,7 +68,7 @@ def session_digest(store: Store, limit: int = 3) -> list[Recommendation]:
     record `seen` — a persistent unaddressed issue keeps surfacing every
     session until it's fixed or explicitly dismissed (no decay here)."""
     recs = health.check_thin(store) + health.check_stale(store) + health.check_unruled(store)
-    state = CoachState(store.paths.index_dir / "coach_state.json")
+    state = CoachState(_coach_state_path(store))
     recs = [r for r in recs if not state.is_dismissed(r.key)]
     recs.sort(key=lambda r: (_SEVERITY_RANK.get(r.severity, 1), r.key))
     return recs[:limit]

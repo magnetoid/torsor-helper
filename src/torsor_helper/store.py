@@ -18,6 +18,49 @@ _FM_BLOCK = re.compile(r"^---[ \t]*\n(.*?)^---[ \t]*\n?(.*)$", re.DOTALL | re.MU
 _H1 = re.compile(r"^\s*#\s+(.+?)\s*$", re.MULTILINE)
 
 
+# Derived directories under .torsor/ that never belong in git: the index
+# rebuilds from Markdown, and state/ holds machine-local dismissals plus a git
+# watermark that means nothing on another machine.
+_IGNORED = (".index/", "state/")
+
+
+def ensure_ignored(paths) -> None:
+    """Add any missing entry to .torsor/.gitignore, in place. Projects
+    scaffolded before state/ existed would otherwise commit it."""
+    gitignore = paths.base / ".gitignore"
+    try:
+        current = gitignore.read_text(encoding="utf-8").split() if gitignore.exists() else []
+        missing = [line for line in _IGNORED if line not in current]
+        if missing:
+            body = "".join(f"{line}\n" for line in [*current, *missing])
+            gitignore.parent.mkdir(parents=True, exist_ok=True)
+            gitignore.write_text(body, encoding="utf-8")
+    except OSError:
+        pass  # advisory housekeeping; never break the caller over it
+
+
+def state_file(paths, name: str):
+    """Path to a non-derivable state file under .torsor/state/, migrating one
+    written by an older version out of .index/ and making sure the directory is
+    git-ignored. Migration on read keeps it to a single call site.
+
+    These two files — the Coach's dismissals and the auto-handoff watermark —
+    are the only things under .torsor/ that neither rebuild from Markdown nor
+    belong in git, which is why they get their own directory: `clean --deep`
+    removes .index/ wholesale, and that used to take them with it.
+    """
+    target = paths.state_dir / name
+    legacy = paths.index_dir / name
+    if not target.exists() and legacy.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            legacy.replace(target)
+        except OSError:
+            return legacy  # unwritable; better to keep reading the old one
+    ensure_ignored(paths)
+    return target
+
+
 class Store:
     def __init__(
         self,
@@ -107,7 +150,7 @@ class Store:
 
         gitignore = self.paths.base / ".gitignore"
         if force or not gitignore.exists():
-            gitignore.write_text(".index/\n", encoding="utf-8")
+            gitignore.write_text("".join(f"{line}\n" for line in _IGNORED), encoding="utf-8")
 
     def write_note(
         self, path: Path, frontmatter: Frontmatter, title: str, body: str
