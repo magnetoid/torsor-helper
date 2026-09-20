@@ -39,6 +39,7 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
 
     existing = db.note_stats(conn)
     seen: set[str] = set()
+    slug_index = None
     pending: list[tuple[str, str]] = []  # (path, body) to embed
 
     for md in store.iter_note_paths():
@@ -74,7 +75,9 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
         # FTS title carries the breadcrumb (BM25 weights it; body_of never reads
         # it for snippets); body stays byte-identical to the source.
         db.replace_fts(conn, path, breadcrumb, note.body)
-        db.replace_edges(conn, path, store.extract_wikilinks(note.body))
+        if slug_index is None:  # built lazily: an unchanged corpus never needs it
+            slug_index = db.SlugIndex(conn)
+        db.replace_edges(conn, path, store.extract_wikilinks(note.body), slug_index)
         pending.append((path, f"{breadcrumb}\n{note.body}"))  # breadcrumb also situates the embedding
 
     if pending:
@@ -89,8 +92,11 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
             deleted += 1
 
     # Heal wikilink edges whose target was indexed after the linking note
-    # (insert-order dependence) or has been deleted since.
-    db.reresolve_edges(conn)
+    # (insert-order dependence) or has been deleted since. Only when the note
+    # set actually moved: re-resolving every edge on an unchanged corpus was
+    # pure cost on every recall, and recall reindexes before it searches.
+    if pending or deleted:
+        db.reresolve_edges(conn)
 
     db.meta_set(conn, "embedder", identity)
     db.meta_set(conn, "indexed_schema", str(db.SCHEMA_VERSION))

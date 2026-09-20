@@ -14,10 +14,19 @@ def test_connect_creates_schema_and_version(tmp_path):
     assert int(db.meta_get(conn, "schema_version")) == db.SCHEMA_VERSION
 
 
-def test_pack_unpack_roundtrip():
+def test_pack_stores_the_direction_normalized():
+    # pack normalizes so cosine similarity is a dot product and the whole
+    # vectors table can be multiplied at once (see cosine_search).
     vec = [0.1, -0.2, 0.3]
     out = db.unpack(db.pack(vec))
-    assert np.allclose(out, np.array(vec, dtype=np.float32))
+    assert np.isclose(float(np.linalg.norm(out)), 1.0)
+    expected = np.array(vec, dtype=np.float32)
+    assert np.allclose(out, expected / np.linalg.norm(expected), atol=1e-6)
+
+
+def test_pack_leaves_a_zero_vector_alone():
+    out = db.unpack(db.pack([0.0, 0.0, 0.0]))
+    assert np.allclose(out, 0.0)
 
 
 def test_upsert_note_and_hashes(tmp_path):
@@ -73,3 +82,23 @@ def test_bump_access(tmp_path):
     db.bump_access(conn, ["a.md"])
     db.bump_access(conn, ["a.md"])
     assert db.note_row(conn, "a.md")["access_count"] == 2
+
+
+def test_hot_queries_are_index_backed_not_full_scans(tmp_path):
+    """Each of these ran as a full table scan. who_references is the worst: impact
+    calls it once per candidate module, so the scans multiply."""
+    conn = db.connect(tmp_path / "i.db")
+    try:
+        plans = {
+            "edges by src": "SELECT target_path FROM edges WHERE src='a.md'",
+            "edges by target": "SELECT src FROM edges WHERE target_path='b.md'",
+            "symbols by module": "SELECT name FROM symbols WHERE module='pkg/a.py'",
+            "symbols by name": "SELECT module FROM symbols WHERE name='fn'",
+            "who_references": ("SELECT caller FROM symbol_edges "
+                               "WHERE resolved_module='pkg.a' AND referenced_name='fn'"),
+        }
+        for label, sql in plans.items():
+            plan = " ".join(r[-1] for r in conn.execute("EXPLAIN QUERY PLAN " + sql))
+            assert "USING INDEX" in plan or "USING COVERING INDEX" in plan, f"{label}: {plan}"
+    finally:
+        conn.close()

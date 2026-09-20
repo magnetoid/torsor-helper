@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import warnings
 from datetime import date, datetime
@@ -181,15 +182,26 @@ class Store:
         )
 
     def iter_note_paths(self) -> Iterator[Path]:
-        """All note files in the pyramid (excluding the disposable index), in
-        sorted order — without reading them (cheap stat-level iteration)."""
-        if not self.paths.base.exists():
+        """All note files in the pyramid (excluding the derived directories), in
+        sorted order — without reading them (cheap stat-level iteration).
+
+        Prunes DURING traversal, the way cartographer.iter_files does. The
+        previous `rglob("*.md")` + `index in md.resolve().parents` filter called
+        resolve() — a syscall — once per note, and reindex walks this on every
+        recall: measured at 5.8s of an 11.8s recall over 5k notes, which is most
+        of what made recall feel slow."""
+        base = self.paths.base
+        if not base.exists():
             return
-        index = self.paths.index_dir.resolve()
-        for md in sorted(self.paths.base.rglob("*.md")):
-            if index in md.resolve().parents:
-                continue
-            yield md
+        skip = {self.paths.index_dir.name, self.paths.state_dir.name}
+        for dirpath, dirnames, filenames in os.walk(base):
+            if Path(dirpath) == base:
+                dirnames[:] = [d for d in dirnames if d not in skip]
+            dirnames.sort()
+            here = Path(dirpath)
+            for name in sorted(filenames):
+                if name.endswith(".md"):
+                    yield here / name
 
     def iter_notes(self) -> Iterator[Note]:
         for md in self.iter_note_paths():
