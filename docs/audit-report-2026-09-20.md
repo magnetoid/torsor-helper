@@ -323,7 +323,30 @@ dogfood test that runs `guard.violations_for_file` against the repo's real ADRs)
 split, `monkeypatch` on the façade no longer intercepts sibling-to-sibling calls (no test relies
 on it today — document in the façade docstring).
 
-### Phase 2 — Performance (≈1 week, S/M each; measure before/after with a 5k-note fixture)
+### Phase 2 — Performance — **DONE (2026-09-21)**
+
+> Shipped on `feat/index-performance`. `recall` 7 650 ms → 482 ms, `map_repo` cold
+> 163 960 ms → 25 514 ms, on a generated 5 000-note corpus (`tests/bench/`).
+>
+> **The audit's predictions were mostly wrong, and that is the finding worth keeping.**
+> C1/C2 named search and the vector scan; profiling put 5.8 s of an 11.8 s recall in
+> `store.iter_note_paths`, which called `Path.resolve()` once per note, and 24 s of a
+> 61 s cold map in `store.tier_for_path`, which did the same thing four times per note.
+> Neither appears anywhere in this document. The search fixes (C1), the vector matrix
+> (C2), the indexes (C3), the connect short-circuit (C4), the slug index (C5), the map
+> write skip (C7) and the version split (C8) all shipped too, and together they are
+> worth less than the two syscall-per-note bugs profiling found.
+>
+> Two new invariants a contributor can break silently, both in CLAUDE.md: `db.connect`
+> trusts the `SCHEMA_VERSION` stamp, and `INDEX_FORMAT_VERSION` is what costs a re-embed.
+>
+> **C6 (Coach caching) and C11 (gate the vector leg on the hashing embedder) are not done.**
+> C6 never showed up as a cost on the bench, so there is nothing to justify the churn yet.
+> C11 is not a performance question any more now that `cosine_search` is a matrix multiply —
+> it is a retrieval-quality decision about whether the hashing fallback's vectors are worth
+> fusing at all, and it belongs with the other quality work in Phase 3.
+
+### Phase 2 — the original plan (for the record)
 
 Add `tests/bench/` (pytest-benchmark or a plain timing script) with generated fixtures of
 5k notes / 20k symbols so every item below has a number.
