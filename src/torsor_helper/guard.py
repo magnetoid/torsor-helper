@@ -238,6 +238,7 @@ def _violation(rule: Rule, relpath: str, line: int, default_msg: str) -> Violati
 
 
 _SEVERITY_ORDER = {"hint": 0, "info": 1, "warning": 2, "error": 3}
+SEVERITIES = tuple(_SEVERITY_ORDER)
 
 
 def strict_failures(violations, threshold: str | None = None) -> list[Violation]:

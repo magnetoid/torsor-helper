@@ -65,6 +65,20 @@ def _load(root: Path, *, config: bool = True):
     return tp, (load_config(tp) if config else None), Store(tp)
 
 
+def _check_severity(value):
+    """Reject a typo instead of widening the gate. An unknown threshold mapped
+    to cutoff 0 — "fail on anything" — which is the opposite of conservative
+    and invisible in CI."""
+    from torsor_helper.guard import SEVERITIES
+
+    if value is not None and value not in SEVERITIES:
+        typer.echo(
+            f"Unknown --severity {value!r}. Expected one of: {', '.join(SEVERITIES)}.", err=True
+        )
+        raise typer.Exit(code=2)
+    return value
+
+
 def _emit(payload, as_json: bool) -> bool:
     """Print `payload` as JSON when asked. Returns True when it did, so a caller
     can skip its prose rendering: `if _emit(x, as_json): return`."""
@@ -382,6 +396,7 @@ def guard(
 ) -> None:
     """Check changes against declared architectural intent (ADR rules)."""
 
+    _check_severity(severity)
     tp, config, store = _load(root)
     result = ops.guard_run(
         store, config, paths or None,
@@ -445,6 +460,7 @@ def verify(
     """The deterministic verification gate (guard + deps + staleness [+ tests]).
     Exits non-zero on failure — a loop-engineering / CI / Stop-hook completion check."""
 
+    _check_severity(severity)
     tp, config, store = _load(root)
     verdict = ops.verify(store, config, paths or None, severity=severity, run_tests=run_tests)
     if _emit(verdict, as_json):
@@ -473,6 +489,9 @@ def stale(
     file-path references. Read-only unless --mark/--unmark. Deterministic, offline."""
 
     tp, config, store = _load(root)
+    if mark and unmark:
+        typer.echo("--mark and --unmark are opposites; pass one.", err=True)
+        raise typer.Exit(code=2)
     result = ops.check_staleness(store, config, mark=mark, unmark=unmark)
     findings = result["findings"]
 

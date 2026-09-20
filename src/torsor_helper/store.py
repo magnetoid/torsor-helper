@@ -97,6 +97,12 @@ class Store:
                 meta[key] = meta[key].isoformat()
         if not isinstance(meta.get("type"), str):
             meta["type"] = "note"
+        for key in ("tags", "links"):
+            # `tags: architecture` is a natural thing to hand-write. Validation
+            # used to reject it and the whole block was thrown away with it,
+            # taking status, kind and rules along.
+            if isinstance(meta.get(key), str):
+                meta[key] = [meta[key]]
         try:
             return Frontmatter.model_validate(meta), match.group(2)
         except ValidationError:
@@ -189,7 +195,11 @@ class Store:
 
     def read_note(self, path: Path) -> Note:
         path = Path(path)
-        text = path.read_text(encoding="utf-8")
+        # utf-8-sig: a Windows editor writes a BOM, which would otherwise sit
+        # in front of the "---" and hide the whole frontmatter block. Every
+        # other reader in the codebase (cartographer, guard, deps) already does
+        # this; read_note did not, so a BOM'd note silently lost its tier.
+        text = path.read_text(encoding="utf-8-sig")
         frontmatter, raw_body = self.parse_frontmatter(text)
         title, body = _split_title(raw_body, fallback=path.stem)
         return Note(

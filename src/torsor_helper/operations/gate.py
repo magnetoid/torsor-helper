@@ -87,6 +87,13 @@ def verify(store, config, files=None, *, severity=None, run_tests=False) -> dict
     guard_reasons = [f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})" for v in guard_result["new"]]
     dep_findings = check_dependencies(store, config, files)
     dep_reasons = [f"{f['file']}:{f['line']} — unknown import '{f['name']}'" for f in dep_findings]
+    # Deliberately NOT scoped by `files`, unlike guard and deps. A staleness
+    # finding's source is a NOTE path; `files` holds SOURCE files (git-changed
+    # discovery filters to source extensions, so a .md never appears). The two
+    # namespaces do not intersect, so filtering one by the other always yields
+    # nothing. If pre-existing staleness should stop blocking an unrelated
+    # change, the mechanism is a ratchet like the guard's baseline, not a name
+    # filter.
     stale_findings = check_staleness(store, config)["findings"]
     stale_reasons = [f"[{r.kind}] {r.message}" for r in stale_findings]
 

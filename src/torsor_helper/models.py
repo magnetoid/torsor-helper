@@ -45,6 +45,11 @@ class Frontmatter(BaseModel):
     links: list[str] = Field(default_factory=list)
     created: str | None = None
     updated: str | None = None
+    # Declared, not merely allowed: `kind` is an indexed column and a search
+    # filter, and `rules` is what the guard enforces. Leaving them to
+    # extra="allow" meant their types were never checked at all.
+    kind: str | None = None
+    rules: list[dict] = Field(default_factory=list)
 
 
 class Note(BaseModel):
