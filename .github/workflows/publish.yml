@@ -9,7 +9,34 @@ on:
     types: [published]
 
 jobs:
+  # A release used to go straight to build+publish, so nothing stopped a red
+  # commit from reaching PyPI. Publishing is the one action here that cannot be
+  # undone, so it gets the strictest gate in the repo.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Lint
+        run: uv run --with ruff ruff check src tests
+      - name: Test (no extras — proves the degradation path)
+        run: uv run --exact --extra dev pytest -q
+      - name: Test (with languages)
+        run: uv run --extra dev --extra languages pytest -q
+      - name: Dogfood the guard
+        run: uv run torsor guard --strict
+      - name: The tag must match the packaged version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          ver="$(uv run python -c 'import torsor_helper; print(torsor_helper.__version__)')"
+          echo "tag=$tag packaged=$ver"
+          test "$tag" = "$ver"
+
   build-and-publish:
+    needs: verify
     runs-on: ubuntu-latest
     # No GitHub deployment environment — the PyPI Trusted Publisher is registered
     # WITHOUT an environment, so the OIDC claims match with one fewer field.
@@ -20,5 +47,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Build sdist + wheel
         run: uv build
+      - name: The built wheel must install and run
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --quiet dist/*.whl
+          /tmp/smoke/bin/torsor --version
+          /tmp/smoke/bin/python -c "import torsor_helper; print(torsor_helper.__version__)"
+          cd /tmp && /tmp/smoke/bin/torsor init --root /tmp/smoke-project >/dev/null
+          /tmp/smoke/bin/torsor doctor --root /tmp/smoke-project
       - name: Publish to PyPI (Trusted Publishing)
         uses: pypa/gh-action-pypi-publish@release/v1

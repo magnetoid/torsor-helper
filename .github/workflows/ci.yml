@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -24,3 +24,14 @@ jobs:
         run: uv run --exact --extra dev pytest -q
       - name: Test (with languages extra)
         run: uv run --extra dev --extra languages pytest -q
+
+      - name: Dogfood the guard
+        run: uv run torsor guard --strict
+
+      - name: The built wheel must install and run
+        run: |
+          set -euo pipefail
+          uv build
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --quiet dist/*.whl
+          /tmp/smoke/bin/torsor --version

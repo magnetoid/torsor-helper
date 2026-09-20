@@ -8,8 +8,8 @@
 One small Python **MCP** server — works with *every* AI coding tool (Claude Code, Codex, Cursor, …).
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
-![status](https://img.shields.io/badge/release-v0.4%20token%20thrift-success)
-![tests](https://img.shields.io/badge/tests-514%20passing-brightgreen)
+![status](https://img.shields.io/badge/release-v0.7%20polyglot%20map-success)
+![tests](https://img.shields.io/badge/tests-569%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)

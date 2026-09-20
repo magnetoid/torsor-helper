@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from torsor_helper.models import Recommendation
+from torsor_helper.models import Recommendation, Tier
 from torsor_helper.store import Store
 
 # Staleness = memory that contradicts current code. The #1 open problem in agent
@@ -37,6 +37,12 @@ def check_dangling_links(store: Store) -> list[Recommendation]:
     note_slugs = {p.stem for p in store.iter_note_paths()}
     out: list[Recommendation] = []
     for note in store.iter_notes():
+        # The MAP tier is rendered from source, so a `[[...]]` in it was copied
+        # out of a docstring, not written by anyone. Reporting it is a false
+        # positive in the detector that exists precisely to have none (ADR 0010),
+        # and it regenerates on the next `torsor map` anyway.
+        if note.tier is Tier.MAP:
+            continue
         rel = _rel(store, note.path)
         for slug in store.extract_wikilinks(note.body):
             if slug not in note_slugs:
