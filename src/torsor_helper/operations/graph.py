@@ -60,6 +60,12 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
             target = contained(store.paths.map_dir, relpath)
             if target is None:
                 continue
+            # write_note stamps `updated`, so rewriting an identical note churns
+            # a committed file in git AND changes its content hash, which makes
+            # the next reindex re-embed every map note. The post-commit hook
+            # remaps on every commit, so this ran constantly.
+            if _map_note_unchanged(store, target, body):
+                continue
             store.write_note(target, Frontmatter(type="map", status="derived", tags=["map"]), title, body)
 
         db.replace_all_symbols(conn, symbols)
@@ -83,6 +89,16 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
         "edges": len(edges),
         "languages": _language_counts(sorted({s.module for s in symbols}), store.paths.root),
     }
+
+def _map_note_unchanged(store, target, body: str) -> bool:
+    """True when `target` already holds exactly this rendered body."""
+    if not target.exists():
+        return False
+    try:
+        return store.read_note(target).body.strip() == body.strip()
+    except (OSError, UnicodeDecodeError):
+        return False
+
 
 def _language_counts(modules, root=None) -> dict:
     """Mapped module count per available language, plus — under "unavailable" —

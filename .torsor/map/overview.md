@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-20T21:54:01'
-updated: '2026-09-20T21:54:01'
+created: '2026-09-21T00:06:45'
+updated: '2026-09-21T00:06:45'
 ---
 
 # Repository Map
@@ -28,7 +28,7 @@ Modules and their key symbols (ranked by references).
   - `scan_repo(root: Path, paths: list[str] | None=None, ignore: set[str]=DEFAULT_IGNORE)` (function)
   - `scan_repo_with_edges(root: Path, paths: list[str] | None=None, ignore: set[str]=DEFAULT_IGNORE)` (function)
   - `_scan(root: Path, paths: list[str] | None, ignore: set[str])` (function)
-- **src/torsor_helper/cleaner.py** — 14 symbol(s)
+- **src/torsor_helper/cleaner.py** — 13 symbol(s)
   - `plan(store, config, *, deep: bool=False)` (function)
   - `CleanPlan` (class)
   - `_size(path: Path)` (function)
@@ -96,12 +96,12 @@ Modules and their key symbols (ranked by references).
   - `_Strict` (class)
   - `save_config(paths: TorsorPaths, config: TorsorConfig)` (function)
   - `AutomationConfig` (class)
-- **src/torsor_helper/db.py** — 45 symbol(s)
+- **src/torsor_helper/db.py** — 51 symbol(s)
   - `meta_set(conn, key, value)` (function)
+  - `_fts_rowid(conn, path)` (function)
+  - `SlugIndex` (class)
   - `meta_get(conn, key)` (function)
-  - `unpack(blob: bytes)` (function)
-  - `_note_paths(conn)` (function)
-  - `_resolve_slug(paths: list[str], slug: str)` (function)
+  - `_schema_is_current(conn: sqlite3.Connection)` (function)
 - **src/torsor_helper/deps.py** — 14 symbol(s)
   - `_norm(name: str)` (function)
   - `_site_packages_top_levels(site: Path)` (function)
@@ -168,4 +168,5 @@ Modules and their key symbols (ranked by references).
   - `_doc_anchor(node)` (function)
 - **src/torsor_helper/languages/modules.py** — 4 symbol(s)
   - `norm_path(relpath: str)` (function)
-  - `norm_module(module: str)` (function)…[truncated]
+  - `norm_module(module: str)` (function)
+  - `_…[truncated]

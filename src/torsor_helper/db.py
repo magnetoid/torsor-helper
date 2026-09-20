@@ -9,7 +9,7 @@ import numpy as np
 
 from torsor_helper.models import Symbol, SymbolEdge
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -22,8 +22,36 @@ def connect(path: Path) -> sqlite3.Connection:
     # "database is locked" failures under that contention.
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=10000")
+    # WAL already gives durability across process crashes; FULL additionally
+    # fsyncs on every commit, which recall pays on its access bumps.
+    conn.execute("PRAGMA synchronous=NORMAL")
+    if _schema_is_current(conn):
+        return conn
     _create_schema(conn)
     return conn
+
+
+def _schema_is_current(conn: sqlite3.Connection) -> bool:
+    """True when this DB was already built by this version.
+
+    Every CLI command and every recall opens a connection, and _create_schema is
+    a write transaction — ten CREATEs, two PRAGMA table_info, a meta write and a
+    commit — so running it unconditionally meant a write (and an fsync) before
+    any read. A missing meta table, an older stamp or any error all fall through
+    to the full path, which is idempotent.
+
+    The trade-off: the stamp is now trusted, so **a change to the schema must
+    come with a SCHEMA_VERSION bump**. An unbumped change used to be absorbed
+    silently by the unconditional rebuild; now it would never reach an index
+    that already exists."""
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
+    except sqlite3.Error:
+        return False
+    try:
+        return row is not None and int(row["value"]) == SCHEMA_VERSION
+    except (TypeError, ValueError):
+        return False
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
@@ -57,6 +85,24 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             op TEXT, args TEXT, hits INTEGER NOT NULL DEFAULT 0, last_used INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(op, args)
         );
+
+        -- Secondary indexes. Every one of these backed a query that was a full
+        -- table scan: who_references ran one per candidate module inside impact,
+        -- neighbors runs on the recall hot path, and db.modules feeds the
+        -- cleaner, the exporter, hub detection and coupling.
+        CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src);
+        CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_path);
+        CREATE INDEX IF NOT EXISTS idx_symbols_module ON symbols(module);
+        CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+        CREATE INDEX IF NOT EXISTS idx_symbol_edges_resolved
+            ON symbol_edges(resolved_module, referenced_name);
+        CREATE INDEX IF NOT EXISTS idx_symbol_edges_module ON symbol_edges(module);
+        CREATE INDEX IF NOT EXISTS idx_notes_type ON notes(type, kind);
+
+        -- path -> the FTS row holding that note's body. `fts.path` is UNINDEXED
+        -- (searching it would pollute the match), so every lookup by path was a
+        -- full scan of the FTS table — and search does one per result it shows.
+        CREATE TABLE IF NOT EXISTS fts_map (path TEXT PRIMARY KEY, rowid_ INTEGER NOT NULL);
         """
     )
     # Additive column migration for DBs created before `status` existed
@@ -90,7 +136,14 @@ def meta_set(conn, key, value):
 
 
 def pack(vec: Sequence[float]) -> bytes:
-    return np.asarray(list(vec), dtype=np.float32).tobytes()
+    """Store L2-normalized, so cosine similarity at query time is a plain dot
+    product and the whole table can be multiplied at once. A zero vector stays
+    zero and scores 0 against everything, which is what it meant before."""
+    arr = np.asarray(list(vec), dtype=np.float32)
+    norm = float(np.linalg.norm(arr))
+    if norm > 0.0:
+        arr = arr / norm
+    return arr.tobytes()
 
 
 def unpack(blob: bytes) -> np.ndarray:
@@ -135,13 +188,42 @@ def note_row(conn, path):
     return dict(row) if row else None
 
 
+def note_rows(conn, paths) -> dict[str, dict]:
+    """{path: row} for many paths in one statement. The per-path note_row was an
+    N+1: search called it once per candidate, and a type/kind filter widens the
+    candidate set to the whole corpus."""
+    paths = list(paths)
+    out: dict[str, dict] = {}
+    for i in range(0, len(paths), 400):  # stay under SQLite's variable limit
+        chunk = paths[i:i + 400]
+        marks = ",".join("?" * len(chunk))
+        for row in conn.execute(f"SELECT * FROM notes WHERE path IN ({marks})", chunk):
+            out[row["path"]] = dict(row)
+    return out
+
+
+def _fts_rowid(conn, path) -> int | None:
+    row = conn.execute("SELECT rowid_ FROM fts_map WHERE path=?", (path,)).fetchone()
+    return row["rowid_"] if row else None
+
+
 def replace_fts(conn, path, title, body):
-    conn.execute("DELETE FROM fts WHERE path=?", (path,))
-    conn.execute("INSERT INTO fts(path, title, body) VALUES(?,?,?)", (path, title, body))
+    old = _fts_rowid(conn, path)
+    if old is not None:
+        conn.execute("DELETE FROM fts WHERE rowid=?", (old,))
+    cur = conn.execute("INSERT INTO fts(path, title, body) VALUES(?,?,?)", (path, title, body))
+    conn.execute(
+        "INSERT INTO fts_map(path, rowid_) VALUES(?,?) "
+        "ON CONFLICT(path) DO UPDATE SET rowid_=excluded.rowid_",
+        (path, cur.lastrowid),
+    )
 
 
 def body_of(conn, path):
-    row = conn.execute("SELECT body FROM fts WHERE path=?", (path,)).fetchone()
+    rowid = _fts_rowid(conn, path)
+    if rowid is None:
+        return ""
+    row = conn.execute("SELECT body FROM fts WHERE rowid=?", (rowid,)).fetchone()
     return row["body"] if row else ""
 
 
@@ -149,9 +231,39 @@ def _note_paths(conn) -> list[str]:
     return [r["path"] for r in conn.execute("SELECT path FROM notes ORDER BY path")]
 
 
+class SlugIndex:
+    """slug -> the first (sorted) note path ending in `<slug>.md`.
+
+    Exactly what scanning the path list per slug answered, computed once. The
+    scan was O(notes) per distinct slug and ran over every edge on every
+    reindex — 2.3s of an 11.8s recall over 5k notes.
+
+    A slug containing "/" (`[[dir/note]]`) still needs the scan, because it
+    matches on a path *suffix* rather than a basename. Those are rare, so they
+    keep the old path rather than changing what resolves to what."""
+
+    def __init__(self, conn) -> None:
+        self.paths = _note_paths(conn)
+        self.by_basename: dict[str, str] = {}
+        for p in self.paths:
+            name = p.rsplit("/", 1)[-1]
+            if name.endswith(".md"):
+                self.by_basename.setdefault(name[:-3], p)
+
+    def resolve(self, slug: str) -> str | None:
+        if "/" not in slug:
+            return self.by_basename.get(slug)
+        suffix = f"/{slug}.md"
+        exact = f"{slug}.md"
+        for p in self.paths:
+            if p == exact or p.endswith(suffix):
+                return p
+        return None
+
+
 def _resolve_slug(paths: list[str], slug: str) -> str | None:
-    """First (sorted) note whose path ends in `<slug>.md` — literal matching, so
-    LIKE wildcards in slugs ('_', '%') can't match the wrong note."""
+    """Literal suffix match, so LIKE wildcards in a slug can't match the wrong
+    note. Kept for callers holding a plain path list; SlugIndex is the fast path."""
     exact, suffix = f"{slug}.md", f"/{slug}.md"
     for p in paths:
         if p == exact or p.endswith(suffix):
@@ -159,13 +271,15 @@ def _resolve_slug(paths: list[str], slug: str) -> str | None:
     return None
 
 
-def replace_edges(conn, src, slugs):
+def replace_edges(conn, src, slugs, index: SlugIndex | None = None):
+    """`index` lets a bulk caller build the slug lookup once instead of running a
+    full SELECT per note being indexed."""
     conn.execute("DELETE FROM edges WHERE src=?", (src,))
-    paths = _note_paths(conn)
+    idx = index or SlugIndex(conn)
     for slug in slugs:
         conn.execute(
             "INSERT INTO edges(src, target_slug, target_path) VALUES(?,?,?)",
-            (src, slug, _resolve_slug(paths, slug)),
+            (src, slug, idx.resolve(slug)),
         )
 
 
@@ -173,12 +287,12 @@ def reresolve_edges(conn) -> None:
     """Second resolution pass over ALL edges: insert-time resolution only sees
     notes already upserted, so links to notes indexed later (or created later)
     would otherwise stay NULL forever — and links to deleted notes stay stale."""
-    paths = _note_paths(conn)
+    idx = SlugIndex(conn)
     resolved: dict[str, str | None] = {}
     for row in conn.execute("SELECT rowid, target_slug, target_path FROM edges").fetchall():
         slug = row["target_slug"]
         if slug not in resolved:
-            resolved[slug] = _resolve_slug(paths, slug)
+            resolved[slug] = idx.resolve(slug)
         if row["target_path"] != resolved[slug]:
             conn.execute("UPDATE edges SET target_path=? WHERE rowid=?", (resolved[slug], row["rowid"]))
 
@@ -205,39 +319,50 @@ def delete_note(conn, path):
     conn.execute("DELETE FROM notes WHERE path=?", (path,))
     conn.execute("DELETE FROM vectors WHERE path=?", (path,))
     conn.execute("DELETE FROM edges WHERE src=?", (path,))
-    conn.execute("DELETE FROM fts WHERE path=?", (path,))
+    rowid = _fts_rowid(conn, path)
+    if rowid is not None:
+        conn.execute("DELETE FROM fts WHERE rowid=?", (rowid,))
+    conn.execute("DELETE FROM fts_map WHERE path=?", (path,))
 
 
 def get_vectors(conn, paths):
     """Return {path: np.ndarray} for the given paths that have a stored vector."""
+    paths = list(paths)
     out = {}
-    for p in paths:
-        row = conn.execute("SELECT embedding FROM vectors WHERE path=?", (p,)).fetchone()
-        if row is not None:
-            out[p] = unpack(row["embedding"])
+    for i in range(0, len(paths), 400):  # stay under SQLite's variable limit
+        chunk = paths[i:i + 400]
+        marks = ",".join("?" * len(chunk))
+        for row in conn.execute(
+            f"SELECT path, embedding FROM vectors WHERE path IN ({marks})", chunk
+        ):
+            out[row["path"]] = unpack(row["embedding"])
     return out
 
 
 def cosine_search(conn, qvec, limit):
-    rows = conn.execute("SELECT path, embedding FROM vectors").fetchall()
-    if not rows:
-        return []
+    """Top-`limit` paths by cosine similarity to `qvec`.
+
+    One matrix multiply over the whole table rather than a Python loop that
+    unpacked, normalized and dotted each row: the vectors are stored normalized
+    (see pack), and `dim` filters out any left over from a different embedder,
+    so the blobs concatenate safely."""
     q = np.asarray(list(qvec), dtype=np.float32)
-    qn = np.linalg.norm(q)
-    if qn == 0:
+    qn = float(np.linalg.norm(q))
+    if qn == 0.0:
         return []
     q = q / qn
-    scored = []
-    for r in rows:
-        v = unpack(r["embedding"])
-        if v.shape[0] != q.shape[0]:
-            continue  # stale-dimension vector (embedder changed) — skip defensively
-        vn = np.linalg.norm(v)
-        if vn == 0:
-            continue
-        scored.append((r["path"], float(np.dot(q, v / vn))))
-    scored.sort(key=lambda t: (-t[1], t[0]))
-    return scored[:limit]
+    rows = conn.execute(
+        "SELECT path, embedding FROM vectors WHERE dim=? ORDER BY path", (q.shape[0],)
+    ).fetchall()
+    if not rows:
+        return []
+    matrix = np.frombuffer(b"".join(r["embedding"] for r in rows), dtype=np.float32)
+    matrix = matrix.reshape(len(rows), q.shape[0])
+    sims = matrix @ q
+    # Rows are path-ordered, so a stable sort on -score breaks ties by path,
+    # matching the previous (-score, path) key.
+    order = np.argsort(-sims, kind="stable")[:limit]
+    return [(rows[i]["path"], float(sims[i])) for i in order]
 
 
 def fts_search(conn, query, limit):

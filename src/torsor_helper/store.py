@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import warnings
 from datetime import date, datetime
@@ -8,6 +9,11 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 import yaml
+
+try:  # libyaml, when PyYAML was built against it — same grammar, C speed
+    from yaml import CSafeLoader as _YamlLoader
+except ImportError:  # pragma: no cover - pure-Python PyYAML
+    from yaml import SafeLoader as _YamlLoader
 from pydantic import ValidationError
 
 from torsor_helper.models import Frontmatter, Note, Tier
@@ -80,7 +86,7 @@ class Store:
         if not match:
             return Frontmatter(type="note"), text
         try:
-            meta = yaml.safe_load(match.group(1)) or {}
+            meta = yaml.load(match.group(1), Loader=_YamlLoader) or {}
         except yaml.YAMLError:
             return Frontmatter(type="note"), text
         if not isinstance(meta, dict):
@@ -117,16 +123,21 @@ class Store:
 
     @staticmethod
     def tier_for_path(paths: TorsorPaths, path: Path) -> Tier:
-        p = Path(path).resolve()
-        if p == paths.charter.resolve():
-            return Tier.CHARTER
-        if _within(p, paths.architecture_dir):
-            return Tier.ARCHITECTURE
-        if _within(p, paths.map_dir):
-            return Tier.MAP
-        if _within(p, paths.active_dir):
-            return Tier.ACTIVE
-        return Tier.EPISODIC
+        """Which stability tier a note file belongs to, by position.
+
+        The anchors are resolved once per TorsorPaths and cached: this runs once
+        per note inside read_note, and reindex reads every note, so resolving
+        four anchors per call meant thousands of syscalls per map — 24s of a
+        61s cold map over 2k notes."""
+        raw, resolved = _tier_anchors(paths)
+        # The common caller passes a path built from these same anchors, so the
+        # unresolved comparison matches without touching the filesystem. Only a
+        # path from somewhere else falls through to resolve() — which is what
+        # keeps a symlinked note classified by where it really lives.
+        tier = _match_tier(Path(path), raw)
+        if tier is None:
+            tier = _match_tier(Path(path).resolve(), resolved)
+        return tier if tier is not None else Tier.EPISODIC
 
     # ---- filesystem operations ----
     def scaffold(self, force: bool = False) -> None:
@@ -181,15 +192,26 @@ class Store:
         )
 
     def iter_note_paths(self) -> Iterator[Path]:
-        """All note files in the pyramid (excluding the disposable index), in
-        sorted order — without reading them (cheap stat-level iteration)."""
-        if not self.paths.base.exists():
+        """All note files in the pyramid (excluding the derived directories), in
+        sorted order — without reading them (cheap stat-level iteration).
+
+        Prunes DURING traversal, the way cartographer.iter_files does. The
+        previous `rglob("*.md")` + `index in md.resolve().parents` filter called
+        resolve() — a syscall — once per note, and reindex walks this on every
+        recall: measured at 5.8s of an 11.8s recall over 5k notes, which is most
+        of what made recall feel slow."""
+        base = self.paths.base
+        if not base.exists():
             return
-        index = self.paths.index_dir.resolve()
-        for md in sorted(self.paths.base.rglob("*.md")):
-            if index in md.resolve().parents:
-                continue
-            yield md
+        skip = {self.paths.index_dir.name, self.paths.state_dir.name}
+        for dirpath, dirnames, filenames in os.walk(base):
+            if Path(dirpath) == base:
+                dirnames[:] = [d for d in dirnames if d not in skip]
+            dirnames.sort()
+            here = Path(dirpath)
+            for name in sorted(filenames):
+                if name.endswith(".md"):
+                    yield here / name
 
     def iter_notes(self) -> Iterator[Note]:
         for md in self.iter_note_paths():
@@ -221,6 +243,34 @@ class Store:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(entry)
         return path
+
+
+_TIER_ANCHOR_CACHE: dict[Path, tuple[tuple[Path, ...], tuple[Path, ...]]] = {}
+
+
+def _match_tier(p: Path, anchors: tuple[Path, ...]) -> Tier | None:
+    if p == anchors[0]:
+        return Tier.CHARTER
+    for parent, tier in zip(anchors[1:], (Tier.ARCHITECTURE, Tier.MAP, Tier.ACTIVE)):
+        if p == parent or parent in p.parents:
+            return tier
+    return None
+
+
+def _tier_anchors(paths: TorsorPaths):
+    """((charter, architecture, map, active) as written, and resolved).
+
+    Computed once per project root. tier_for_path runs inside read_note, and
+    reindex reads every note, so resolving four anchors per call cost thousands
+    of syscalls per map. Keyed on the RESOLVED root because the CLI passes a
+    relative Path("."). The layout does not move while a process runs."""
+    key = paths.root.resolve()
+    cached = _TIER_ANCHOR_CACHE.get(key)
+    if cached is None:
+        raw = (paths.charter, paths.architecture_dir, paths.map_dir, paths.active_dir)
+        cached = (raw, tuple(a.resolve() for a in raw))
+        _TIER_ANCHOR_CACHE[key] = cached
+    return cached
 
 
 def _within(path: Path, parent: Path) -> bool:

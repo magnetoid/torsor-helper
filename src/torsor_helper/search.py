@@ -25,12 +25,16 @@ def _importance(tier: Tier, access_count: int, floors: dict[str, float]) -> floa
     return floor + (1.0 - floor) * (1.0 - 1.0 / (1.0 + math.log1p(max(0, access_count))))
 
 
-def _cos(a, b) -> float:
-    na = float(np.linalg.norm(a))
-    nb = float(np.linalg.norm(b))
-    if na == 0.0 or nb == 0.0 or a.shape != b.shape:
-        return 0.0
-    return float(np.dot(a, b) / (na * nb))
+def _unit_vectors(vec_by_path):
+    """Pre-normalize once. Cosine between unit vectors is a plain dot product,
+    and MMR compares every remaining hit against every selected one — the norms
+    were being recomputed on each of those pairs."""
+    out = {}
+    for path, v in vec_by_path.items():
+        n = float(np.linalg.norm(v))
+        if n > 0.0:
+            out[path] = v / n
+    return out
 
 
 def _mmr_order(hits, vec_by_path, lam: float):
@@ -38,7 +42,8 @@ def _mmr_order(hits, vec_by_path, lam: float):
     duplicate notes don't crowd out distinct ones. mmr = λ·rel − (1−λ)·maxSim.
     No-ops (returns the input order) when fewer than 2 hits have vectors, so the
     keyword/hashing paths are untouched. Deterministic."""
-    if sum(1 for h in hits if h.path in vec_by_path) < 2:
+    unit = _unit_vectors(vec_by_path)
+    if sum(1 for h in hits if h.path in unit) < 2:
         return list(hits)
     max_score = max((h.score for h in hits), default=1.0) or 1.0
     remaining = list(hits)
@@ -47,10 +52,11 @@ def _mmr_order(hits, vec_by_path, lam: float):
         best_i, best_val = 0, None
         for i, h in enumerate(remaining):
             rel = h.score / max_score
-            v = vec_by_path.get(h.path)
+            v = unit.get(h.path)
             sim = 0.0
             if v is not None:
-                sims = [_cos(v, vec_by_path[s.path]) for s in selected if s.path in vec_by_path]
+                sims = [float(np.dot(v, unit[s.path])) for s in selected
+                        if s.path in unit and unit[s.path].shape == v.shape]
                 sim = max(sims) if sims else 0.0
             val = lam * rel - (1.0 - lam) * sim
             if best_val is None or val > best_val:
@@ -83,7 +89,7 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
     if not scores:
         return RecallResult(query=query, hits=[], total_tokens=0)
 
-    rows = {p: db.note_row(conn, p) for p in scores}
+    rows = db.note_rows(conn, scores)
     by_recency = sorted(scores, key=lambda p: (rows[p] or {}).get("updated") or "", reverse=True)
     for rank, path in enumerate(by_recency):
         scores[path] += config.index.recency_weight * (1.0 / (k + rank))
@@ -110,7 +116,7 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
         hits.append(RecallHit(
             path=path, title=row["title"] or path, tier=tier,
             score=score * _TIER_WEIGHTS.get(tier, 1.0) * importance,
-            snippet=best_snippet(db.body_of(conn, path), terms),
+            snippet="",  # filled in below, for the survivors only
         ))
 
     # Score desc; ties broken toward the more stable tier (lower value), then path,
@@ -118,10 +124,19 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
     hits.sort(key=lambda h: (-h.score, h.tier.value, h.path))
 
     # Diversify: demote near-duplicate notes via MMR over the stored vectors.
-    vec_by_path = db.get_vectors(conn, [h.path for h in hits])
-    ordered = _mmr_order(hits, vec_by_path, config.index.mmr_lambda)
+    # MMR is quadratic in what it is given and only `limit` items survive it, so
+    # it runs over a shortlist. 4x leaves room to demote near-duplicates without
+    # paying for the long tail of a corpus-wide filter.
+    pool = hits[: max(limit * 4, limit)]
+    vec_by_path = db.get_vectors(conn, [h.path for h in pool])
+    ordered = _mmr_order(pool, vec_by_path, config.index.mmr_lambda)
 
-    candidates = ordered[:limit]
+    # Only now compute snippets: each is an FTS lookup plus a scan of the body,
+    # and doing it for every candidate before the cut was most of the search.
+    candidates = [
+        h.model_copy(update={"snippet": best_snippet(db.body_of(conn, h.path), terms)})
+        for h in ordered[:limit]
+    ]
     selected: list[RecallHit] = []
     used = 0
     truncated = False

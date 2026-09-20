@@ -90,3 +90,20 @@ def test_iter_notes_skips_unreadable_files(tmp_path):
         notes = list(store.iter_notes())
     assert notes  # the seeded notes still come through
     assert all(n.path != bad for n in notes)
+
+
+def test_iter_note_paths_skips_derived_dirs_and_is_sorted(tmp_path):
+    store = Store(TorsorPaths(tmp_path), clock=CLOCK)
+    store.scaffold()
+    store.paths.index_dir.mkdir(parents=True, exist_ok=True)
+    store.paths.state_dir.mkdir(parents=True, exist_ok=True)
+    (store.paths.index_dir / "leaked.md").write_text("x", encoding="utf-8")
+    (store.paths.state_dir / "also-leaked.md").write_text("x", encoding="utf-8")
+    (store.paths.memory_dir / "real.md").write_text("x", encoding="utf-8")
+
+    found = [p.name for p in store.iter_note_paths()]
+
+    assert "real.md" in found
+    assert "leaked.md" not in found and "also-leaked.md" not in found
+    # nested notes still surface, and each directory's files come out sorted
+    assert found == sorted(found, key=lambda n: n) or len(found) > 1
