@@ -5,6 +5,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from torsor_helper import operations as ops
+from torsor_helper.budget import cap_items
 from torsor_helper.config import load_config
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
@@ -73,13 +74,16 @@ def build_server(root: Path | str) -> FastMCP:
         )
 
     @mcp.tool()
-    def impact(symbol: str) -> str:
-        """Blast radius of a symbol before you change it: which functions/files reference it (run map_repo first)."""
-        res = ops.impact(store, config, symbol)
+    def impact(symbol: str, limit: int = config.budgets.max_items) -> str:
+        """Blast radius of a symbol before you change it: which functions/files reference it (run map_repo first). The reported count is the true total; raise limit to list more of them."""
+        res = ops.impact(store, config, symbol, limit=limit)
         if res["count"] == 0:
             return f"No references to {symbol!r} found (run map_repo to refresh the symbol graph)."
         lines = [f"- {c['module']} :: {c['caller']}" for c in res["callers"]]
-        return f"{res['count']} reference(s) to {symbol!r}:\n" + "\n".join(lines)
+        out = f"{res['count']} reference(s) to {symbol!r}:\n" + "\n".join(lines)
+        if res["truncated"]:
+            out += f"\n… +{res['truncated']} more (raise limit to list them)"
+        return out
 
     @mcp.tool()
     def connect(source: str, target: str, max_hops: int = 12) -> str:
@@ -145,13 +149,13 @@ def build_server(root: Path | str) -> FastMCP:
         cmds = ops.list_commands(store)
         if not cmds:
             return "No project commands recorded yet (record them with record_command)."
-        return "\n".join(
-            f"- {c['name']}: `{c['command']}`" + (f" — {c['note']}" if c["note"] else "") for c in cmds
-        )
+        kept, tail = cap_items(cmds, config.budgets.max_items)
+        lines = [f"- {c['name']}: `{c['command']}`" + (f" — {c['note']}" if c["note"] else "") for c in kept]
+        return "\n".join([*lines, tail] if tail else lines)
 
     @mcp.tool()
     def get_model_policy(as_json: bool = False) -> str:
-        """The project's model-routing policy (token thrift): which work to run on the cheap model vs the smart model. Follow it — do deterministic torsor lookups on the cheap model, reserve the smart model for design/code/decisions. as_json for a machine-readable form a router can parse."""
+        """The project's model-routing policy (token thrift): which work belongs on the cheap model vs the smart one. Follow it. as_json returns a form a router can parse."""
         if as_json:
             import json
 
@@ -160,7 +164,7 @@ def build_server(root: Path | str) -> FastMCP:
 
     @mcp.tool()
     def get_primer(max_tokens: int = 800) -> str:
-        """Token-saver: a budgeted project primer (charter + architecture + repo map + token-efficient tool habits). Load once instead of exploring — or better, `torsor primer --write AGENTS.md` makes it free at prompt time."""
+        """Token-saver: a budgeted project primer (charter + architecture + repo map + token-efficient tool habits). Load once instead of exploring; `torsor primer --write AGENTS.md` makes it free."""
         return ops.project_primer(store, config, max_tokens=max_tokens)
 
     @mcp.tool()
@@ -190,8 +194,11 @@ def build_server(root: Path | str) -> FastMCP:
             return json.dumps([v.model_dump() for v in violations])
         if not violations:
             return "No drift from declared intent detected."
-        lines = [f"- {v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})" for v in violations]
-        return f"{len(violations)} drift violation(s):\n" + "\n".join(lines)
+        # as_json above is the machine-readable contract and stays whole; this
+        # prose path lands in the agent's context, so it is capped.
+        kept, tail = cap_items(violations, config.budgets.max_items, more="as_json=true for all")
+        lines = [f"- {v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})" for v in kept]
+        return f"{len(violations)} drift violation(s):\n" + "\n".join([*lines, tail] if tail else lines)
 
     @mcp.tool()
     def check_dependencies(files: list[str] | None = None) -> str:
@@ -199,15 +206,17 @@ def build_server(root: Path | str) -> FastMCP:
         findings = ops.check_dependencies(store, config, files)
         if not findings:
             return "No unknown imports — every import resolves to a known package."
-        lines = [f"- {f['file']}:{f['line']} — unknown import '{f['name']}'" for f in findings]
-        return f"{len(findings)} possible hallucinated dependenc(y/ies); verify before installing:\n" + "\n".join(lines)
+        kept, tail = cap_items(findings, config.budgets.max_items)
+        lines = [f"- {f['file']}:{f['line']} — unknown import '{f['name']}'" for f in kept]
+        return (f"{len(findings)} possible hallucinated dependenc(y/ies); verify before installing:\n"
+                + "\n".join([*lines, tail] if tail else lines))
 
     @mcp.tool()
     def verify(files: list[str] | None = None, severity: str | None = None, run_tests: bool = False) -> str:
         """The deterministic verification gate (guard + deps + staleness [+ tests]) as
-        one machine-checkable verdict — a loop completion condition. Returns JSON:
-        {ok, exit_code, checks:[{name,ok,status,reasons,count}], summary}. Defaults to
-        git-changed files; run_tests also runs a recorded `test` command."""
+        one machine-checkable verdict — a loop completion condition. Returns JSON
+        {ok, exit_code, checks, summary}; each check carries a true `count` and a
+        capped `reasons`. Defaults to git-changed files; run_tests runs a recorded `test`."""
         import json
 
         return json.dumps(ops.verify(store, config, files, severity=severity, run_tests=run_tests))
@@ -215,14 +224,15 @@ def build_server(root: Path | str) -> FastMCP:
     @mcp.tool()
     def stale(mark: bool = False) -> str:
         """Flag memory that contradicts current code: dangling [[wikilinks]] and dead
-        file-path references. Deterministic and offline. Read-only unless mark=True,
-        which sets status: stale on the offending notes (reversible; body untouched)."""
+        file-path references. Read-only unless mark=True, which sets status: stale
+        on the offending notes (reversible; the body is untouched)."""
         result = ops.check_staleness(store, config, mark=mark)
         findings = result["findings"]
         if not findings:
             return "No staleness detected — memory matches the code."
-        lines = [f"- [{r.kind}] {r.message}" for r in findings]
-        out = f"{len(findings)} staleness finding(s):\n" + "\n".join(lines)
+        kept, tail = cap_items(findings, config.budgets.max_items)
+        lines = [f"- [{r.kind}] {r.message}" for r in kept]
+        out = f"{len(findings)} staleness finding(s):\n" + "\n".join([*lines, tail] if tail else lines)
         if result["marked"]:
             out += f"\n\nMarked {len(result['marked'])} note(s) status: stale."
         return out
@@ -255,8 +265,7 @@ def build_server(root: Path | str) -> FastMCP:
     @mcp.tool()
     def hooks_status() -> str:
         """Report which git hooks and Claude Code events carry a torsor auto-capture
-        entry. Read-only: installing/removing hooks is CLI-only (`torsor hooks install`)
-        — an agent should not rewrite its own hooks or settings (ADR 0009)."""
+        entry. Read-only — installing and removing hooks is CLI-only (`torsor hooks install`)."""
         status = ops.hooks_status(store, config)
         git = "not a git repo" if not status["git_repo"] else ", ".join(
             f"{name}={'on' if on else 'off'}" for name, on in status["git_hooks"].items()

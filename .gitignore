@@ -22,3 +22,6 @@ htmlcov/
 
 # Subagent-driven-development scratch (ledgers, briefs, review packages)
 .superpowers/
+
+# Local git worktrees (Claude Code)
+.claude/worktrees/

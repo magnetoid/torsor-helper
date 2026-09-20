@@ -6,6 +6,30 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 💸 Token budgets that are actually enforced
+- `budget.py` claimed every context-returning path was budgeted; several were not, and the ones that were
+  under-counted. Fixed end to end, with a test per path (`tests/test_token_budgets.py`):
+  - **The `SessionStart` digest overran its ceiling on every single session.** The Coach section was appended
+    *after* every allocation was spent, and the injected header was never billed. Both are inside the budget now,
+    and `bootstrap_session` truncates the assembled whole as a backstop. Measured on this repo: 515 → 448 tokens
+    against a 500 ceiling.
+  - **`truncate_to_tokens` appended its `…[truncated]` marker *after* the cut**, so every "budgeted" path
+    overran by the marker's length. The marker is now spent from the budget.
+  - **`recall` billed only the snippet** while both adapters render `### {title} ({tier})` above it — a wide
+    recall overran by ~28% (1859 rendered tokens against a 1500 budget). New `budget.hit_cost` bills title and
+    framing; `search.py` and `recall.py` share it.
+  - **`impact` rendered every caller.** On this repo's biggest hub that was **2573 tokens in one tool call**;
+    now 345. The reported `count` is still the true blast radius — the part worth paying for — and `truncated`
+    says how many were withheld. New `limit` on the MCP tool and `--limit` on the CLI.
+  - `get_intent` (uncapped ADR list, never truncated), `list_practices` (every detected pack at once) and
+    `verify` (unbounded reasons) are now bounded by new `budgets.intent_tokens` / `practices_tokens` /
+    `max_items`. `check_drift`, `check_dependencies`, `stale` and `list_commands` cap their prose output at the
+    server; `check_drift(as_json=true)` stays whole, since that is the machine-readable contract.
+- New `budget.cap_items(items, max_items, more=…)` returns the kept items **and an honest tail** naming how many
+  were hidden. A silent truncation is more expensive than none: the agent either trusts a partial list or
+  re-queries blindly. One line of tail removes both.
+- Trimmed five verbose MCP tool descriptions (they sit in context for the whole session): 972 → 937 tokens.
+
 ### Fixed — two silent bugs in the polyglot map, found by review before merge
 - **A JS/TS file at the repo root never resolved its own references.** A file's module key is derived from its
   path, while its importers' key is derived from the import specifier, and the two only met when the path

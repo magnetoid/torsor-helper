@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from torsor_helper.budget import estimate_tokens
+from torsor_helper.budget import hit_cost
 from torsor_helper.models import TIER_WEIGHTS, Note, RecallHit, RecallResult, Tier
 from torsor_helper.snippets import best_snippet
 
@@ -47,7 +47,7 @@ def keyword_recall(
     selected: list[RecallHit] = []
     used = 0
     for hit in scored[:limit]:
-        cost = estimate_tokens(hit.snippet, chars_per_token)
+        cost = hit_cost(hit.title, hit.snippet, chars_per_token)
         if selected and used + cost > max_tokens:
             break
         selected.append(hit)

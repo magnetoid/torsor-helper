@@ -28,6 +28,16 @@ class BudgetConfig(BaseModel):
     # follows the "core tier under ~500 tokens" rule for injected context —
     # bootstrap_session() stays the fuller, on-demand form.
     session_start_tokens: int = 500
+    # get_intent assembles architecture + decisions + symbols; it grows with the
+    # ADR count, so it carries its own ceiling rather than borrowing bootstrap's.
+    intent_tokens: int = 1200
+    # A best-practice pack is static prose; with no language argument every
+    # detected pack is concatenated, which is the largest single MCP response.
+    practices_tokens: int = 1200
+    # Default ceiling on list-shaped output (impact callers, decision titles,
+    # verify reasons, drift/dep/staleness findings). What is hidden is always
+    # counted in the response, so the agent knows the list is partial.
+    max_items: int = 25
     chars_per_token: int = 4
 
 
