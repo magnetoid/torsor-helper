@@ -391,7 +391,42 @@ Add `tests/bench/` (pytest-benchmark or a plain timing script) with generated fi
 9. **C8** Split `indexed_schema` (embedding/FTS input format) from DB `SCHEMA_VERSION` so index-only
    changes don't re-embed.
 
-### Phase 3 — Correctness (≈1 week)
+### Phase 3 — Correctness — **DONE (2026-09-21)**
+
+> Shipped on `feat/correctness`: B1, B4, B5, B6, B7, B8, B9 (partial), B10, B12,
+> B13, B14, B15, B17. 684 tests pass; ruff and `torsor guard --strict` clean.
+>
+> **Two findings did not survive being implemented.**
+>
+> *B11 — "verify should scope staleness by its file list."* Implemented, watched
+> it return zero for everything, reverted. A staleness finding's `source` is a
+> NOTE path; `files` holds SOURCE files, and git-changed discovery filters to
+> source extensions so a `.md` never appears in it. The namespaces never
+> intersect, so the filter always yields nothing — which reads as "no staleness"
+> rather than "not checked". If pre-existing staleness should stop blocking an
+> unrelated change, the mechanism is a ratchet like the guard's baseline.
+>
+> *B1 was half right.* The partial map did corrupt a committed file — but only
+> `overview.md`, and only when the index had no full map behind it. The audit
+> also claimed the cleaner would delete committed map notes from an empty index
+> and that other modules' notes would vanish; both were tested and both were
+> already safe.
+>
+> **B9 is partial on purpose.** The silent-zero it caused on Windows (no wikilink
+> edge resolves, because stored paths use `\` and every consumer splits on `/`)
+> is fixed. Full repo-relative paths — which would also survive moving a checkout
+> and let the cleaner GC the note tables — remain open.
+>
+> **B2 landed in Phase 2** (`db.connect` reads the stamp before building), and
+> **B3 and A7 landed earlier** (token budgets, `.torsor/state/`).
+>
+> Notable: B6 was the dangerous one. Guard scopes were matched with `fnmatch`, so
+> `*` crossed `/` and `**` meant nothing — a scope could govern far more than it
+> said, or nothing at all, and a scope matching nothing reports exactly like a
+> rule that passes. Fixed, and every ADR rule was then fed a deliberate violation
+> to prove it still fires.
+
+### Phase 3 — the original plan (for the record)
 
 1. **B1** Make the index-derived graph explicit: `map_repo(paths=…)` refuses (or auto-falls back to
    a full scan) when `meta.map_fingerprint` is missing/mismatched; `cleaner` orphan detection
