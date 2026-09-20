@@ -7,6 +7,7 @@ import typer
 
 from torsor_helper import db
 from torsor_helper import operations as ops
+from torsor_helper import render
 from torsor_helper.clients import SUPPORTED_CLIENTS, config_location, config_snippet, instructions_file
 from torsor_helper.config import TorsorConfig, load_config, save_config
 from torsor_helper.embeddings import get_embedder
@@ -246,7 +247,7 @@ def impact(
         return
     typer.echo(f"{res['count']} reference(s) to {symbol!r}:")
     for c in res["callers"]:
-        typer.echo(f"  {c['module']} :: {c['caller']}")
+        typer.echo(f"  {render.caller(c)}")
     if res["truncated"]:
         typer.echo(f"  … +{res['truncated']} more (--limit to list them)")
 
@@ -268,7 +269,7 @@ def connect(
         )
         return
     typer.echo(f"{res['hops']} hop(s) from {source!r} to {target!r}:")
-    typer.echo("  " + " -> ".join(f"{s['symbol']} ({s['module']})" for s in res["path"]))
+    typer.echo("  " + render.call_path(res["path"]))
 
 
 @app.command()
@@ -291,9 +292,9 @@ def find(
         return
     for r in res:
         if r["type"] == "file":
-            typer.echo(f"  {r['path']}")
+            typer.echo(f"  {render.find_hit(r)}")
         else:
-            typer.echo(f"  {r['module']}:{r['line']}  {r['name']} ({r['kind']})")
+            typer.echo(f"  {render.find_hit(r)}")
 
 
 @app.command()
@@ -407,7 +408,7 @@ def guard(
         typer.echo("No drift from declared intent detected.")
         return
     for v in violations:
-        typer.echo(f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})")
+        typer.echo(render.violation(v))
     tail = f" ({result['baselined']} baselined)" if result["baselined"] else ""
     typer.echo(f"\n{len(violations)} drift violation(s){tail}.")
     if result["failed"]:
@@ -427,7 +428,7 @@ def deps(
         typer.echo("No unknown imports — every import resolves to a known package.")
         return
     for f in findings:
-        typer.echo(f"{f['file']}:{f['line']} — unknown import '{f['name']}' (possible hallucinated dependency)")
+        typer.echo(f"{render.unknown_import(f)} (possible hallucinated dependency)")
     typer.echo(f"\n{len(findings)} unknown import(s). Verify each exists before installing.")
     if strict:
         raise typer.Exit(code=1)
@@ -507,8 +508,7 @@ def coach(
         typer.echo("No recommendations right now — the project looks healthy.")
         return
     for r in recs:
-        tail = f" -> {r.action}" if r.action else ""
-        typer.echo(f"[{r.severity}/{r.kind}] {r.message}{tail}  (key: {r.key})")
+        typer.echo(render.recommendation(r, arrow="->"))
 
 
 @app.command()
@@ -619,8 +619,7 @@ def commands(
         typer.echo("No commands recorded yet. Add one:  torsor commands --add 'test=uv run pytest'")
         return
     for c in cmds:
-        tail = f"  — {c['note']}" if c["note"] else ""
-        typer.echo(f"  {c['name']}: {c['command']}{tail}")
+        typer.echo(f"  {render.command(c)}")
 
 
 @app.command()

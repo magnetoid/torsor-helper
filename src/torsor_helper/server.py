@@ -5,6 +5,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from torsor_helper import operations as ops
+from torsor_helper import render
 from torsor_helper.budget import cap_items
 from torsor_helper.config import load_config
 from torsor_helper.paths import TorsorPaths
@@ -29,7 +30,7 @@ def build_server(root: Path | str) -> FastMCP:
         result = ops.recall(store, config, query, limit=limit)
         if not result.hits:
             return f"No matches for: {query!r}"
-        lines = [f"### {h.title} ({h.tier.name})\n{h.snippet}" for h in result.hits]
+        lines = [render.recall_hit(h) for h in result.hits]
         return "\n\n".join(lines)
 
     @mcp.tool()
@@ -79,7 +80,7 @@ def build_server(root: Path | str) -> FastMCP:
         res = ops.impact(store, config, symbol, limit=limit)
         if res["count"] == 0:
             return f"No references to {symbol!r} found (run map_repo to refresh the symbol graph)."
-        lines = [f"- {c['module']} :: {c['caller']}" for c in res["callers"]]
+        lines = [f"- {render.caller(c)}" for c in res["callers"]]
         out = f"{res['count']} reference(s) to {symbol!r}:\n" + "\n".join(lines)
         if res["truncated"]:
             out += f"\n… +{res['truncated']} more (raise limit to list them)"
@@ -94,7 +95,7 @@ def build_server(root: Path | str) -> FastMCP:
                 f"No call path from {source!r} to {target!r} "
                 f"(directed; run map_repo to refresh the symbol graph)."
             )
-        chain = " -> ".join(f"{s['symbol']} ({s['module']})" for s in res["path"])
+        chain = render.call_path(res["path"])
         return f"{res['hops']} hop(s) from {source!r} to {target!r}:\n{chain}"
 
     @mcp.tool()
@@ -103,13 +104,7 @@ def build_server(root: Path | str) -> FastMCP:
         res = ops.find_targets(store, config, query, mode=mode, limit=limit)
         if not res:
             return f"No matches for {query!r}."
-        lines = []
-        for r in res:
-            if r["type"] == "file":
-                lines.append(f"- {r['path']}")
-            else:
-                lines.append(f"- {r['module']}:{r['line']}  {r['name']} ({r['kind']})")
-        return "\n".join(lines)
+        return "\n".join(f"- {render.find_hit(r)}" for r in res)
 
     @mcp.tool()
     def export() -> str:
@@ -135,7 +130,7 @@ def build_server(root: Path | str) -> FastMCP:
         recs = ops.recipes(store, limit)
         if not recs:
             return "No recorded operations yet."
-        return "\n".join(f"- {r['hits']}× {r['op']}" + (f" {r['args']!r}" if r["args"] else "") for r in recs)
+        return "\n".join(f"- {render.recipe(r)}" for r in recs)
 
     @mcp.tool()
     def record_command(name: str, command: str, note: str = "") -> str:
@@ -150,7 +145,7 @@ def build_server(root: Path | str) -> FastMCP:
         if not cmds:
             return "No project commands recorded yet (record them with record_command)."
         kept, tail = cap_items(cmds, config.budgets.max_items)
-        lines = [f"- {c['name']}: `{c['command']}`" + (f" — {c['note']}" if c["note"] else "") for c in kept]
+        lines = [f"- {render.command(c, quote=True)}" for c in kept]
         return "\n".join([*lines, tail] if tail else lines)
 
     @mcp.tool()
@@ -197,7 +192,7 @@ def build_server(root: Path | str) -> FastMCP:
         # as_json above is the machine-readable contract and stays whole; this
         # prose path lands in the agent's context, so it is capped.
         kept, tail = cap_items(violations, config.budgets.max_items, more="as_json=true for all")
-        lines = [f"- {v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})" for v in kept]
+        lines = [f"- {render.violation(v)}" for v in kept]
         return f"{len(violations)} drift violation(s):\n" + "\n".join([*lines, tail] if tail else lines)
 
     @mcp.tool()
@@ -207,7 +202,7 @@ def build_server(root: Path | str) -> FastMCP:
         if not findings:
             return "No unknown imports — every import resolves to a known package."
         kept, tail = cap_items(findings, config.budgets.max_items)
-        lines = [f"- {f['file']}:{f['line']} — unknown import '{f['name']}'" for f in kept]
+        lines = [f"- {render.unknown_import(f)}" for f in kept]
         return (f"{len(findings)} possible hallucinated dependenc(y/ies); verify before installing:\n"
                 + "\n".join([*lines, tail] if tail else lines))
 
@@ -233,7 +228,7 @@ def build_server(root: Path | str) -> FastMCP:
         if not findings:
             return "No staleness detected — memory matches the code."
         kept, tail = cap_items(findings, config.budgets.max_items)
-        lines = [f"- [{r.kind}] {r.message}" for r in kept]
+        lines = [f"- {render.staleness(r)}" for r in kept]
         out = f"{len(findings)} staleness finding(s):\n" + "\n".join([*lines, tail] if tail else lines)
         if result["marked"]:
             out += f"\n\nMarked {len(result['marked'])} note(s) status: stale."
@@ -258,11 +253,7 @@ def build_server(root: Path | str) -> FastMCP:
         recs = ops.recommend(store, config, context or None, limit=limit)
         if not recs:
             return "No recommendations right now — the project looks healthy."
-        lines = []
-        for r in recs:
-            tail = f" → {r.action}" if r.action else ""
-            lines.append(f"- [{r.severity}/{r.kind}] {r.message}{tail}  (key: {r.key})")
-        return "\n".join(lines)
+        return "\n".join(f"- {render.recommendation(r)}" for r in recs)
 
     @mcp.tool()
     def hooks_status() -> str:
