@@ -4,6 +4,7 @@ import re
 
 from torsor_helper import db
 from torsor_helper.cartographer import norm_path
+from torsor_helper.models import Frontmatter
 from torsor_helper.store import Store
 
 _MERMAID_HEADING = "## Module dependencies"
@@ -97,28 +98,31 @@ def render_module_mermaid(conn) -> str:
     return "\n".join(lines)
 
 
-def _strip_mermaid(body: str) -> str:
-    return body.split("\n" + _MERMAID_HEADING, 1)[0].rstrip()
-
-
 def export_project(store: Store, config) -> dict:
-    """Write .torsor/llms.txt and inject a Mermaid module diagram into the
-    repo-map overview note. Idempotent — re-running replaces, never accumulates."""
+    """Write .torsor/llms.txt and the Mermaid module diagram.
+
+    The diagram is its own note (map/dependencies.md), not a section appended
+    to the map overview: map_repo re-renders the overview from the symbol
+    table, so a diagram living there was erased by the next `torsor map` — and
+    the post-commit hook runs one on every commit. Idempotent: re-running
+    replaces the note, never accumulates."""
     paths = store.paths
     paths.llms_txt.write_text(render_llms_txt(store), encoding="utf-8")
 
     diagram_written = False
-    if paths.index_db.exists() and paths.map_overview.exists():
+    if paths.index_db.exists():
         conn = db.connect(paths.index_db)
         try:
             diagram = render_module_mermaid(conn)
         finally:
             conn.close()
         if diagram:
-            note = store.read_note(paths.map_overview)
-            body = _strip_mermaid(note.body)
-            new_body = f"{body}\n\n{_MERMAID_HEADING}\n\n{diagram}\n"
-            store.write_note(paths.map_overview, note.frontmatter, note.title, new_body)
+            store.write_note(
+                paths.map_dependencies,
+                Frontmatter(type="map", status="derived", tags=["map"]),
+                "Module dependencies",
+                f"{_MERMAID_HEADING}\n\n{diagram}\n",
+            )
             diagram_written = True
 
     return {"llms_txt": str(paths.llms_txt), "diagram": diagram_written}

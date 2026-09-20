@@ -4,8 +4,9 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-20T21:54:01'
-updated: '2026-09-20T21:54:01'
+created: '2026-09-21T01:02:54'
+updated: '2026-09-21T01:02:54'
+rules: []
 ---
 
 # src/torsor_helper/paths.py
@@ -34,9 +35,10 @@ Symbols in `src/torsor_helper/paths.py`.
 - L99 `commands_file(self)` (method)
 - L104 `baseline_file(self)` (method)
 - L110 `index_dir(self)` (method)
-- L114 `state_dir(self)` (method)
-- L124 `index_db(self)` (method)
-- L128 `claude_settings(self)` (method)
-- L134 `claude_rules_dir(self)` (method)
-- L141 `claude_settings_local(self)` (method)
-- L145 `journal_file(self, date_str: str)` (method)
+- L114 `map_dependencies(self)` (method)
+- L122 `state_dir(self)` (method)
+- L132 `index_db(self)` (method)
+- L136 `claude_settings(self)` (method)
+- L142 `claude_rules_dir(self)` (method)
+- L149 `claude_settings_local(self)` (method)
+- L153 `journal_file(self, date_str: str)` (method)

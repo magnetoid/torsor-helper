@@ -45,6 +45,11 @@ class Frontmatter(BaseModel):
     links: list[str] = Field(default_factory=list)
     created: str | None = None
     updated: str | None = None
+    # Declared, not merely allowed: `kind` is an indexed column and a search
+    # filter, and `rules` is what the guard enforces. Leaving them to
+    # extra="allow" meant their types were never checked at all.
+    kind: str | None = None
+    rules: list[dict] = Field(default_factory=list)
 
 
 class Note(BaseModel):
@@ -104,7 +109,10 @@ class Rule(BaseModel):
     # kind: forbid_import | forbid_pattern | require_import | forbid_layer_import
     kind: str
     target: str          # module prefix (forbid/require_import), or regex (forbid_pattern/forbid_layer_import)
-    scope: str = "*.py"  # fnmatch glob over the posix path, relative to the repo root
+    # Path-aware glob over the posix relpath (guard.scope_matches): `*` and `?`
+    # stay inside one segment, `**` spans directories, and a pattern with no
+    # "/" matches at any depth the way a .gitignore pattern does.
+    scope: str = "*.py"
     message: str = ""
     source: str = ""     # ADR/title that declared this rule (for citation)
     severity: str = "warning"  # hint | info | warning | error
@@ -125,6 +133,7 @@ class Violation(BaseModel):
 class Recommendation(BaseModel):
     # kind: thin | stale | unruled | uncharted | uncharted_language | reuse | decision | learning
     #       | hotspot | phantom_dep | coupling | hub | regression | dangling_link | stale_path
+    #       | ambiguous_link
     kind: str
     severity: str = "suggest"  # info | suggest | important
     message: str

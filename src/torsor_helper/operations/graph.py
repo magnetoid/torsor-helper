@@ -21,10 +21,20 @@ from torsor_helper.store import Store
 
 def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None, force: bool = False) -> dict:
     full_scan = paths is None
-    fingerprint = cartographer.repo_fingerprint(store.paths.root) if full_scan else None
 
     conn = db.connect(store.paths.index_db)
     try:
+        if not full_scan and db.meta_get(conn, "map_fingerprint") is None:
+            # A partial map merges the rest of the graph out of the index, then
+            # renders map/ from the union. With no full map behind it — a fresh
+            # clone or anything after `clean --deep`, since .index/ is
+            # git-ignored — there is nothing to merge into, so the render would
+            # rewrite the COMMITTED overview with only the files in this commit.
+            # The post-commit hook calls this on every commit, so it would have
+            # happened on the very next one. Falling back costs one full scan,
+            # once, and leaves the index able to merge from then on.
+            full_scan, paths = True, None
+        fingerprint = cartographer.repo_fingerprint(store.paths.root) if full_scan else None
         # Skip the whole scan+render+reindex when the repo is byte-for-byte
         # unchanged since the last full map (a partial `paths` map never skips).
         if full_scan and not force and fingerprint == db.meta_get(conn, "map_fingerprint"):

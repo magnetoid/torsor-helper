@@ -1,0 +1,31 @@
+# Project Charter
+
+> torsor-helper: a persistent memory + architectural-intent guardrail for AI coding
+
+## Charter
+
+- [Project Charter](charter.md)
+
+## Architecture
+
+- [System Patterns](architecture/system-patterns.md)
+- [Tech Context](architecture/tech-context.md)
+- [ADR 0001: Adopt torsor-helper](architecture/decisions/0001-adopt-torsor-helper.md)
+- [ADR 0002: Adapters depend on core, never the reverse](architecture/decisions/0002-adapters-depend-on-core-never-the-reverse.md)
+- [0003-use-stdlib-ast-for-the-cartographer-not-tree-sitter](architecture/decisions/0003-use-stdlib-ast-for-the-cartographer-not-tree-sitter.md)
+- [ADR 0004: Reference edges resolve only the two reliable cases](architecture/decisions/0004-reference-edges-resolve-only-the-two-reliable-cases.md)
+- [ADR 0005: The drift baseline is committed config, not disposable index](architecture/decisions/0005-the-drift-baseline-is-committed-config-not-disposable-index.md)
+- [ADR 0006: The dependency check is advisory, offline, and conservative](architecture/decisions/0006-dependency-check-is-advisory-and-offline.md)
+- [ADR 0007: Impact analysis reuses the v0.2 reference edges (no new call graph)](architecture/decisions/0007-reuse-reference-edges-for-impact-not-a-new-call-graph.md)
+- [ADR 0008: Partial map_repo merges into the graph rather than replacing it wholesale](architecture/decisions/0008-partial-map-repo-merges-into-the-graph-rather-than-replacing-it-wholesale.md)
+- [ADR 0009: Auto-capture is event-driven, and hook installers are CLI-only](architecture/decisions/0009-auto-capture-is-event-driven-and-hook-installers-are-cli-only.md)
+- [ADR 0010: Staleness detection is high-precision and read-only by default; verify composes existing gates](architecture/decisions/0010-staleness-detection-is-high-precision-and-read-only-by-default-verify-composes-existing-gates.md)
+- [ADR 0011: Cleanup is plan-then-apply, and never touches a stable tier](architecture/decisions/0011-cleanup-is-plan-then-apply-and-never-touches-a-stable-tier.md)
+- [ADR 0012: The edit gate is advisory by default and checks proposed content](architecture/decisions/0012-the-edit-gate-is-advisory-by-default-and-checks-proposed-content.md)
+- [ADR 0013: Python stays on stdlib ast; other languages use the official tree-sitter grammar wheels, never the language pack](architecture/decisions/0013-python-stays-on-stdlib-ast-other-languages-use-official-tree-sitter-grammar-wheels-never-the-language-pack.md)
+- [ADR 0014: Inside the operations package, submodules import siblings by path, never the façade](architecture/decisions/0014-the-operations-package-imports-siblings-by-path-never-the-facade.md)
+
+## Active
+
+- [Active Context](active/context.md)
+- [Progress](active/progress.md)

@@ -84,10 +84,12 @@ def _rule_line(r) -> str:
     return f"- {r.kind}: `{r.target}`{scope}{message}"
 
 def _scope_to_paths_glob(scope: str) -> str:
-    """A guard rule's fnmatch scope → a Claude Code `paths:` glob (matched
-    relative to the project root). fnmatch's `*.py` means "any .py, anywhere",
-    which in glob terms is `**/*.py`; a scope that already names a directory is
-    passed through unchanged."""
+    """A guard rule's scope → a Claude Code `paths:` glob (matched relative to
+    the project root).
+
+    The two agree now: `*` stays inside a segment and `**` spans directories in
+    both, so a scope naming a directory passes through unchanged. A bare `*.py`
+    means "any .py, anywhere" in a scope, which spelled as a glob is `**/*.py`."""
     scope = scope or "*.py"
     return scope if "/" in scope else f"**/{scope}"
 

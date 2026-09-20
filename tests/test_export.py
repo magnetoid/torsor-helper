@@ -27,17 +27,20 @@ def test_llms_txt_shape(tmp_path):
     assert result["llms_txt"].endswith("llms.txt")
 
 
-def test_mermaid_module_diagram_in_overview(tmp_path):
+def test_mermaid_module_diagram_gets_its_own_note(tmp_path):
     store = _project(tmp_path)
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "dates.py").write_text("def format_date(d):\n    return d\n")
     (tmp_path / "app.py").write_text("from pkg.dates import format_date\n\ndef run():\n    return format_date(1)\n")
     ops.map_repo(store, TorsorConfig())
     ops.export_project(store, TorsorConfig())
-    overview = store.paths.map_overview.read_text(encoding="utf-8")
-    assert "```mermaid" in overview
-    assert "graph TD" in overview
-    assert "-->" in overview  # at least one module dependency edge
+    # Not the overview: map_repo re-renders that, so a diagram there is erased
+    # by the next `torsor map` — which the post-commit hook runs every commit.
+    diagram = store.paths.map_dependencies.read_text(encoding="utf-8")
+    assert "```mermaid" in diagram
+    assert "graph TD" in diagram
+    assert "-->" in diagram  # at least one module dependency edge
+    assert "```mermaid" not in store.paths.map_overview.read_text(encoding="utf-8")
 
 
 def test_export_is_idempotent_no_duplicate_mermaid(tmp_path):
@@ -48,8 +51,8 @@ def test_export_is_idempotent_no_duplicate_mermaid(tmp_path):
     ops.map_repo(store, TorsorConfig())
     ops.export_project(store, TorsorConfig())
     ops.export_project(store, TorsorConfig())
-    overview = store.paths.map_overview.read_text(encoding="utf-8")
-    assert overview.count("```mermaid") == 1  # not accumulated across runs
+    diagram = store.paths.map_dependencies.read_text(encoding="utf-8")
+    assert diagram.count("```mermaid") == 1  # not accumulated across runs
 
 
 def test_render_module_mermaid_empty_without_edges(tmp_path):

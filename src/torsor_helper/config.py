@@ -3,7 +3,7 @@ from __future__ import annotations
 import tomllib
 
 import tomli_w
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Literal
 
 from torsor_helper.paths import TorsorPaths
@@ -67,6 +67,23 @@ class IndexConfig(_Strict):
     auto_index: bool = True
     mmr_lambda: float = 0.7  # MMR relevance/diversity trade-off (1.0 = pure relevance)
     importance_floors: dict[str, float] = Field(default_factory=lambda: dict(_DEFAULT_IMPORTANCE_FLOORS))
+
+    @field_validator("importance_floors", mode="after")
+    @classmethod
+    def _upper_and_known(cls, value: dict[str, float]) -> dict[str, float]:
+        """Keys are Tier names, which are uppercase. A user writing `active =
+        0.85` got a silently ignored key and decay left off, so uppercase them
+        — and reject a name that is not a tier, which can only be a typo."""
+        out = dict(_DEFAULT_IMPORTANCE_FLOORS)
+        for key, floor in value.items():
+            name = str(key).upper()
+            if name not in _DEFAULT_IMPORTANCE_FLOORS:
+                raise ValueError(
+                    f"unknown tier {key!r} in importance_floors; expected one of "
+                    + ", ".join(sorted(_DEFAULT_IMPORTANCE_FLOORS))
+                )
+            out[name] = floor
+        return out
     # Depth bound for `connect`: a dense graph would otherwise render a path no
     # one reads, and the search cost grows with it.
     connect_max_hops: int = 12

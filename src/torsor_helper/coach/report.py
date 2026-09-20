@@ -40,6 +40,7 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
     # path refs (check_path_refs) can still catch an example path, so they live
     # only in the explicit `torsor stale` command, not the always-on Coach.
     recs += staleness.check_dangling_links(store)
+    recs += staleness.check_ambiguous_links(store)
     if conn is not None:  # indexed path; these self-skip outside a git repo / on a clean project
         days = config.coach.history_days if config is not None else 365
         recs += hotspots.find_hotspots(store.paths.root, history_days=days)

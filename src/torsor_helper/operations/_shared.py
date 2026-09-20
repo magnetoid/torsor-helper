@@ -24,8 +24,13 @@ def _embedder_for(config):
 
 def _open_index(store, config):
     """Return a freshly-synced index connection, or None to use keyword fallback."""
-    if not config.index.auto_index and not store.paths.index_db.exists():
-        return None
+    if not config.index.auto_index:
+        # It used to also require the DB to be absent, so the setting worked
+        # exactly once — on a virgin project. After the first recall built an
+        # index, every later recall reindexed regardless. Serve what is there.
+        if not store.paths.index_db.exists():
+            return None
+        return db.connect(store.paths.index_db)
     embedder = _embedder_for(config)
     conn = db.connect(store.paths.index_db)
     try:

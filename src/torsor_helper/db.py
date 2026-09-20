@@ -245,10 +245,26 @@ class SlugIndex:
     def __init__(self, conn) -> None:
         self.paths = _note_paths(conn)
         self.by_basename: dict[str, str] = {}
+        self.ambiguous: set[str] = set()
         for p in self.paths:
-            name = p.rsplit("/", 1)[-1]
-            if name.endswith(".md"):
-                self.by_basename.setdefault(name[:-3], p)
+            # Tolerate a backslash path from an index built by an older version
+            # on Windows; the indexer writes posix now.
+            name = p.replace("\\", "/").rsplit("/", 1)[-1]
+            if not name.endswith(".md"):
+                continue
+            slug = name[:-3]
+            if slug in self.by_basename:
+                # Two tiers can both hold an `overview.md`. The first sorted one
+                # keeps winning — changing that would silently re-point existing
+                # links — but the collision is now visible to the Coach.
+                self.ambiguous.add(slug)
+            else:
+                self.by_basename[slug] = p
+
+    def is_ambiguous(self, slug: str) -> bool:
+        """True when more than one note shares this basename. A slug containing
+        "/" is a path tail, which is how a writer disambiguates, so it never is."""
+        return "/" not in slug and slug in self.ambiguous
 
     def resolve(self, slug: str) -> str | None:
         if "/" not in slug:
@@ -256,7 +272,8 @@ class SlugIndex:
         suffix = f"/{slug}.md"
         exact = f"{slug}.md"
         for p in self.paths:
-            if p == exact or p.endswith(suffix):
+            norm = p.replace("\\", "/")
+            if norm == exact or norm.endswith(suffix):
                 return p
         return None
 
@@ -337,6 +354,14 @@ def get_vectors(conn, paths):
         ):
             out[row["path"]] = unpack(row["embedding"])
     return out
+
+
+def vectors_match(conn, embedder_identity: str) -> bool:
+    """True when the stored vectors were built by this run's embedder. A False
+    here means the vector leg must be skipped: comparing a hashing query vector
+    against fastembed document vectors is noise, not a weaker signal."""
+    stored = meta_get(conn, "embedder")
+    return stored is None or stored == embedder_identity
 
 
 def cosine_search(conn, qvec, limit):
