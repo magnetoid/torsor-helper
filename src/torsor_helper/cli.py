@@ -206,6 +206,115 @@ def doctor(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_R
     typer.echo("OK: torsor-helper project is healthy.")
 
 
+# ---- Memory: the same seven operations the MCP server exposes -------------
+# These were MCP-only, including the five founding tools, although nearly every
+# feature is meant to be both (CLAUDE.md). Without them memory cannot be
+# scripted, used from CI, or debugged without an MCP client attached.
+
+
+@app.command()
+def recall(
+    query: list[str] = typer.Argument(..., help="What to search memory for."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    limit: int = typer.Option(8, "--limit", help="Maximum hits."),
+    type_: Optional[str] = typer.Option(None, "--type", help="Only notes of this frontmatter type (e.g. decision)."),
+    kind: Optional[str] = typer.Option(None, "--kind", help="Only notes of this kind (e.g. learning)."),
+    include_superseded: bool = typer.Option(False, "--include-superseded", help="Include superseded decisions."),
+    as_json: bool = typer.Option(False, "--json", help="Emit machine-readable hits."),
+) -> None:
+    """Hybrid search across memory, wiki and map — ranked snippets, token-budgeted."""
+    _, config, store = _load(root)
+    result = ops.recall(store, config, " ".join(query), limit=limit, type_=type_, kind=kind,
+                        include_superseded=include_superseded)
+    if _emit({"query": result.query, "total_tokens": result.total_tokens,
+              "hits": [h.model_dump(mode="json") for h in result.hits]}, as_json):
+        return
+    if not result.hits:
+        typer.echo(f"No matches for {' '.join(query)!r}.")
+        return
+    for hit in result.hits:
+        typer.echo(render.recall_hit(hit))
+        typer.echo("")
+
+
+@app.command()
+def remember(
+    content: list[str] = typer.Argument(..., help="What to remember."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    kind: str = typer.Option("observation", "--kind", help="observation | decision | learning."),
+    link: list[str] = typer.Option(None, "--link", help="Wikilink slug to relate this to (repeatable)."),
+) -> None:
+    """Persist an observation, decision or learning to episodic memory."""
+    _, _, store = _load(root, config=False)
+    path = ops.remember(store, " ".join(content), kind=kind, links=list(link or []))
+    typer.echo(f"Remembered ({kind}) → {path}")
+
+
+@app.command()
+def active(
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    focus: str = typer.Option(..., "--focus", help="What you are working on now."),
+    progress: str = typer.Option("", "--progress", help="What is done."),
+    open_questions: str = typer.Option("", "--open-questions", help="What is still unresolved."),
+) -> None:
+    """Update the active working state (current focus, progress, open questions)."""
+    _, _, store = _load(root, config=False)
+    ops.update_active(store, focus, progress, open_questions)
+    typer.echo("Active context updated.")
+
+
+@app.command()
+def handoff(
+    summary: list[str] = typer.Argument(..., help="What this session did."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    decisions: str = typer.Option("", "--decisions", help="Decisions taken."),
+    open_questions: str = typer.Option("", "--open-questions", help="Left unresolved."),
+    next_steps: str = typer.Option("", "--next-steps", help="What the next session should pick up."),
+) -> None:
+    """Write a structured end-of-session handoff the next session resumes from."""
+    _, _, store = _load(root, config=False)
+    path = ops.record_handoff(store, " ".join(summary), decisions, open_questions, next_steps)
+    typer.echo(f"Handoff written → {path}")
+
+
+@app.command()
+def bootstrap(
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    max_tokens: Optional[int] = typer.Option(None, "--max-tokens", help="Override the budget for this call."),
+) -> None:
+    """Print the budgeted whole-pyramid digest an agent reads at session start."""
+    _, config, store = _load(root)
+    typer.echo(ops.bootstrap_session(store, config, max_tokens=max_tokens))
+
+
+@app.command()
+def intent(
+    topic: list[str] = typer.Argument(None, help="Optional topic to surface relevant symbols for."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+) -> None:
+    """Surface the architecture (patterns, tech, ADRs) and symbols for a topic."""
+    _, config, store = _load(root)
+    typer.echo(ops.get_intent(store, config, " ".join(topic) if topic else None))
+
+
+@app.command()
+def decision(
+    title: str = typer.Argument(..., help="The decision, as a title."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    context: str = typer.Option(..., "--context", help="Why this came up."),
+    decision_text: str = typer.Option(..., "--decision", help="What was decided."),
+    consequences: str = typer.Option("", "--consequences", help="What follows from it."),
+    supersedes: Optional[str] = typer.Option(None, "--supersedes", help="ADR id or slug this replaces."),
+) -> None:
+    """Record an Architecture Decision Record. Add machine-readable `rules:` by
+    hand afterwards, or adopt a practice pack — `torsor guard` enforces them."""
+    _, _, store = _load(root, config=False)
+    path = ops.record_decision(store, title, context, decision_text, consequences,
+                               None, supersedes)
+    typer.echo(f"Recorded → {path}")
+    typer.echo("Add a `rules:` block to make it machine-enforced, then: torsor rules --scoped")
+
+
 @app.command()
 def index(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),

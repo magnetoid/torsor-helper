@@ -87,6 +87,17 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
         vec_ranked = []
     fts_ranked = db.fts_search(conn, query, pool)
 
+    if embedder.name == "hashing" and vec_ranked:
+        # The fallback embedder hashes a bag of words into 384 buckets, so every
+        # query has some similarity to every note. Left to fuse freely it
+        # *created* hits: a query for something the project never recorded came
+        # back with the charter, and recall could never answer "nothing here".
+        # So the fallback ranks what the lexical side already found a basis for
+        # and adds nothing. A real embedder introducing a hit with no lexical
+        # overlap is exactly what semantic search is for, and is untouched.
+        lexical = {path for path, _ in fts_ranked}
+        vec_ranked = [pair for pair in vec_ranked if pair[0] in lexical]
+
     scores: dict[str, float] = {}
     for rank, (path, _) in enumerate(vec_ranked):
         scores[path] = scores.get(path, 0.0) + 1.0 / (k + rank)

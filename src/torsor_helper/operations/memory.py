@@ -109,7 +109,15 @@ def _recent_journal(store: Store, max_tokens: int, cpt: int) -> str:
         used += cost
     return truncate_to_tokens("\n\n".join(parts), max_tokens, cpt)
 
-def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8) -> RecallResult:
+def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8, *,
+           type_: str | None = None, kind: str | None = None,
+           include_superseded: bool = False) -> RecallResult:
+    """Hybrid search across the pyramid, token-budgeted.
+
+    The filters were implemented in hybrid_search and then dropped here, so no
+    adapter could reach them — "only ADRs" and "only learnings" were
+    inexpressible despite the plumbing existing. The keyword fallback applies
+    them itself, since it has no SQL to push them into."""
     _log_op(store, "recall", query)
     conn = _open_index(store, config)
     if conn is not None:
@@ -117,15 +125,28 @@ def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8) -> Re
             return hybrid_search(
                 conn, _embedder_for(config), config, query,
                 limit=limit, max_tokens=config.budgets.recall_tokens,
+                type_=type_, kind=kind, include_superseded=include_superseded,
             )
         finally:
             conn.close()
-    notes = list(store.iter_notes())
+    notes = [n for n in store.iter_notes() if _passes(n, type_, kind, include_superseded)]
     return keyword_recall(
         notes, query, limit=limit,
         chars_per_token=config.budgets.chars_per_token,
         max_tokens=config.budgets.recall_tokens,
     )
+
+
+def _passes(note, type_: str | None, kind: str | None, include_superseded: bool) -> bool:
+    """The same filters hybrid_search applies in SQL, for the no-index path."""
+    fm = note.frontmatter
+    if type_ is not None and fm.type != type_:
+        return False
+    if kind is not None and getattr(fm, "kind", None) != kind:
+        return False
+    if not include_superseded and fm.type == "decision" and fm.status == "superseded":
+        return False
+    return True
 
 def remember(store: Store, content: str, kind: str = "observation", links: list[str] | None = None) -> str:
     path = store.append_journal(content, kind=kind, links=links or [])
