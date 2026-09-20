@@ -1,22 +1,38 @@
 from __future__ import annotations
 
+import fnmatch
+import json
 import re as _re
+import subprocess
 from collections import deque
+from pathlib import Path
 
-from torsor_helper import cartographer, cleaner, db, export as _export, guard
+from torsor_helper import baseline as _baseline
+from torsor_helper import cartographer
+from torsor_helper import cleaner
+from torsor_helper import db
+from torsor_helper import deps as _deps
+from torsor_helper import export as _export
+from torsor_helper import finder
+from torsor_helper import guard
+from torsor_helper import hooks as _hooks
+from torsor_helper import languages
+from torsor_helper import practices as _practices
+from torsor_helper import store as _store_mod
+from torsor_helper.budget import cap_items, estimate_tokens, truncate_to_tokens
 from torsor_helper.coach import mining as coach_mining
 from torsor_helper.coach import report as coach_report
+from torsor_helper.coach import staleness as _staleness
+from torsor_helper.coach import trend as coach_trend
 from torsor_helper.coach.state import CoachState
-from torsor_helper.budget import cap_items, estimate_tokens, truncate_to_tokens
 from torsor_helper.config import TorsorConfig
 from torsor_helper.embeddings import get_embedder
 from torsor_helper.indexer import reindex
 from torsor_helper.models import Frontmatter, RecallResult
+from torsor_helper.paths import contained
 from torsor_helper.recall import keyword_recall
 from torsor_helper.search import hybrid_search
-from torsor_helper import store as _store_mod
 from torsor_helper.store import Store
-from torsor_helper.paths import contained
 
 # Fractions of the bootstrap budget allocated per section (must sum to <= 1.0).
 _BOOTSTRAP_ALLOC = [
@@ -260,8 +276,6 @@ def _language_counts(modules, root=None) -> dict:
     the number of files of each language the map CANNOT see because the
     `[languages]` extra isn't installed. Zero-file languages are omitted, so the
     gap is surfaced only when it's real (spec: Degradation & discoverability)."""
-    from torsor_helper import languages
-
     counts: dict = {}
     for m in modules:
         spec = languages.spec_for(m)
@@ -272,8 +286,6 @@ def _language_counts(modules, root=None) -> dict:
 
 
 def _unavailable_language_counts(root) -> dict[str, int]:
-    from torsor_helper import languages
-
     missing = {name for name in languages.LANGUAGES if not languages.is_available(name)}
     if not missing:
         return {}
@@ -294,8 +306,6 @@ def find_targets(store: Store, config: TorsorConfig, query: str, *, mode: str = 
                  limit: int = 20, include_files: bool = True, include_symbols: bool = True) -> list:
     """Fuzzy/literal/regex find over repo files + mapped symbols, frecency-ranked."""
     _log_op(store, "find_files", query)
-    from torsor_helper import finder
-
     return finder.find(store, config, query, mode=mode, limit=limit,
                        include_files=include_files, include_symbols=include_symbols)
 
@@ -343,8 +353,6 @@ def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int = 600) ->
 def _write_managed_block(target, start: str, end: str, content: str) -> str:
     """Write/refresh a marker-delimited block in `target` (AGENTS.md,
     CLAUDE.md, …). Idempotent — re-running replaces the block, never duplicates."""
-    from pathlib import Path
-
     block = f"{start}\n{content}\n{end}"
     target = Path(target)
     if target.exists():
@@ -393,9 +401,6 @@ def write_scoped_rules(store: Store, config: TorsorConfig) -> list:
     CLAUDE.md block. Charter principles have no scope and become an unscoped
     file (loaded every session, like CLAUDE.md). The directory is fully
     managed: a file torsor no longer produces is removed."""
-    import json
-    from pathlib import Path
-
     _log_op(store, "get_rules", "scoped")
     out_dir = store.paths.claude_rules_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -579,8 +584,6 @@ def record_command(store: Store, name: str, command: str, note: str = "") -> str
 def run_command(store: Store, name: str):
     """Execute a recorded command (returns CompletedProcess, or None if unknown).
     Runs the user-/agent-recorded command via the shell from the repo root."""
-    import subprocess
-
     cmds = {c["name"]: c for c in list_commands(store)}
     found = cmds.get(name)
     if not found:
@@ -818,16 +821,12 @@ def _source_exts() -> tuple[str, ...]:
     an unavailable language's files still match `forbid_pattern` rules scoped to
     them), plus `.pyi` and `.rs`, which no extractor claims but which teams do
     write `forbid_pattern` rules against."""
-    from torsor_helper import languages
-
     return tuple(dict.fromkeys(languages.all_extensions() + (".pyi", ".rs")))
 
 
 def list_practices(store, config, language=None) -> str:
     """Render the curated best-practice pack(s): one language, or every pack
     detected in the repo when language is None."""
-    from torsor_helper import practices as _practices
-
     cpt = config.budgets.chars_per_token
     budget = config.budgets.practices_tokens
     if language is None:
@@ -848,8 +847,6 @@ def list_practices(store, config, language=None) -> str:
 def adopt_practices(store, config, language) -> dict:
     """Adopt a best-practice pack: records ONE ADR carrying the pack's
     machine-readable rules (guard enforces them) + prose principles."""
-    from torsor_helper import practices as _practices
-
     try:
         payload = _practices.adr_payload(language)
     except KeyError:
@@ -880,8 +877,6 @@ def _rel_to_root(root, toplevel, files) -> list[str]:
     source files that live under it — so a .torsor/ in a subdirectory of the git
     repo never checks the wrong paths. Shared by the working-tree and per-commit
     change discovery."""
-    from pathlib import Path
-
     top, base = Path(toplevel), Path(root).resolve()
     exts = _source_exts()
     out: list[str] = []
@@ -896,8 +891,6 @@ def _rel_to_root(root, toplevel, files) -> list[str]:
 
 
 def _git_changed(root) -> list[str]:
-    import subprocess
-
     try:
         toplevel = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
@@ -924,8 +917,6 @@ def _git_changed_in_commit(root, ref="HEAD") -> list[str]:
     """Source files touched by a single commit (default HEAD) — what the
     post-commit hook remaps. Working-tree `_git_changed` diffs uncommitted state;
     this diffs the commit itself."""
-    import subprocess
-
     try:
         toplevel = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
@@ -951,8 +942,6 @@ def check_drift(store, config, files=None) -> list:
 
 def new_drift(store, config, files=None) -> list:
     """Drift beyond the committed baseline — the genuinely-new violations."""
-    from torsor_helper import baseline as _baseline
-
     violations = check_drift(store, config, files)
     return _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))
 
@@ -961,8 +950,6 @@ def guard_run(store, config, files=None, *, update_baseline=False, strict=False,
     """The single guard orchestration both adapters share: check drift, apply
     the baseline ratchet, and decide strict failure — so the MCP tool and the
     CLI command can't diverge in behavior."""
-    from torsor_helper import baseline as _baseline
-
     violations = check_drift(store, config, files)
     if update_baseline:
         _baseline.save(store.paths.baseline_file, violations)
@@ -978,8 +965,6 @@ def check_dependencies(store, config, files=None) -> list:
     """Flag imports that resolve to no known package (possible slopsquatting).
     Defaults to git-changed files; fully offline."""
     _log_op(store, "check_dependencies", "")
-    from torsor_helper import deps as _deps
-
     if files is None:
         files = _git_changed(store.paths.root)
     return _deps.unknown_imports(store.paths.root, files)
@@ -1020,8 +1005,8 @@ def verify(store, config, files=None, *, severity=None, run_tests=False) -> dict
     if files is None:
         files = _git_changed(store.paths.root)
 
-    guard = guard_run(store, config, files, strict=True, severity=severity)
-    guard_reasons = [f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})" for v in guard["new"]]
+    guard_result = guard_run(store, config, files, strict=True, severity=severity)
+    guard_reasons = [f"{v.file}:{v.line} — [{v.severity}] {v.message} (per {v.source})" for v in guard_result["new"]]
     dep_findings = check_dependencies(store, config, files)
     dep_reasons = [f"{f['file']}:{f['line']} — unknown import '{f['name']}'" for f in dep_findings]
     stale_findings = check_staleness(store, config)["findings"]
@@ -1029,7 +1014,7 @@ def verify(store, config, files=None, *, severity=None, run_tests=False) -> dict
 
     cap = config.budgets.max_items
     checks = [
-        _verify_check("guard", not guard["failed"], "pass" if not guard["failed"] else "fail",
+        _verify_check("guard", not guard_result["failed"], "pass" if not guard_result["failed"] else "fail",
                       guard_reasons, cap=cap),
         _verify_check("deps", not dep_findings, "pass" if not dep_findings else "fail",
                       dep_reasons, cap=cap),
@@ -1073,8 +1058,6 @@ def check_staleness(store, config, *, mark=False, unmark=False) -> dict:
     dead file-path references (deterministic, index-free, high-precision). Read-only
     by default; `--mark` sets `status: stale` on the offending notes (opt-in,
     reversible via `--unmark`), never touching the note body (ADR 0010)."""
-    from torsor_helper.coach import staleness as _staleness
-
     _log_op(store, "check_staleness", "")
     findings = _staleness.run_staleness(store)
     counts: dict[str, int] = {}
@@ -1177,8 +1160,6 @@ def _snapshot_complexity(store) -> None:
     """Refresh the per-file complexity baseline `coach/trend.find_regressions`
     diffs against. Shared by `consolidate` and the post-commit auto-capture hook,
     so a regression baseline stays fresh with zero manual maintenance calls."""
-    from torsor_helper.coach import trend as coach_trend
-
     if not store.paths.index_db.exists():
         return
     conn = db.connect(store.paths.index_db)
@@ -1201,8 +1182,6 @@ def _capture_state_path(store):
 
 
 def _load_capture_state(store) -> dict:
-    import json
-
     try:
         data = json.loads(_capture_state_path(store).read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
@@ -1211,16 +1190,12 @@ def _load_capture_state(store) -> dict:
 
 
 def _save_capture_state(store, data: dict) -> None:
-    import json
-
     path = _capture_state_path(store)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def _git_out(root, *args) -> str:
-    import subprocess
-
     try:
         r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, timeout=10)
         return r.stdout.strip() if r.returncode == 0 else ""
@@ -1290,9 +1265,6 @@ def _find_file_paths(obj) -> list[str]:
 
 
 def _transcript_digest(transcript_path) -> str:
-    import json
-    from pathlib import Path
-
     try:
         raw = Path(transcript_path).read_text(encoding="utf-8")
     except OSError:
@@ -1426,11 +1398,6 @@ def pre_edit(store, config, tool_name, tool_input) -> dict | None:
     so the hook stays silent). Read-only: the gate never touches the file.
     `decision` is "advise" unless automation.guard_on_edit is "block" AND a new
     violation is severity=error; the guard never blocks by default (ADR 0012)."""
-    import fnmatch
-    from pathlib import Path
-
-    from torsor_helper import baseline as _baseline
-
     mode = config.automation.guard_on_edit
     if mode == "off" or tool_name not in ("Edit", "Write") or not isinstance(tool_input, dict):
         return None
@@ -1480,8 +1447,6 @@ def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=
     """Wire git hooks + Claude Code hook entries so capture fires on the lifecycle.
     Idempotent, foreign-content-preserving, and CLI-only (footgun parity with the
     self-updater — an agent should not rewrite its own hooks; ADR 0009)."""
-    from torsor_helper import hooks as _hooks
-
     root = str(store.paths.root)
     result = {"git_hooks": [], "claude_settings": None, "warnings": [], "skipped": []}
 
@@ -1543,8 +1508,6 @@ def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=
 
 def uninstall_hooks(store, config, *, local=False) -> dict:
     """Remove only torsor-owned git hooks + Claude Code hook entries."""
-    from torsor_helper import hooks as _hooks
-
     result = {"removed": [], "claude_settings": None, "cleaned": [], "warnings": []}
     hooks_dir = _hooks.resolve_hooks_dir(str(store.paths.root))
     if hooks_dir is not None:
@@ -1576,10 +1539,6 @@ def uninstall_hooks(store, config, *, local=False) -> dict:
 def hooks_status(store, config) -> dict:
     """Read-only report of which git hooks + Claude Code events carry a torsor
     entry. The only auto-capture surface exposed as an MCP tool (writes are CLI-only)."""
-    import json
-
-    from torsor_helper import hooks as _hooks
-
     status = {"git_repo": False, "git_hooks": {}, "claude_events": []}
     hooks_dir = _hooks.resolve_hooks_dir(str(store.paths.root))
     if hooks_dir is not None:
