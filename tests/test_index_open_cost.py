@@ -13,7 +13,7 @@ from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
 
 
-def test_opening_a_current_index_does_not_rebuild_the_schema(tmp_path):
+def test_opening_a_current_index_does_not_rebuild_the_schema(tmp_path, monkeypatch):
     path = tmp_path / "i.db"
     db.connect(path).close()          # create it once
 
@@ -25,11 +25,11 @@ def test_opening_a_current_index_does_not_rebuild_the_schema(tmp_path):
         c.set_trace_callback(issued.append)
         return c
 
-    sqlite3.connect = traced
-    try:
-        db.connect(path).close()
-    finally:
-        sqlite3.connect = orig
+    # monkeypatch, not a bare assignment: this replaces a stdlib global, and a
+    # failure before the restore would leave every later test tracing.
+    monkeypatch.setattr(sqlite3, "connect", traced)
+    db.connect(path).close()
+    monkeypatch.undo()
 
     sql = " ".join(issued).upper()
     assert "CREATE TABLE" not in sql

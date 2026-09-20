@@ -7,6 +7,15 @@ from torsor_helper import db
 from torsor_helper.store import Store
 
 
+# What goes INTO the index — the breadcrumb, the FTS title, the embedding
+# input. Bump this only when that changes, because it forces every note to be
+# re-embedded. It is deliberately not db.SCHEMA_VERSION: that governs the DDL,
+# and adding a secondary index or a lookup table has no bearing on whether a
+# stored vector is still valid. Tying the two meant a pure-DDL change re-embedded
+# the whole corpus.
+INDEX_FORMAT_VERSION = 1
+
+
 def _embedder_identity(embedder) -> str:
     return f"{embedder.name}:{getattr(embedder, 'model', '')}:{embedder.dim}"
 
@@ -33,8 +42,8 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
 
     # If the index *format* changed since this DB was last built (e.g. what goes
     # into the FTS title or the embedding input), unchanged content hashes would
-    # keep stale rows forever — force one full rebuild per schema bump.
-    if db.meta_get(conn, "indexed_schema") != str(db.SCHEMA_VERSION):
+    # keep stale rows forever — force one full rebuild per format bump.
+    if db.meta_get(conn, "indexed_format") != str(INDEX_FORMAT_VERSION):
         full = True
 
     existing = db.note_stats(conn)
@@ -99,6 +108,6 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
         db.reresolve_edges(conn)
 
     db.meta_set(conn, "embedder", identity)
-    db.meta_set(conn, "indexed_schema", str(db.SCHEMA_VERSION))
+    db.meta_set(conn, "indexed_format", str(INDEX_FORMAT_VERSION))
     conn.commit()
     return {"indexed": len(pending), "deleted": deleted, "total": len(seen)}

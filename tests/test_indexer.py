@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from torsor_helper import db
+from torsor_helper import indexer as indexer_mod
 from torsor_helper.embeddings import HashingEmbedder
 from torsor_helper.indexer import reindex
 from torsor_helper.paths import TorsorPaths
@@ -84,11 +85,11 @@ def test_reindex_survives_malformed_and_undecodable_notes(tmp_path):
 def test_reindex_full_when_index_schema_changes(tmp_path):
     store, conn = _setup(tmp_path)
     reindex(store, conn, HashingEmbedder(dim=64))
-    db.meta_set(conn, "indexed_schema", "3")  # simulate a DB built by an older torsor
+    db.meta_set(conn, "indexed_format", "0")  # simulate a DB built by an older torsor
     conn.commit()
     stats = reindex(store, conn, HashingEmbedder(dim=64))
     assert stats["indexed"] == stats["total"]  # format change forces one full rebuild
-    assert db.meta_get(conn, "indexed_schema") == str(db.SCHEMA_VERSION)
+    assert db.meta_get(conn, "indexed_format") == str(indexer_mod.INDEX_FORMAT_VERSION)
 
 
 def test_wikilink_edges_resolve_regardless_of_index_order(tmp_path):
@@ -152,3 +153,26 @@ def test_reindex_rewrite_with_same_content_skips_reembed(tmp_path):
     assert stats["indexed"] == 0  # hash check still skips; stat columns refreshed
     stats = reindex(store, conn, HashingEmbedder(dim=64))
     assert stats["indexed"] == 0
+
+
+def test_a_ddl_only_schema_bump_does_not_re_embed_everything(tmp_path, monkeypatch):
+    """Adding a secondary index or a lookup table says nothing about whether a
+    stored vector is still valid. Tying the re-embed trigger to SCHEMA_VERSION
+    meant every DDL change re-embedded the whole corpus."""
+    store, conn = _setup(tmp_path)
+    embedder = HashingEmbedder(dim=64)
+    assert reindex(store, conn, embedder)["indexed"] >= 1
+
+    monkeypatch.setattr(db, "SCHEMA_VERSION", db.SCHEMA_VERSION + 1)
+
+    assert reindex(store, conn, embedder)["indexed"] == 0   # nothing re-embedded
+
+
+def test_a_format_bump_does_re_embed(tmp_path, monkeypatch):
+    store, conn = _setup(tmp_path)
+    embedder = HashingEmbedder(dim=64)
+    reindex(store, conn, embedder)
+
+    monkeypatch.setattr(indexer_mod, "INDEX_FORMAT_VERSION", indexer_mod.INDEX_FORMAT_VERSION + 1)
+
+    assert reindex(store, conn, embedder)["indexed"] >= 1
