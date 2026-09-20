@@ -7,6 +7,7 @@ import numpy as np
 
 from torsor_helper import db
 from torsor_helper.budget import hit_cost
+from torsor_helper.indexer import _embedder_identity
 from torsor_helper.models import TIER_WEIGHTS, RecallHit, RecallResult, Tier
 from torsor_helper.snippets import best_snippet
 
@@ -77,8 +78,13 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
         # ranked below the unfiltered top pool would be unreachable (empty result
         # despite good matches). Widen the candidate pool to the whole corpus.
         pool = max(pool, db.note_count(conn))
-    qvec = embedder.embed([query])[0]
-    vec_ranked = db.cosine_search(conn, qvec, pool)
+    # Only fuse the vector leg when the stored vectors came from this run's
+    # embedder. Across spaces the similarities are noise, not a weaker signal,
+    # so RRF would rank on them just as confidently.
+    if db.vectors_match(conn, _embedder_identity(embedder)):
+        vec_ranked = db.cosine_search(conn, embedder.embed([query])[0], pool)
+    else:
+        vec_ranked = []
     fts_ranked = db.fts_search(conn, query, pool)
 
     scores: dict[str, float] = {}

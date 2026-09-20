@@ -16,6 +16,12 @@ from torsor_helper.store import Store
 INDEX_FORMAT_VERSION = 1
 
 
+def _is_fallback(stored: str | None, embedder) -> bool:
+    """True when this run is the hashing fallback standing in for the embedder
+    that actually built the index. Not a configuration change — an outage."""
+    return bool(stored) and not stored.startswith("hashing:") and embedder.name == "hashing"
+
+
 def _embedder_identity(embedder) -> str:
     return f"{embedder.name}:{getattr(embedder, 'model', '')}:{embedder.dim}"
 
@@ -37,8 +43,22 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
     # vectors live in a different space — force a full re-embed so cosine search
     # stays valid (and never mixes dimensions).
     identity = _embedder_identity(embedder)
-    if db.meta_get(conn, "embedder") not in (None, identity):
+    stored = db.meta_get(conn, "embedder")
+    embedder_matches = stored in (None, identity)
+    if not embedder_matches and _is_fallback(stored, embedder):
+        # get_embedder falls back to hashing whenever fastembed raises —
+        # including a first-run model download with no network. Treating that
+        # as an embedder change re-embedded the whole corpus, and the recovery
+        # re-embedded it back. Leave the good vectors alone: text indexing
+        # continues and search skips the vector leg while the spaces disagree
+        # (db.vectors_match). Same rule as "no index -> keyword recall".
+        #
+        # A real change — a different dim, or fastembed newly installed — is not
+        # a fallback and still rebuilds, which is what the user asked for.
+        pass
+    elif not embedder_matches:
         full = True
+        embedder_matches = True
 
     # If the index *format* changed since this DB was last built (e.g. what goes
     # into the FTS title or the embedding input), unchanged content hashes would
@@ -89,10 +109,17 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
         db.replace_edges(conn, path, store.extract_wikilinks(note.body), slug_index)
         pending.append((path, f"{breadcrumb}\n{note.body}"))  # breadcrumb also situates the embedding
 
-    if pending:
+    if pending and embedder_matches:
         vectors = embedder.embed([body for _, body in pending])
         for (path, _), vec in zip(pending, vectors):
             db.upsert_vector(conn, path, vec)
+    elif pending:
+        warnings.warn(
+            f"embedder is {identity} but the index was built with {stored}; "
+            "indexing text only and searching without vectors until they agree "
+            "(install the `embeddings` extra, or `torsor clean --deep` to rebuild).",
+            stacklevel=2,
+        )
 
     deleted = 0
     for path in list(existing):
@@ -107,7 +134,8 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
     if pending or deleted:
         db.reresolve_edges(conn)
 
-    db.meta_set(conn, "embedder", identity)
+    if embedder_matches:
+        db.meta_set(conn, "embedder", identity)
     db.meta_set(conn, "indexed_format", str(INDEX_FORMAT_VERSION))
     conn.commit()
     return {"indexed": len(pending), "deleted": deleted, "total": len(seen)}

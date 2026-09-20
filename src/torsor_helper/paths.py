@@ -111,6 +111,14 @@ class TorsorPaths:
         return self.base / ".index"
 
     @property
+    def map_dependencies(self) -> Path:
+        # The module diagram gets its own note. It used to be appended into
+        # map/overview.md, which map_repo re-renders from scratch — so the
+        # diagram vanished on the next commit, since the post-commit hook
+        # remaps every time.
+        return self.map_dir / "dependencies.md"
+
+    @property
     def state_dir(self) -> Path:
         # Small, machine-local state that does NOT rebuild from Markdown: the
         # user's Coach dismissals and the auto-handoff watermark. It lived in

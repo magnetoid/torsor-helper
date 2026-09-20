@@ -353,6 +353,14 @@ def get_vectors(conn, paths):
     return out
 
 
+def vectors_match(conn, embedder_identity: str) -> bool:
+    """True when the stored vectors were built by this run's embedder. A False
+    here means the vector leg must be skipped: comparing a hashing query vector
+    against fastembed document vectors is noise, not a weaker signal."""
+    stored = meta_get(conn, "embedder")
+    return stored is None or stored == embedder_identity
+
+
 def cosine_search(conn, qvec, limit):
     """Top-`limit` paths by cosine similarity to `qvec`.
 
