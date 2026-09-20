@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T01:02:54'
-updated: '2026-09-21T01:02:54'
+created: '2026-09-21T01:13:27'
+updated: '2026-09-21T01:13:27'
 rules: []
 ---
 
@@ -42,26 +42,27 @@ Symbols in `src/torsor_helper/db.py`.
 - L323 `upsert_vector(conn, path, vec)` (function)
 - L332 `delete_note(conn, path)` (function)
 - L342 `get_vectors(conn, paths)` (function) — Return {path: np.ndarray} for the given paths that have a stored vector.
-- L356 `cosine_search(conn, qvec, limit)` (function) — Top-`limit` paths by cosine similarity to `qvec`.
-- L382 `fts_search(conn, query, limit)` (function)
-- L394 `bump_access(conn, paths)` (function)
-- L399 `replace_all_symbols(conn, symbols)` (function)
-- L408 `replace_all_edges(conn, edges)` (function)
-- L418 `who_references(conn, resolved_module, name)` (function) — Return [(caller, module)] of references to `name` resolving to `resolved_module`.
-- L428 `call_graph_edges(conn)` (function) — Distinct (caller, referenced_name, resolved_module) directed edges of the
-- L439 `symbol_fan_in(conn)` (function) — In-degree of each referenced symbol: (resolved_module, referenced_name,
-- L452 `module_edges(conn)` (function) — Distinct (module, resolved_module) pairs for module-level dependency views.
-- L461 `search_symbols(conn, query, limit=10)` (function)
-- L482 `modules(conn)` (function)
-- L486 `all_symbols(conn)` (function) — Lightweight dicts for every mapped symbol — for fuzzy-scoring by the finder.
-- L492 `load_symbols(conn)` (function) — Full Symbol objects for every mapped symbol — used when merging a partial
-- L503 `load_edges(conn)` (function) — Full SymbolEdge objects for every recorded reference edge.
-- L515 `find_clock(conn)` (function)
-- L519 `bump_path_access(conn, paths)` (function) — Record that these files were surfaced by a find — frecency signal. The
-- L535 `path_access_map(conn)` (function)
-- L539 `log_op(conn, op, args)` (function) — Record one deterministic-tool call — the frequency signal behind 'recipes'
-- L552 `top_ops(conn, limit=10)` (function)
-- L560 `op_totals(conn)` (function) — Total hits per op, aggregated across args — the per-session delta baseline
-- L567 `save_complexity_snapshot(conn, mapping)` (function) — Replace the stored per-file complexity baseline (for trend detection).
-- L577 `load_complexity_snapshot(conn)` (function)
-- L581 `top_accessed(conn, limit=5)` (function)
+- L356 `vectors_match(conn, embedder_identity: str)` (function) — True when the stored vectors were built by this run's embedder. A False
+- L364 `cosine_search(conn, qvec, limit)` (function) — Top-`limit` paths by cosine similarity to `qvec`.
+- L390 `fts_search(conn, query, limit)` (function)
+- L402 `bump_access(conn, paths)` (function)
+- L407 `replace_all_symbols(conn, symbols)` (function)
+- L416 `replace_all_edges(conn, edges)` (function)
+- L426 `who_references(conn, resolved_module, name)` (function) — Return [(caller, module)] of references to `name` resolving to `resolved_module`.
+- L436 `call_graph_edges(conn)` (function) — Distinct (caller, referenced_name, resolved_module) directed edges of the
+- L447 `symbol_fan_in(conn)` (function) — In-degree of each referenced symbol: (resolved_module, referenced_name,
+- L460 `module_edges(conn)` (function) — Distinct (module, resolved_module) pairs for module-level dependency views.
+- L469 `search_symbols(conn, query, limit=10)` (function)
+- L490 `modules(conn)` (function)
+- L494 `all_symbols(conn)` (function) — Lightweight dicts for every mapped symbol — for fuzzy-scoring by the finder.
+- L500 `load_symbols(conn)` (function) — Full Symbol objects for every mapped symbol — used when merging a partial
+- L511 `load_edges(conn)` (function) — Full SymbolEdge objects for every recorded reference edge.
+- L523 `find_clock(conn)` (function)
+- L527 `bump_path_access(conn, paths)` (function) — Record that these files were surfaced by a find — frecency signal. The
+- L543 `path_access_map(conn)` (function)
+- L547 `log_op(conn, op, args)` (function) — Record one deterministic-tool call — the frequency signal behind 'recipes'
+- L560 `top_ops(conn, limit=10)` (function)
+- L568 `op_totals(conn)` (function) — Total hits per op, aggregated across args — the per-session delta baseline
+- L575 `save_complexity_snapshot(conn, mapping)` (function) — Replace the stored per-file complexity baseline (for trend detection).
+- L585 `load_complexity_snapshot(conn)` (function)
+- L589 `top_accessed(conn, limit=5)` (function)

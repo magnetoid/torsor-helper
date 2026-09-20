@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T01:02:54'
-updated: '2026-09-21T01:02:54'
+created: '2026-09-21T01:13:27'
+updated: '2026-09-21T01:13:27'
 rules: []
 ---
 
@@ -43,9 +43,9 @@ Modules and their key symbols (ranked by references).
   - `_check_severity(value)` (function)
 - **src/torsor_helper/clients.py** — 5 symbol(s)
   - `config_snippet(client: str, root: str)` (function)
-  - `mcp_servers_block(root: str)` (function)
   - `write_mcp_json(project_root, server_root: str)` (function)
   - `config_location(client: str)` (function)
+  - `mcp_servers_block(root: str)` (function)
   - `instructions_file(client: str)` (function)
 - **src/torsor_helper/coach/coupling.py** — 3 symbol(s)
   - `_commits(root: Path, history_days: int=365)` (function)
@@ -59,9 +59,9 @@ Modules and their key symbols (ranked by references).
   - `check_uncharted_language(store: Store)` (function)
 - **src/torsor_helper/coach/hotspots.py** — 5 symbol(s)
   - `_complexity(path: Path)` (function)
-  - `_is_git_repo(root: Path)` (function)
   - `history_args(history_days: int)` (function)
   - `_churn(root: Path, history_days: int=365)` (function)
+  - `_is_git_repo(root: Path)` (function)
   - `find_hotspots(root: Path, limit: int=3, history_days: int=365)` (function)
 - **src/torsor_helper/coach/hubs.py** — 2 symbol(s)
   - `find_hubs(conn, *, min_fan_in: int=8, sigma: float=2.0)` (function)
@@ -99,11 +99,11 @@ Modules and their key symbols (ranked by references).
   - `_Strict` (class)
   - `save_config(paths: TorsorPaths, config: TorsorConfig)` (function)
   - `AutomationConfig` (class)
-- **src/torsor_helper/db.py** — 52 symbol(s)
+- **src/torsor_helper/db.py** — 53 symbol(s)
+  - `meta_get(conn, key)` (function)
   - `meta_set(conn, key, value)` (function)
   - `_fts_rowid(conn, path)` (function)
   - `SlugIndex` (class)
-  - `meta_get(conn, key)` (function)
   - `_schema_is_current(conn: sqlite3.Connection)` (function)
 - **src/torsor_helper/deps.py** — 14 symbol(s)
   - `_norm(name: str)` (function)
@@ -147,9 +147,10 @@ Modules and their key symbols (ranked by references).
   - `_managed_block(inner: str)` (function)
   - `claude_command(root: str)` (function)
   - `claude_start_command(root: str)` (function)
-- **src/torsor_helper/indexer.py** — 3 symbol(s)
+- **src/torsor_helper/indexer.py** — 4 symbol(s)
   - `reindex(store: Store, conn, embedder, *, full: bool=False)` (function)
   - `_embedder_identity(embedder)` (function)
+  - `_is_fallback(stored: str | None, embedder)` (function)
   - `_breadcrumb(note)` (function)
 - **src/torsor_helper/languages/__init__.py** — 9 symbol(s)
   - `LanguageSpec` (class)
@@ -165,6 +166,4 @@ Modules and their key symbols (ranked by references).
   - `imports(source: str, module: str='')` (function)
 - **src/torsor_helper/languages/javascript.py** — 20 symbol(s)
   - `_is_top_level(node)` (function)
-  - `_class_name(node)` (function)
-  - `grammar_for(module: str)` (function)
-  - `_i…[truncated]
+  - `_class_name(node)`…[truncated]

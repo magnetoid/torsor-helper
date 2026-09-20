@@ -71,9 +71,19 @@ def _import_aliases(tree: ast.Module, module: str) -> dict[str, str]:
     we imported FROM — always real). `import pkg.dates as d` → {d: "pkg.dates"},
     but a no-asname `import pkg.dates` binds only the top name: {pkg: "pkg"}.
     Relative imports resolve against `module`'s package.
+
+    Walks the WHOLE tree, not just its body: a deferred import inside a
+    function is an ordinary Python idiom (optional dependencies, startup cost,
+    breaking a cycle) and the name it binds is the one the code goes on to
+    call. Reading only the top level meant those calls resolved to nothing, so
+    the callee's ref count was short and `impact` never listed the caller.
+    guard and deps already walk the whole tree; this makes the three agree.
+
+    A later binding wins, so a function-local import that shadows a top-level
+    one resolves to what that function actually calls.
     """
     aliases: dict[str, str] = {}
-    for node in tree.body:
+    for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for a in node.names:
                 if a.asname:
