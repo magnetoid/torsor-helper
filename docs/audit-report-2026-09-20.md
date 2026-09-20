@@ -344,7 +344,24 @@ on it today — document in the façade docstring).
 > C6 never showed up as a cost on the bench, so there is nothing to justify the churn yet.
 > C11 is not a performance question any more now that `cosine_search` is a matrix multiply —
 > it is a retrieval-quality decision about whether the hashing fallback's vectors are worth
-> fusing at all, and it belongs with the other quality work in Phase 3.
+> fusing at all.
+>
+> **C11 was then measured, and the claim does not hold.** The audit asserted that hybrid
+> search without fastembed is *worse* than keyword-only, because the hashing embedder's
+> 384 md5 buckets make the vector leg a noisy duplicate of the lexical signal. Tested on a
+> 12-topic × 40-note corpus with knowable right answers: precision@8 was **0.990 with the
+> vector leg and 1.000 without** on an easy corpus with disjoint vocabularies — one wrong
+> hit in ~96 — and **exactly equal** on a harder one where topics share 60% of their words.
+> So: directionally real, practically nil. Gating the vector leg would add a branch, change
+> behaviour, and lose MMR's de-duplication (which this precision metric does not even
+> capture) in exchange for nothing measurable. **Struck from Phase 3.** If the hashing
+> fallback is ever worth improving, IDF weighting is the lever, not removal.
+>
+> The `coach.history_days` window (part of C6) shipped separately afterwards: hotspots and
+> temporal coupling each walked the *entire* git history, so `torsor coach` got slower every
+> year regardless of how much code there was. No measurable change on this repo, where the
+> whole history fits inside the window — the point is that the cost stops growing. Both also
+> moved onto `gitinfo`, so they inherit its handling of paths git would otherwise quote.
 
 ### Phase 2 — the original plan (for the record)
 
