@@ -55,6 +55,37 @@ def check_dangling_links(store: Store) -> list[Recommendation]:
     return out
 
 
+def check_ambiguous_links(store: Store) -> list[Recommendation]:
+    """Notes whose [[wikilink]] could mean more than one note.
+
+    Not staleness — the link resolves fine — but it resolves *arbitrarily*, to
+    whichever path sorts first, so the author may well be reading a different
+    note than the agent follows. Advisory and index-free: write the path tail
+    (`[[map/overview]]`) to say which one you meant."""
+    by_slug: dict[str, list[str]] = {}
+    for path in store.iter_note_paths():
+        by_slug.setdefault(path.stem, []).append(_rel(store, path))
+    out: list[Recommendation] = []
+    for note in store.iter_notes():
+        if note.tier is Tier.MAP:  # generated; the links in it were copied from docstrings
+            continue
+        rel = _rel(store, note.path)
+        for slug in store.extract_wikilinks(note.body):
+            if "/" in slug:
+                continue  # a path tail is how you disambiguate
+            targets = by_slug.get(slug, [])
+            if len(targets) > 1:
+                out.append(Recommendation(
+                    kind="ambiguous_link", severity="info",
+                    message=(f"{rel} links to [[{slug}]], which matches {len(targets)} notes "
+                             f"({', '.join(sorted(targets)[:3])}) — it resolves to whichever "
+                             f"sorts first."),
+                    action=f"write the path tail in {rel}, e.g. [[{sorted(targets)[0].rsplit('/', 2)[-2]}/{slug}]]",
+                    source=rel, key=f"ambiguous_link:{rel}:{slug}",
+                ))
+    return out
+
+
 def check_path_refs(store: Store) -> list[Recommendation]:
     """Notes citing a repo-relative source path that no longer exists on disk.
     High-precision by construction: only paths written in an inline `code` span

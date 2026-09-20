@@ -245,10 +245,24 @@ class SlugIndex:
     def __init__(self, conn) -> None:
         self.paths = _note_paths(conn)
         self.by_basename: dict[str, str] = {}
+        self.ambiguous: set[str] = set()
         for p in self.paths:
             name = p.rsplit("/", 1)[-1]
-            if name.endswith(".md"):
-                self.by_basename.setdefault(name[:-3], p)
+            if not name.endswith(".md"):
+                continue
+            slug = name[:-3]
+            if slug in self.by_basename:
+                # Two tiers can both hold an `overview.md`. The first sorted one
+                # keeps winning — changing that would silently re-point existing
+                # links — but the collision is now visible to the Coach.
+                self.ambiguous.add(slug)
+            else:
+                self.by_basename[slug] = p
+
+    def is_ambiguous(self, slug: str) -> bool:
+        """True when more than one note shares this basename. A slug containing
+        "/" is a path tail, which is how a writer disambiguates, so it never is."""
+        return "/" not in slug and slug in self.ambiguous
 
     def resolve(self, slug: str) -> str | None:
         if "/" not in slug:

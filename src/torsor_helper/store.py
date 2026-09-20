@@ -110,11 +110,21 @@ class Store:
 
     @staticmethod
     def extract_wikilinks(text: str) -> list[str]:
+        """Link *targets*, in order, deduplicated.
+
+        A target is the part before `|` (the display alias) and before `#` (a
+        heading anchor) — both ordinary Markdown-wiki forms. Taking the raw
+        inner text meant `[[charter|the charter]]` resolved to nothing, and the
+        staleness checker then reported it as a dangling link: a false positive
+        in the detector that exists precisely to have none (ADR 0010).
+
+        A target containing "/" keeps it: `[[architecture/decisions/0001-x]]`
+        means that path tail, not a basename."""
         out: list[str] = []
         for m in _WIKILINK.finditer(text):
-            link = m.group(1).strip()
-            if link and link not in out:
-                out.append(link)
+            target = m.group(1).split("|", 1)[0].split("#", 1)[0].strip()
+            if target and target not in out:
+                out.append(target)
         return out
 
     @staticmethod
