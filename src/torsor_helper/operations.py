@@ -7,7 +7,7 @@ from torsor_helper import cartographer, cleaner, db, export as _export, guard
 from torsor_helper.coach import mining as coach_mining
 from torsor_helper.coach import report as coach_report
 from torsor_helper.coach.state import CoachState
-from torsor_helper.budget import estimate_tokens, truncate_to_tokens
+from torsor_helper.budget import cap_items, estimate_tokens, truncate_to_tokens
 from torsor_helper.config import TorsorConfig
 from torsor_helper.embeddings import get_embedder
 from torsor_helper.indexer import reindex
@@ -18,13 +18,18 @@ from torsor_helper.store import Store
 
 # Fractions of the bootstrap budget allocated per section (must sum to <= 1.0).
 _BOOTSTRAP_ALLOC = [
-    ("Charter", "charter", 0.30),
-    ("System Patterns", "system_patterns", 0.20),
-    ("Tech Context", "tech_context", 0.15),
+    ("Charter", "charter", 0.28),
+    ("System Patterns", "system_patterns", 0.18),
+    ("Tech Context", "tech_context", 0.13),
     ("Active Context", "active_context", 0.18),
-    ("Progress", "progress", 0.10),
+    ("Progress", "progress", 0.09),
 ]
-_RECENT_JOURNAL_FRACTION = 0.07
+_RECENT_JOURNAL_FRACTION = 0.06
+# The Coach digest is *part of* the budget, not a bonus after it. It used to be
+# appended once every allocation was already spent, so the SessionStart digest —
+# injected at every start and again after every compaction — overran its ceiling
+# on every single session. Allocations above were trimmed to make room.
+_COACH_FRACTION = 0.08
 
 
 def bootstrap_session(store: Store, config: TorsorConfig, *, max_tokens: int | None = None) -> str:
@@ -48,10 +53,16 @@ def bootstrap_session(store: Store, config: TorsorConfig, *, max_tokens: int | N
     # Push a short hygiene digest from the Coach (index-free, dismissible).
     digest = coach_report.session_digest(store, limit=3)
     if digest:
-        lines = "\n".join(f"- [{rec.severity}] {rec.message}" for rec in digest)
-        sections.append(f"## Recommendations\n\n{lines}")
+        lines = truncate_to_tokens(
+            "\n".join(f"- [{rec.severity}] {rec.message}" for rec in digest),
+            int(total * _COACH_FRACTION), cpt,
+        )
+        if lines.strip():
+            sections.append(f"## Recommendations\n\n{lines}")
 
-    return "\n\n".join(sections)
+    # Backstop: the section headings and the joins cost tokens that the
+    # per-section fractions never see, so the assembled whole is what has to fit.
+    return truncate_to_tokens("\n\n".join(sections), total, cpt)
 
 
 _SESSION_START_HEADER = (
@@ -68,11 +79,18 @@ def session_start_context(store: Store, config: TorsorConfig, *, how: str = "sta
     to say — the adapter then emits nothing, and the session starts untouched."""
     if not config.automation.auto_bootstrap:
         return None
-    body = bootstrap_session(store, config, max_tokens=config.budgets.session_start_tokens)
+    cpt = config.budgets.chars_per_token
+    when = "re-injected after context compaction" if how == "compact" else "injected at session start"
+    header = _SESSION_START_HEADER.format(when=when)
+    # The header lands in context alongside the body, so it is spent from the
+    # same ceiling — "a 500-token digest" has to mean the whole injected string.
+    body = bootstrap_session(
+        store, config,
+        max_tokens=max(0, config.budgets.session_start_tokens - estimate_tokens(header, cpt)),
+    )
     if not body.strip():
         return None
-    when = "re-injected after context compaction" if how == "compact" else "injected at session start"
-    return _SESSION_START_HEADER.format(when=when) + body
+    return header + body
 
 
 def _recent_journal(store: Store, max_tokens: int, cpt: int) -> str:
@@ -564,12 +582,17 @@ def recipes(store: Store, limit: int = 10) -> list:
         conn.close()
 
 
-def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
+def impact(store: Store, config: TorsorConfig, symbol: str, *, limit: int | None = None) -> dict:
     """Blast radius of a symbol: who references it, across files, via the
     cartographer's resolved reference edges. Read-only over the existing index
-    (run `torsor map` first). Empty when the index/symbol is absent."""
+    (run `torsor map` first). Empty when the index/symbol is absent.
+
+    `count` is always the true number of callers — that is the signal worth
+    paying for. `callers` is capped at `limit` (default `budgets.max_items`)
+    because a hub symbol otherwise renders hundreds of lines; `truncated` says
+    how many were withheld."""
     _log_op(store, "impact", symbol)
-    empty = {"symbol": symbol, "callers": [], "count": 0}
+    empty = {"symbol": symbol, "callers": [], "count": 0, "truncated": 0}
     if not store.paths.index_db.exists():
         return empty
     base = symbol.split(".")[-1]
@@ -591,7 +614,10 @@ def impact(store: Store, config: TorsorConfig, symbol: str) -> dict:
         conn.close()
 
     callers.sort(key=lambda c: (c["module"], c["caller"]))
-    return {"symbol": symbol, "callers": callers, "count": len(callers)}
+    cap = config.budgets.max_items if limit is None else limit
+    kept, _ = cap_items(callers, cap)
+    return {"symbol": symbol, "callers": kept, "count": len(callers),
+            "truncated": len(callers) - len(kept)}
 
 
 def connect(store: Store, config: TorsorConfig, source: str, target: str, *, max_hops: int = 12) -> dict:
@@ -655,7 +681,7 @@ def connect(store: Store, config: TorsorConfig, source: str, target: str, *, max
 def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:
     _log_op(store, "get_intent", topic or "")
     cpt = config.budgets.chars_per_token
-    total = config.budgets.bootstrap_tokens
+    total = config.budgets.intent_tokens
     sections: list[str] = []
 
     for label, path, frac in [
@@ -676,7 +702,12 @@ def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> 
                 continue
             titles.append(note.title)
         if titles:
-            sections.append("## Decisions\n\n" + "\n".join(f"- {t}" for t in titles))
+            # ADR titles grow without bound; the count of the hidden ones is the
+            # part the agent actually needs (it says whether to go look).
+            kept, tail = cap_items(titles, config.budgets.max_items,
+                                   more="read .torsor/architecture/decisions/")
+            body = "\n".join(f"- {t}" for t in kept)
+            sections.append("## Decisions\n\n" + body + (f"\n{tail}" if tail else ""))
 
     if topic and store.paths.index_db.exists():
         conn = db.connect(store.paths.index_db)
@@ -688,7 +719,7 @@ def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> 
             lines = [f"- `{s.signature}` ({s.kind}) — {s.module}:{s.line}" for s in syms]
             sections.append("## Relevant existing symbols\n\n" + "\n".join(lines))
 
-    return "\n\n".join(sections)
+    return truncate_to_tokens("\n\n".join(sections), total, cpt)
 
 
 def _next_adr_number(store) -> int:
@@ -756,15 +787,19 @@ def list_practices(store, config, language=None) -> str:
     detected in the repo when language is None."""
     from torsor_helper import practices as _practices
 
+    cpt = config.budgets.chars_per_token
+    budget = config.budgets.practices_tokens
     if language is None:
         detected = _practices.detect_languages(store.paths.root)
         if not detected:
             return "No supported languages detected. Available packs: " + ", ".join(
                 _practices.available_languages()
             )
-        return "\n\n".join(_practices.render(lang) for lang in detected)
+        # Every detected pack at once is the largest response the server can
+        # return; ask for one language to get it whole.
+        return truncate_to_tokens("\n\n".join(_practices.render(lang) for lang in detected), budget, cpt)
     try:
-        return _practices.render(language)
+        return truncate_to_tokens(_practices.render(language), budget, cpt)
     except KeyError:
         return f"Unknown pack {language!r}. Available: " + ", ".join(_practices.available_languages())
 
@@ -908,8 +943,12 @@ def check_dependencies(store, config, files=None) -> list:
     return _deps.unknown_imports(store.paths.root, files)
 
 
-def _verify_check(name, ok, status, reasons) -> dict:
-    return {"name": name, "ok": ok, "status": status, "reasons": reasons, "count": len(reasons)}
+def _verify_check(name, ok, status, reasons, *, cap: int = 0) -> dict:
+    """`count` is the true number of reasons; `reasons` is capped so a gate that
+    JSON-dumps this verdict into an agent's context stays cheap. A caller sees
+    it was capped from `count > len(reasons)`."""
+    kept, _ = cap_items(reasons, cap)
+    return {"name": name, "ok": ok, "status": status, "reasons": kept, "count": len(reasons)}
 
 
 def _verify_tests(store) -> dict:
@@ -946,10 +985,14 @@ def verify(store, config, files=None, *, severity=None, run_tests=False) -> dict
     stale_findings = check_staleness(store, config)["findings"]
     stale_reasons = [f"[{r.kind}] {r.message}" for r in stale_findings]
 
+    cap = config.budgets.max_items
     checks = [
-        _verify_check("guard", not guard["failed"], "pass" if not guard["failed"] else "fail", guard_reasons),
-        _verify_check("deps", not dep_findings, "pass" if not dep_findings else "fail", dep_reasons),
-        _verify_check("staleness", not stale_findings, "pass" if not stale_findings else "fail", stale_reasons),
+        _verify_check("guard", not guard["failed"], "pass" if not guard["failed"] else "fail",
+                      guard_reasons, cap=cap),
+        _verify_check("deps", not dep_findings, "pass" if not dep_findings else "fail",
+                      dep_reasons, cap=cap),
+        _verify_check("staleness", not stale_findings, "pass" if not stale_findings else "fail",
+                      stale_reasons, cap=cap),
     ]
     if run_tests:
         checks.append(_verify_tests(store))

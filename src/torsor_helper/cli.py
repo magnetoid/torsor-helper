@@ -192,6 +192,7 @@ def map(
 def impact(
     symbol: str = typer.Argument(..., help="Symbol name to trace (e.g. a function/class name)."),
     root: Path = typer.Option(Path("."), help="Project root."),
+    limit: int = typer.Option(0, "--limit", help="Max callers to list (0 = budgets.max_items)."),
 ) -> None:
     """Show the blast radius of a symbol — who references it, across files (run `torsor map` first)."""
     paths = TorsorPaths(root)
@@ -200,13 +201,15 @@ def impact(
         raise typer.Exit(code=1)
     config = load_config(paths)
     store = Store(paths)
-    res = ops.impact(store, config, symbol)
+    res = ops.impact(store, config, symbol, limit=limit or None)
     if res["count"] == 0:
         typer.echo(f"No references to {symbol!r} found (is the map current? run `torsor map`).")
         return
     typer.echo(f"{res['count']} reference(s) to {symbol!r}:")
     for c in res["callers"]:
         typer.echo(f"  {c['module']} :: {c['caller']}")
+    if res["truncated"]:
+        typer.echo(f"  … +{res['truncated']} more (--limit to list them)")
 
 
 @app.command()
@@ -454,6 +457,9 @@ def verify(
         typer.echo(f"{c['name']}: {c['status'].upper()}{tail}")
         for reason in c["reasons"]:
             typer.echo(f"  - {reason}")
+        hidden = c["count"] - len(c["reasons"])
+        if hidden > 0:
+            typer.echo(f"  … +{hidden} more")
     typer.echo(f"\n{'PASS' if verdict['ok'] else 'FAIL'}")
     raise typer.Exit(code=verdict["exit_code"])
 

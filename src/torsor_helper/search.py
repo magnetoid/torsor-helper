@@ -6,7 +6,7 @@ import re
 import numpy as np
 
 from torsor_helper import db
-from torsor_helper.budget import estimate_tokens
+from torsor_helper.budget import hit_cost
 from torsor_helper.models import TIER_WEIGHTS, RecallHit, RecallResult, Tier
 from torsor_helper.snippets import best_snippet
 
@@ -127,7 +127,7 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
     truncated = False
     cpt = config.budgets.chars_per_token
     for hit in candidates:
-        cost = estimate_tokens(hit.snippet, cpt)
+        cost = hit_cost(hit.title, hit.snippet, cpt)
         if selected and used + cost > max_tokens:
             truncated = True
             break

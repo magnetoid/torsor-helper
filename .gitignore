@@ -19,3 +19,6 @@ htmlcov/
 
 # OS / editor
 .DS_Store
+
+# Local git worktrees (Claude Code)
+.claude/worktrees/
