@@ -1,25 +1,22 @@
 from __future__ import annotations
 
-import subprocess
 from collections import Counter
 from itertools import combinations
 from pathlib import Path
 
-from torsor_helper import db, languages
+from torsor_helper import db, gitinfo, languages
 from torsor_helper.cartographer import norm_path
-from torsor_helper.coach.hotspots import _is_git_repo
+from torsor_helper.coach.hotspots import _is_git_repo, history_args
 from torsor_helper.models import Recommendation
 
 
-def _commits(root: Path) -> list[set[str]]:
-    """Each commit as the set of source files it touched (via git log --name-only)."""
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(root), "log", "--no-merges", "--name-only", "--pretty=format:#commit#%H"],
-            capture_output=True, text=True, timeout=30,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return []
+def _commits(root: Path, history_days: int = 365) -> list[set[str]]:
+    """Each commit as the set of source files it touched (via git log --name-only).
+    Bounded by the same window as churn — see hotspots.history_args."""
+    out = gitinfo.output(
+        root, "log", *history_args(history_days), "--no-merges", "--name-only",
+        "--pretty=format:#commit#%H",
+    )
     commits: list[set[str]] = []
     cur: set[str] | None = None
     for line in out.splitlines():
@@ -34,7 +31,7 @@ def _commits(root: Path) -> list[set[str]]:
     return commits
 
 
-def find_coupling(root: Path, min_commits: int = 3, max_files: int = 40, threshold: float = 0.6):
+def find_coupling(root: Path, min_commits: int = 3, max_files: int = 40, threshold: float = 0.6, history_days: int = 365):
     """Pairs of files that change together far more often than chance.
 
     degree = co_changes / min(changes(a), changes(b)). Skips giant commits
@@ -46,7 +43,7 @@ def find_coupling(root: Path, min_commits: int = 3, max_files: int = 40, thresho
         return []
     changes: Counter[str] = Counter()
     co: Counter[tuple[str, str]] = Counter()
-    for files in _commits(root):
+    for files in _commits(root, history_days):
         fs = sorted(files)
         if not fs or len(fs) > max_files:
             continue
@@ -66,10 +63,10 @@ def find_coupling(root: Path, min_commits: int = 3, max_files: int = 40, thresho
     return out
 
 
-def find_coupling_recs(root: Path, conn, limit: int = 3) -> list[Recommendation]:
+def find_coupling_recs(root: Path, conn, limit: int = 3, history_days: int = 365) -> list[Recommendation]:
     """Coupling recs for the top co-changed pairs NOT already linked by an import
     edge (an import explains the coupling; a hidden one doesn't)."""
-    pairs = find_coupling(root)
+    pairs = find_coupling(root, history_days=history_days)
     if not pairs:
         return []
     edges: set[tuple[str, str]] = set()
