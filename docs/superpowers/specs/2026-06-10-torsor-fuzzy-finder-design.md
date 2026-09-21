@@ -1,3 +1,5 @@
+> **Status: Shipped.**
+
 # torsor-helper — Fuzzy + Frecency Finder (design)
 
 **Goal:** Give agents a fast **"find"** capability — fuzzy, typo-tolerant matching over the repo's **files** and torsor's **mapped symbols**, ranked by match quality + **frecency** (recent + frequently-found). Inspired by [dmtrKovalenko/fff](https://github.com/dmtrKovalenko/fff), adopting its *ideas* (fuzzy + frecency) in pure Python while respecting torsor's invariants.

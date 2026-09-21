@@ -48,7 +48,13 @@ def test_recall_emits_json(tmp_path):
     root = _project(tmp_path)
     runner.invoke(app, ["remember", "widget alpha", *root])
     result = runner.invoke(app, ["recall", "widget", "--json", *root])
-    payload = json.loads(result.output)
+
+    # Click 8.5's runner folds stderr into `output`, and get_embedder warns there
+    # the first time a process falls back to hashing. Serially that warning has
+    # already fired by the time this test runs; under xdist each worker is a
+    # fresh process, so it can land here instead. Read the JSON line.
+    payload = json.loads(next(line for line in reversed(result.output.strip().splitlines())
+                              if line.strip().startswith("{")))
     assert payload["hits"] and payload["hits"][0]["title"]
 
 

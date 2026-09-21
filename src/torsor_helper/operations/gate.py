@@ -32,18 +32,19 @@ def guard_run(store, config, files=None, *, update_baseline=False, strict=False,
     """The single guard orchestration both adapters share: check drift, apply
     the baseline ratchet, and decide strict failure — so the MCP tool and the
     CLI command can't diverge in behavior."""
-    violations = check_drift(store, config, files)
+    checked = files if files is not None else gitinfo.changed_source_files(store.paths.root)
+    violations = check_drift(store, config, checked)
     # A cycle is a property of the whole import graph, so it cannot come out of
     # the per-file pass — it is evaluated once, here, where the store is in hand.
     violations = violations + guard.check_cycles(store, guard.load_rules(store))
     if update_baseline:
         _baseline.save(store.paths.baseline_file, violations)
         return {"violations": violations, "new": [], "baselined": len(violations),
-                "failed": False, "updated_baseline": True}
+                "failed": False, "updated_baseline": True, "checked": len(checked)}
     new = _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))
     failed = bool(strict and guard.strict_failures(new, severity))
     return {"violations": violations, "new": new, "baselined": len(violations) - len(new),
-            "failed": failed, "updated_baseline": False}
+            "failed": failed, "updated_baseline": False, "checked": len(checked)}
 
 def check_dependencies(store, config, files=None) -> list:
     """Flag imports that resolve to no known package (possible slopsquatting).
@@ -174,7 +175,7 @@ def pre_edit(store, config, tool_name, tool_input) -> dict | None:
     violations = [
         v
         for rule in guard.load_rules(store)
-        if guard.scope_matches(relpath, rule.scope)
+        if guard.rule_applies(relpath, rule)
         for v in guard.violations_for_file(relpath, text, rule)
     ]
     new = _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))

@@ -1,3 +1,7 @@
+> **Status: Shipped in v0.7.0.**
+>
+> Merged 2026-09-20 after a review found two silent bugs the branch's own green suite had missed: root-level JS/TS files never resolved their own references, and Go's cross-file resolver was sticky across a partial remap. See docs/audit-report-2026-09-20.md, Phase 5.
+
 # torsor-helper — Multi-language map: JavaScript / TypeScript / Go (design)
 
 **Goal:** Make `torsor map` — and everything that consumes the symbol table (`impact`, `connect`, `find`, `export`, the Coach's hotspots / complexity trend / hubs, and `forbid_import` guard rules) — work for **JavaScript, TypeScript (incl. TSX) and Go**, not only Python. Today every one of those features is `*.py`-only ([cartographer.py](../../../src/torsor_helper/cartographer.py) `rglob("*.py")`), so a JS/TS or Go shop installing torsor gets memory + `forbid_pattern` and nothing else. This is the single largest adoption blocker; every comparable 2026 tool (CodeGraph, GitNexus, code-review-graph, Codebase-Memory) covers 15–158 languages.

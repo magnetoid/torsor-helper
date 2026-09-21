@@ -40,7 +40,11 @@ def mine_insights(store: Store) -> list[Path]:
     written: list[Path] = []
     for kind, items in by_kind.items():
         seen: set[str] = set()
-        uniq = [it for it in items if not (it in seen or seen.add(it))]
+        uniq: list[str] = []
+        for it in items:   # dict.fromkeys would do, but this reads as what it is
+            if it not in seen:
+                seen.add(it)
+                uniq.append(it)
         body = "\n".join(f"- {it}" for it in uniq)
         target = store.paths.insights_dir / f"{kind}.md"
         store.write_note(target, Frontmatter(type="insight", tags=["insight"], kind=kind), f"Mined {kind}s", body)

@@ -573,7 +573,43 @@ Ordering note: Phase 5 can go **first**, before Phase 0/1 — it is finished wor
 before the `operations.py` split avoids a painful rebase (the branch touches `operations.py`
 +52 lines). Recommended order: **5 → 0 → 1 → 2 → 3 → 4 → 6 → 7**. Phase 5 is done; the token-budget work (B3, D11) shipped early on user request and is merged.
 
-### Phase 6 — Tests, CI, docs hygiene (continuous, S each unless noted)
+### Phase 6 — Tests, CI, docs hygiene — **DONE (2026-09-21)**
+
+> Shipped on `feat/test-and-ci-hardening`: F1, F2, F5, H3, H4, H6, G2, G4, G5.
+> 797 tests pass serially and under `-n auto`, with and without `--extra
+> languages`; ruff, mypy and `torsor guard --strict` clean.
+>
+> **Two gaps in the verification itself, both of which had already let a real
+> bug through.** `torsor guard` with no arguments checks git-changed files, so
+> on a clean tree it checks nothing and prints "no drift" — indistinguishable
+> from a pass. That is how an ADR 0002 violation I introduced survived a green
+> `--strict` run in my own checking *and* in the CI step added in Phase 0. Both
+> workflows now pass an explicit file list, and the guard says when it checked
+> nothing. Separately, every server test called `build_server()` in-process or
+> monkeypatched `FastMCP.run`, so the shipped entry point was never exercised;
+> six tests now hold a real JSON-RPC conversation with `torsor mcp` as a
+> subprocess, and writing them found that `python -m torsor_helper` did not work
+> at all.
+>
+> **Parallelism and the type checker each found a bug within minutes of being
+> added.** `-n auto` exposed a test that only passed because a warning had
+> already fired earlier in the same process. mypy found three: an int parameter
+> rebound to a float (making a branch unreachable), a Typer option unpacked
+> without checking both halves, and a dedupe that worked only because
+> `set.add` returns None.
+>
+> **The docs stopped drifting structurally.** Fifteen CLI commands and three MCP
+> tools were documented nowhere; a test now walks the real registries. Every
+> spec and plan in `docs/superpowers/` carries a status line, because none of
+> the nine plans ever had a checkbox ticked and they all read as "not started".
+>
+> **H5 (tag-driven release automation) is not done.** `publish.yml` already
+> gates on lint, both test matrices, the guard, a tag-versus-version check and
+> a wheel smoke test, which is the part that matters. Slicing the changelog into
+> release notes automatically is the remaining manual step and is not worth a
+> workflow yet.
+
+### Phase 6 — the original plan (for the record)
 
 Tests (F):
 1. **F1** One real MCP round-trip test per tool via `server.call_tool(...)` asserting the

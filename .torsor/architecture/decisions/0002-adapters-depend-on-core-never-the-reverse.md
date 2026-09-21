@@ -10,7 +10,8 @@ rules:
 - kind: forbid_import
   target: torsor_helper.cli
   scope: src/torsor_helper/**/*.py
-  message: nothing should import the CLI entry point
+  exclude: src/torsor_helper/__main__.py
+  message: nothing should import the CLI entry point (except __main__, which exists to be one)
 - kind: forbid_import
   target: torsor_helper.server
   scope: src/torsor_helper/operations/*.py

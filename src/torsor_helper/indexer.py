@@ -19,7 +19,7 @@ INDEX_FORMAT_VERSION = 2
 def _is_fallback(stored: str | None, embedder) -> bool:
     """True when this run is the hashing fallback standing in for the embedder
     that actually built the index. Not a configuration change — an outage."""
-    return bool(stored) and not stored.startswith("hashing:") and embedder.name == "hashing"
+    return stored is not None and not stored.startswith("hashing:") and embedder.name == "hashing"
 
 
 def _embedder_identity(embedder) -> str:

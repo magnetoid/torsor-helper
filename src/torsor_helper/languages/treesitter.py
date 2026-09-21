@@ -14,13 +14,13 @@ def grammar(name: str):
         import tree_sitter_javascript as m
         return Language(m.language())
     if name == "typescript":
-        import tree_sitter_typescript as m
-        return Language(m.language_typescript())
+        import tree_sitter_typescript as m  # type: ignore[no-redef]
+        return Language(m.language_typescript())  # type: ignore[attr-defined]
     if name == "tsx":
-        import tree_sitter_typescript as m
-        return Language(m.language_tsx())
+        import tree_sitter_typescript as m  # type: ignore[no-redef]
+        return Language(m.language_tsx())  # type: ignore[attr-defined]
     if name == "go":
-        import tree_sitter_go as m
+        import tree_sitter_go as m  # type: ignore[no-redef]
         return Language(m.language())
     raise KeyError(name)
 

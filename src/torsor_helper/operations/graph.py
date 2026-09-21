@@ -53,6 +53,7 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
             # cross-module counts to/from unscanned modules stay correct. The
             # result is identical to a pristine full remap. (Truly incremental,
             # skip-unchanged mapping is I-20 / the tree-sitter fast-follow.)
+            assert paths is not None  # not full_scan means an explicit list
             scanned = cartographer.scanned_modules(store.paths.root, paths)
             symbols = [s for s in db.load_symbols(conn) if s.module not in scanned] + symbols
             edges = [e for e in db.load_edges(conn) if e.module not in scanned] + edges
@@ -233,10 +234,10 @@ def connect(store: Store, config: TorsorConfig, source: str, target: str, *, max
         return empty
 
     chain: list[dict] = []
-    node: str | None = dst
-    while node is not None:
-        parent, mod = prev[node]
-        chain.append({"symbol": node, "module": mod})
-        node = parent
+    step: str | None = dst
+    while step is not None:
+        parent, mod = prev[step]
+        chain.append({"symbol": step, "module": mod})
+        step = parent
     chain.reverse()
     return {"source": source, "target": target, "path": chain, "hops": len(chain) - 1, "found": True}

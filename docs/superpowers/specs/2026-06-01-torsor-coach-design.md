@@ -1,3 +1,7 @@
+> **Status: Partial.**
+>
+> Family A (hygiene: thin, stale, unruled, uncharted, hotspots, coupling, hubs, regressions, dangling and ambiguous links) shipped. Family B is one-fifth done: only `reuse` exists of reuse/convention/decision/rejection/learning. The `kinds` filter, the `first_seen`/`last_shown`/`resolved` state fields and severity escalation were never built.
+
 # torsor-helper Coach — Design Spec
 
 **Date:** 2026-06-01

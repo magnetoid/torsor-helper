@@ -1,3 +1,7 @@
+> **Status: Shipped, with two documented reversals.**
+>
+> The tool surface, the pyramid and the index all shipped. Two parts of this spec were deliberately NOT built as written: the tree-sitter cartographer (superseded by ADR 0003, then partly reinstated for JS/TS/Go by ADR 0013), and the sampling-based semantic drift check (never started; the guard is deterministic). The four MCP prompts specified here shipped in 2026-09.
+
 # torsor-helper — Design Spec
 
 **Date:** 2026-06-01

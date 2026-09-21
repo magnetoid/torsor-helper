@@ -9,7 +9,7 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
 ![status](https://img.shields.io/badge/release-v0.7%20polyglot%20map-success)
-![tests](https://img.shields.io/badge/tests-569%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-794%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
@@ -21,11 +21,122 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 > **Your AI agent has amnesia.** Every new session starts from zero. Mid-session it forgets the rules you set an hour ago. It rebuilds the helper you already wrote, re-introduces the pattern you explicitly rejected, quietly drifts from your architecture — and sometimes imports a package that doesn't even exist. **torsor-helper** is the persistent **brain** that fixes the forgetting, a **guardrail** that catches the drift, and a **coach** that keeps nudging your project back toward health — all local-first, no API key.
 
-**Contents:** [Why](#-why) · [Every feature — what & when](#-every-feature--what-it-solves--when-to-use-it) · [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens) · [What's new](#-whats-new) · [How it works](#-how-it-works) · [Install](#-install) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Usage](#-usage) · [Team / HTTP mode](#-team--http-mode) · [What's inside](#-whats-inside) · [Status](#-status--roadmap) · [Design](#-design--prior-art)
+**Contents:** [Install](#-install) · [Quick start](#-quick-start) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Why](#-why) · [Every feature](#-every-feature--what-it-solves--when-to-use-it) · [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens) · [How it works](#️-how-it-works) · [Usage](#️-usage) · [Status](#-status--roadmap) · [Contributing](#-contributing--releasing)
 
 > **New here / vibe-coding a startup?** Jump to [**Every feature — what it solves & when to use it**](#-every-feature--what-it-solves--when-to-use-it) for a plain-language guide to which tool helps with what.
 >
 > 📚 **Step-by-step guides:** [**Vibe-coding guide**](docs/vibe-coding-guide.md) — how to use torsor while building fast with an AI agent (start here) · [**How to install**](docs/how-to-install.md) — every install path + setup for all 20 supported clients · [**How to use**](docs/how-to-use.md) — the day-to-day workflow, ADR rules, CI, and the full CLI/MCP reference.
+
+## 📦 Install
+
+`torsor-helper` is a small, local-first Python package (Python ≥ 3.11). *(Full walkthrough incl. troubleshooting: [docs/how-to-install.md](docs/how-to-install.md).)*
+
+**Available now — install the global `torsor` command straight from GitHub (no PyPI needed):**
+```bash
+uv tool install "git+https://github.com/magnetoid/torsor-helper"
+# or:  pipx install "git+https://github.com/magnetoid/torsor-helper"
+# with semantic embeddings:  uv tool install "torsor-helper[embeddings] @ git+https://github.com/magnetoid/torsor-helper"
+# with JS/TS/Go in the map:  uv tool install "torsor-helper[languages] @ git+https://github.com/magnetoid/torsor-helper"
+```
+
+**From PyPI**, once a release is published (the workflow runs the full suite, the guard and a wheel smoke-test before it publishes — see [PUBLISHING.md](PUBLISHING.md); tags so far: v0.4.0, v0.6.0):
+```bash
+uv tool install torsor-helper     # or: pipx install torsor-helper / pip install torsor-helper
+uv tool install "torsor-helper[languages]"   # + JS/TS/Go in the map (official tree-sitter grammar wheels)
+uvx torsor-helper --help          # ephemeral, no install
+```
+
+**From a local clone (for development):**
+```bash
+git clone https://github.com/magnetoid/torsor-helper && cd torsor-helper
+uv run torsor --help              # uv resolves the env from pyproject automatically
+```
+
+> Without the `[embeddings]` extra, recall uses a deterministic offline hashing fallback — everything works with no model download and no API key.
+
+## 🚀 Quick start
+
+```bash
+cd your-project
+torsor init --write          # scaffold .torsor/ AND write a project .mcp.json
+torsor doctor                # sanity-check
+```
+
+`torsor init` creates the `.torsor/` pyramid (commit it — it's your project's memory). `--write` drops a `.mcp.json` so MCP clients that read it (**Claude Code** especially) auto-detect torsor-helper. That's it — your agent now has memory.
+
+Then put your standing rules where the agent reads them for free:
+
+```bash
+torsor rules --write AGENTS.md     # or CLAUDE.md — refresh any time you record a new ADR
+```
+
+`torsor rules` distills your charter's non-negotiable principles plus every machine-readable ADR rule into a compact (~600-token, budget-capped) digest, written into a managed block in your agent's prompt file. The agent sees the constraints **at prompt time — no tool calls, no rediscovery, no burned context** — and `torsor guard` still enforces the same rules deterministically in CI. Re-running replaces the block, never duplicates it.
+
+## 🔌 Connect your agent (Claude Code, Codex, Cursor, …)
+
+torsor-helper is a standard **MCP stdio server** — the command is `torsor mcp`. Point any MCP client at it. `torsor init --client <name>` prints exact, copy-paste config for your tool.
+
+### Claude Code — *one command*
+Paste this into the Claude Code terminal — it installs `torsor` and wires up the current project, then reload MCP servers:
+```bash
+curl -fsSL https://raw.githubusercontent.com/magnetoid/torsor-helper/main/scripts/install.sh | bash
+```
+Prefer not to pipe a script? The equivalent two commands:
+```bash
+uv tool install "git+https://github.com/magnetoid/torsor-helper"   # installs the `torsor` command
+torsor init --write                                                  # scaffold .torsor/ + write ./.mcp.json
+```
+Claude Code auto-detects torsor-helper from `.mcp.json`. To register it for **all** projects instead: `claude mcp add --scope user torsor-helper -- torsor mcp` (or `install.sh --global`).
+
+### OpenAI Codex CLI
+Add to `~/.codex/config.toml`:
+```toml
+[mcp_servers.torsor-helper]
+command = "torsor"
+args = ["mcp"]
+```
+
+### Cursor
+`torsor init --client cursor` prints the block — paste it into **`.cursor/mcp.json`** (project) or Cursor → *Settings → MCP*:
+```json
+{ "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
+```
+
+### VS Code / GitHub Copilot
+VS Code uses its own `servers` shape in **`.vscode/mcp.json`** (or Command Palette → *MCP: Add Server*). `torsor init --client vscode` prints it:
+```json
+{ "servers": { "torsor-helper": { "type": "stdio", "command": "torsor", "args": ["mcp"] } } }
+```
+
+### Google Antigravity
+Agent panel → settings → **MCP Servers** → *Manage* opens `mcp_config.json` — paste the standard block (`torsor init --client antigravity`):
+```json
+{ "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
+```
+
+### Everything else — one command prints your client's exact config + where it goes
+```bash
+torsor init --client <name>
+```
+
+| Client | `--client` | Config goes in |
+|---|---|---|
+| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` (Settings → Cascade → MCP) |
+| Trae | `trae` | AI chat → Settings → MCP → Add manually |
+| Cline / Roo Code | `cline` / `roo` | extension → MCP Servers → Configure |
+| Claude Desktop | `claude-desktop` | `claude_desktop_config.json` (Settings → Developer) |
+| Gemini CLI | `gemini` | `~/.gemini/settings.json` or project `.gemini/settings.json` |
+| GitHub Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` (or `/mcp add` in the CLI) |
+| Zed | `zed` | `settings.json` (`context_servers` shape — snippet handles it) |
+| JetBrains AI / Junie | `jetbrains` | Settings → Tools → AI Assistant → MCP → Add |
+| Continue | `continue` | `.continue/config.yaml` (YAML shape — snippet handles it) |
+| OpenCode | `opencode` | `opencode.json` (its own `mcp` shape — snippet handles it) |
+| Amp | `amp` | VS Code `settings.json` under `amp.mcpServers` |
+| Goose | `goose` | `~/.config/goose/config.yaml` (or `goose configure`) |
+| Kiro | `kiro` | `.kiro/settings/mcp.json` |
+| Warp | `warp` | Settings → AI → Manage MCP servers |
+
+> **Note:** the config uses `command: "torsor"`, which requires the `torsor` command on your PATH (`uv tool install` / `pipx install`). Running ephemerally instead? Use `"command": "uvx", "args": ["torsor-helper", "mcp"]`.
 
 ## ⏱️ The 30-second version
 
@@ -55,42 +166,6 @@ AI coding agents are brilliant in the moment and forgetful over time:
 Most tools fix *one* of these. **torsor-helper combines four ideas no one else puts together** — a pyramidal wiki, an external semantic memory, a symbol-level repo map, and a drift guard — plus a **Coach** that proactively recommends fixes over time. See [What's new](#-whats-new).
 
 <sub>**Why "torsor"?** A *torsor* is a space that looks like a group but has **no fixed origin** — you can only measure *differences* between points. That's exactly drift detection: your architecture is the reference frame, drift is the measured delta.</sub>
-
-## ⚙️ How it works
-
-Your project's memory lives as **plain Markdown you own** — git-versioned, Obsidian-readable, editable by you *and* the agent. A **disposable index** (SQLite FTS5 + local-embedding vectors + a wiki-link graph) is *derived* from those files for instant semantic recall. A single Python **MCP server** serves it all to any agent.
-
-> **One rule:** Markdown is always the source of truth. The index is throwaway — delete it, rebuild it, never fear it.
-
-### 🔺 The pyramid
-
-Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, stable base loads first; the volatile tip changes every session.
-
-```
-                 ╱╲
-                ╱T4╲            EPISODIC      memory/       observations · learnings · handoffs · mined insights
-               ╱────╲
-              ╱  T3  ╲          ACTIVE        active/       current focus · progress · open questions
-             ╱────────╲
-            ╱    T2    ╲         MAP (derived) map/          repo map · module & symbol summaries
-           ╱────────────╲
-          ╱      T1      ╲        ARCHITECTURE architecture/ system patterns · tech context · ADRs  ← intent
-         ╱────────────────╲
-        ╱        T0        ╲       CHARTER      charter.md    what & why · non-negotiable principles  ← most stable
-       ╱────────────────────╲
-```
-
-### 🔬 Under the hood — how each part works
-
-Everything below is **derived from your Markdown** and rebuildable. Delete `.torsor/.index/` any time; the next command rebuilds it.
-
-- **Recall (`recall`)** — every note is indexed three ways: **FTS5** keyword search, **vector** embeddings (a local `fastembed` model, or a deterministic offline hash fallback), and a **wiki-link graph**. A query fuses them with **Reciprocal Rank Fusion**, then re-weights by tier (stable tiers rank higher), recency, an **importance multiplier** (notes you recall often float up; charter/architecture never decay), and a 1-hop link-graph boost. **MMR** drops near-duplicate hits so scarce context isn't wasted, and results are packed to a token budget. Indexing is incremental (content-hash diff) and self-heals when the embedder changes.
-- **The map (`map` / `get_intent` / `impact`)** — a cartographer over a per-language registry (Python via stdlib `ast`, always on; JavaScript/TypeScript/TSX and Go via the official tree-sitter grammar wheels behind the optional `[languages]` extra) extracts every function/class/method and, crucially, **real reference edges** ("who calls what") by resolving names — not substring matching, so comments and strings never inflate counts. `impact` walks those edges to show a symbol's blast radius; `connect` finds the shortest path between two symbols; `find` fuzzy-searches files + symbols, ranked by match quality and frecency — all of it language-agnostic since it's built on the same edge shape. A repo fingerprint lets `map` skip entirely when nothing changed; without `[languages]` installed, everything above quietly stays Python-only (ADR 0013).
-- **The guard (`guard` / `check_drift`)** — ADRs carry machine-readable `rules:` in their frontmatter (`forbid_import`, `forbid_layer_import`, `require_import`, `forbid_pattern`). The guard checks changed files against them deterministically (AST + regex), citing the ADR. It's **advisory by default**; `--strict` fails CI, and a committed **baseline** grandfathers existing debt so only *new* drift fails.
-- **The Coach (`coach` / `recommend`)** — surfaces ranked, evidence-backed nudges: stale/thin files, `reuse` (a symbol already exists), `hotspot` (churn × complexity), `coupling` (files that always change together but aren't linked), `regression` (complexity rose since the last snapshot), `phantom_dep` (a hallucinated import). Each **decays** so it never nags; a 3-item digest rides along in `bootstrap_session`.
-- **Token thrift (`commands` / `recipes` / `models`)** — the learned command book and the rules/primer blocks live in your prompt file (zero tool-call cost); `recipes` learns which deterministic lookups recur; `models` publishes a cheap-vs-smart routing policy your harness follows. torsor never calls an LLM — it makes the exact answers cheap to fetch. See [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens).
-
-> **The one rule:** Markdown is always the source of truth. The SQLite index, the symbol map, the frecency counters — all derived, all disposable, never something to fear losing.
 
 ## 🧰 Every feature — what it solves & when to use it
 
@@ -206,158 +281,43 @@ torsor models --write model-policy.json # …or write the JSON to a file
 
 ## ✨ What's new
 
-### v0.4 — token thrift *(spend fewer, cheaper tokens)*
+See **[CHANGELOG.md](CHANGELOG.md)** — the one that is kept current. This section used to duplicate it and was two releases behind.
 
-| | Feature | Kills the failure mode | Try it |
-|---|---|---|---|
-| 🧰 | **Learned command book** | Agent re-derives how to test/build/lint every session | `torsor commands --add 'test=uv run pytest'` |
-| 📊 | **Op-frequency recipes** | No visibility into what recurs (and could be cheaper) | `torsor recipes` |
-| 💸 | **Cheap/smart model routing** | The frontier model does basic deterministic work | `torsor models --cheap … --smart …` |
+## ⚙️ How it works
 
-Plus a **fuzzy + frecency finder** (`torsor find` / `find_files`) — fast navigation over files **and** mapped symbols (inspired by [dmtrKovalenko/fff](https://github.com/dmtrKovalenko/fff), pure-Python, no daemon). See [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens).
+Your project's memory lives as **plain Markdown you own** — git-versioned, Obsidian-readable, editable by you *and* the agent. A **disposable index** (SQLite FTS5 + local-embedding vectors + a wiki-link graph) is *derived* from those files for instant semantic recall. A single Python **MCP server** serves it all to any agent.
 
-### v0.3 — the resilience release *(supply-chain + blast-radius + hidden coupling)*
+> **One rule:** Markdown is always the source of truth. The index is throwaway — delete it, rebuild it, never fear it.
 
-Four research-driven features (from deep research into [documented vibe-coding failure modes](docs/superpowers/specs/2026-06-10-torsor-v0.3-resilience-design.md) — hallucinated deps, cross-file cascades, hidden coupling, review fatigue), each hardened by adversarial review:
+### 🔺 The pyramid
 
-| | Feature | Kills the failure mode | Try it |
-|---|---|---|---|
-| 📦 | **Slopsquatting guard** | AI imports a non-existent package (USENIX '25: ~5–21% don't exist) | `torsor deps` |
-| 🔎 | **Impact analysis** | Changing a symbol silently cascades across files | `torsor impact <symbol>` |
-| 🔗 | **Temporal-coupling recs** | Hidden dependencies the import graph can't see | `torsor coach` |
-| 📉 | **Complexity-trend regressions** | Review fatigue — alert only on what got *worse* | `torsor coach` after `consolidate` |
+Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, stable base loads first; the volatile tip changes every session.
 
-### v0.2 — the intelligence release
-
-Twelve improvements distilled from deep research into the best memory / repo-map / architecture-guard / code-health tools, then hardened by an adversarial review. All **dependency-free, deterministic, and offline-testable** — every invariant intact.
-
-| | Improvement | What it buys you | Inspired by |
-|---|---|---|---|
-| 🔎 | **Contextual breadcrumbs** | Indexes tier·path·title with each note so a query for situating terms finds it (snippets stay byte-identical) | Anthropic Contextual Retrieval |
-| 🔎 | **Section-aware snippets** | Recall returns the *densest* matching section, not the first keyword hit | — |
-| 🔎 | **Importance decay** | Frequently-recalled notes float up; episodic noise sinks; charter/architecture never decay | mem0, Reflexion |
-| 🔎 | **MMR diversity + budget marker** | Near-duplicate notes demoted; truncation made explicit | MMR (Carbonell & Goldstein) |
-| 🗺️ | **AST reference edges** | Honest "who references what" + ref counts (no more substring counting of comments) | Aider repo map, Serena, SCIP |
-| 🗺️ | **Fingerprint skip** | `torsor map` is instant when nothing changed | Continue.dev, Cursor indexing |
-| 🗺️ | **`torsor export`** | Portable `llms.txt` + a GitHub-rendered **Mermaid** module diagram | llms.txt, DeepWiki |
-| 🛡️ | **Layering & seam rules** | `forbid_layer_import` + `require_import` express real architecture, not just deny-lists | ArchUnit, dependency-cruiser, import-linter |
-| 🛡️ | **Severity + `--json`** | Per-rule severity, machine-readable findings, threshold-gated CI | ast-grep, dependency-cruiser |
-| 🛡️ | **Drift baseline** | `--strict` fails only on *new* drift — adoptable on a brownfield repo | ArchUnit FreezingArchRule, SonarQube |
-| 🧭 | **Churn × complexity hotspots** | The Coach says *where* to refactor/test first | CodeScene, SonarQube |
-| 🧭 | **ADR supersedes** | Superseded decisions stop resurfacing in recall | mem0, Zep/Graphiti |
-
-→ Full per-item notes in the [CHANGELOG](CHANGELOG.md) and the [v0.2 design spec](docs/superpowers/specs/2026-06-02-torsor-v0.2-intelligence-design.md).
-
-## 📦 Install
-
-`torsor-helper` is a small, local-first Python package (Python ≥ 3.11). *(Full walkthrough incl. troubleshooting: [docs/how-to-install.md](docs/how-to-install.md).)*
-
-**Available now — install the global `torsor` command straight from GitHub (no PyPI needed):**
-```bash
-uv tool install "git+https://github.com/magnetoid/torsor-helper"
-# or:  pipx install "git+https://github.com/magnetoid/torsor-helper"
-# with semantic embeddings:  uv tool install "torsor-helper[embeddings] @ git+https://github.com/magnetoid/torsor-helper"
-# with JS/TS/Go in the map:  uv tool install "torsor-helper[languages] @ git+https://github.com/magnetoid/torsor-helper"
+```
+                 ╱╲
+                ╱T4╲            EPISODIC      memory/       observations · learnings · handoffs · mined insights
+               ╱────╲
+              ╱  T3  ╲          ACTIVE        active/       current focus · progress · open questions
+             ╱────────╲
+            ╱    T2    ╲         MAP (derived) map/          repo map · module & symbol summaries
+           ╱────────────╲
+          ╱      T1      ╲        ARCHITECTURE architecture/ system patterns · tech context · ADRs  ← intent
+         ╱────────────────╲
+        ╱        T0        ╲       CHARTER      charter.md    what & why · non-negotiable principles  ← most stable
+       ╱────────────────────╲
 ```
 
-**Once published to PyPI** (a GitHub Release away — see [PUBLISHING.md](PUBLISHING.md)):
-```bash
-uv tool install torsor-helper     # or: pipx install torsor-helper / pip install torsor-helper
-uv tool install "torsor-helper[languages]"   # + JS/TS/Go in the map (official tree-sitter grammar wheels)
-uvx torsor-helper --help          # ephemeral, no install
-```
+### 🔬 Under the hood — how each part works
 
-**From a local clone (for development):**
-```bash
-git clone https://github.com/magnetoid/torsor-helper && cd torsor-helper
-uv run torsor --help              # uv resolves the env from pyproject automatically
-```
+Everything below is **derived from your Markdown** and rebuildable. Delete `.torsor/.index/` any time; the next command rebuilds it.
 
-> Without the `[embeddings]` extra, recall uses a deterministic offline hashing fallback — everything works with no model download and no API key.
+- **Recall (`recall`)** — every note is indexed three ways: **FTS5** keyword search, **vector** embeddings (a local `fastembed` model, or a deterministic offline hash fallback), and a **wiki-link graph**. A query fuses them with **Reciprocal Rank Fusion**, then re-weights by tier (stable tiers rank higher), recency, an **importance multiplier** (notes you recall often float up; charter/architecture never decay), and a 1-hop link-graph boost. **MMR** drops near-duplicate hits so scarce context isn't wasted, and results are packed to a token budget. Indexing is incremental (content-hash diff) and self-heals when the embedder changes.
+- **The map (`map` / `get_intent` / `impact`)** — a cartographer over a per-language registry (Python via stdlib `ast`, always on; JavaScript/TypeScript/TSX and Go via the official tree-sitter grammar wheels behind the optional `[languages]` extra) extracts every function/class/method and, crucially, **real reference edges** ("who calls what") by resolving names — not substring matching, so comments and strings never inflate counts. `impact` walks those edges to show a symbol's blast radius; `connect` finds the shortest path between two symbols; `find` fuzzy-searches files + symbols, ranked by match quality and frecency — all of it language-agnostic since it's built on the same edge shape. A repo fingerprint lets `map` skip entirely when nothing changed; without `[languages]` installed, everything above quietly stays Python-only (ADR 0013).
+- **The guard (`guard` / `check_drift`)** — ADRs carry machine-readable `rules:` in their frontmatter (`forbid_import`, `forbid_layer_import`, `require_import`, `forbid_pattern`). The guard checks changed files against them deterministically (AST + regex), citing the ADR. It's **advisory by default**; `--strict` fails CI, and a committed **baseline** grandfathers existing debt so only *new* drift fails.
+- **The Coach (`coach` / `recommend`)** — surfaces ranked, evidence-backed nudges: stale/thin files, `reuse` (a symbol already exists), `hotspot` (churn × complexity), `coupling` (files that always change together but aren't linked), `regression` (complexity rose since the last snapshot), `phantom_dep` (a hallucinated import). Each **decays** so it never nags; a 3-item digest rides along in `bootstrap_session`.
+- **Token thrift (`commands` / `recipes` / `models`)** — the learned command book and the rules/primer blocks live in your prompt file (zero tool-call cost); `recipes` learns which deterministic lookups recur; `models` publishes a cheap-vs-smart routing policy your harness follows. torsor never calls an LLM — it makes the exact answers cheap to fetch. See [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens).
 
-## 🚀 Quick start
-
-```bash
-cd your-project
-torsor init --write          # scaffold .torsor/ AND write a project .mcp.json
-torsor doctor                # sanity-check
-```
-
-`torsor init` creates the `.torsor/` pyramid (commit it — it's your project's memory). `--write` drops a `.mcp.json` so MCP clients that read it (**Claude Code** especially) auto-detect torsor-helper. That's it — your agent now has memory.
-
-Then put your standing rules where the agent reads them for free:
-
-```bash
-torsor rules --write AGENTS.md     # or CLAUDE.md — refresh any time you record a new ADR
-```
-
-`torsor rules` distills your charter's non-negotiable principles plus every machine-readable ADR rule into a compact (~600-token, budget-capped) digest, written into a managed block in your agent's prompt file. The agent sees the constraints **at prompt time — no tool calls, no rediscovery, no burned context** — and `torsor guard` still enforces the same rules deterministically in CI. Re-running replaces the block, never duplicates it.
-
-## 🔌 Connect your agent (Claude Code, Codex, Cursor, …)
-
-torsor-helper is a standard **MCP stdio server** — the command is `torsor mcp`. Point any MCP client at it. `torsor init --client <name>` prints exact, copy-paste config for your tool.
-
-### Claude Code — *one command*
-Paste this into the Claude Code terminal — it installs `torsor` and wires up the current project, then reload MCP servers:
-```bash
-curl -fsSL https://raw.githubusercontent.com/magnetoid/torsor-helper/main/scripts/install.sh | bash
-```
-Prefer not to pipe a script? The equivalent two commands:
-```bash
-uv tool install "git+https://github.com/magnetoid/torsor-helper"   # installs the `torsor` command
-torsor init --write                                                  # scaffold .torsor/ + write ./.mcp.json
-```
-Claude Code auto-detects torsor-helper from `.mcp.json`. To register it for **all** projects instead: `claude mcp add --scope user torsor-helper -- torsor mcp` (or `install.sh --global`).
-
-### OpenAI Codex CLI
-Add to `~/.codex/config.toml`:
-```toml
-[mcp_servers.torsor-helper]
-command = "torsor"
-args = ["mcp"]
-```
-
-### Cursor
-`torsor init --client cursor` prints the block — paste it into **`.cursor/mcp.json`** (project) or Cursor → *Settings → MCP*:
-```json
-{ "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
-```
-
-### VS Code / GitHub Copilot
-VS Code uses its own `servers` shape in **`.vscode/mcp.json`** (or Command Palette → *MCP: Add Server*). `torsor init --client vscode` prints it:
-```json
-{ "servers": { "torsor-helper": { "type": "stdio", "command": "torsor", "args": ["mcp"] } } }
-```
-
-### Google Antigravity
-Agent panel → settings → **MCP Servers** → *Manage* opens `mcp_config.json` — paste the standard block (`torsor init --client antigravity`):
-```json
-{ "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
-```
-
-### Everything else — one command prints your client's exact config + where it goes
-```bash
-torsor init --client <name>
-```
-
-| Client | `--client` | Config goes in |
-|---|---|---|
-| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` (Settings → Cascade → MCP) |
-| Trae | `trae` | AI chat → Settings → MCP → Add manually |
-| Cline / Roo Code | `cline` / `roo` | extension → MCP Servers → Configure |
-| Claude Desktop | `claude-desktop` | `claude_desktop_config.json` (Settings → Developer) |
-| Gemini CLI | `gemini` | `~/.gemini/settings.json` or project `.gemini/settings.json` |
-| GitHub Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` (or `/mcp add` in the CLI) |
-| Zed | `zed` | `settings.json` (`context_servers` shape — snippet handles it) |
-| JetBrains AI / Junie | `jetbrains` | Settings → Tools → AI Assistant → MCP → Add |
-| Continue | `continue` | `.continue/config.yaml` (YAML shape — snippet handles it) |
-| OpenCode | `opencode` | `opencode.json` (its own `mcp` shape — snippet handles it) |
-| Amp | `amp` | VS Code `settings.json` under `amp.mcpServers` |
-| Goose | `goose` | `~/.config/goose/config.yaml` (or `goose configure`) |
-| Kiro | `kiro` | `.kiro/settings/mcp.json` |
-| Warp | `warp` | Settings → AI → Manage MCP servers |
-
-> **Note:** the config uses `command: "torsor"`, which requires the `torsor` command on your PATH (`uv tool install` / `pipx install`). Running ephemerally instead? Use `"command": "uvx", "args": ["torsor-helper", "mcp"]`.
+> **The one rule:** Markdown is always the source of truth. The SQLite index, the symbol map, the frecency counters — all derived, all disposable, never something to fear losing.
 
 ## 🛠️ Usage
 
@@ -452,41 +412,27 @@ Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs who
 
 ## 📍 Status & roadmap
 
-**v0.7 shipped — 514 tests, lint-clean, dogfooded.** The 6-phase foundation, the intelligence release (v0.2), the resilience release (v0.3), the token-thrift release (v0.4), self-driving memory (v0.5), self-serving memory (v0.6), and the polyglot map (v0.7).
+**v0.7 — 794 tests, lint-clean, dogfooded.** What shipped when is in
+**[CHANGELOG.md](CHANGELOG.md)**; this section is what is true now and what is next.
 
-**Foundation (v0.1):**
-- [x] **Foundation** · pyramid scaffold, `init`, MCP server, the five memory tools
-- [x] **Index** · SQLite (FTS5 + wiki-link graph) + local embeddings, incremental indexer, hybrid RRF recall
-- [x] **Map** · stdlib-`ast` cartographer + symbol inventory + `get_intent` / `map_repo`
-- [x] **Guard** · ADRs carry machine-readable rules; deterministic drift detection (`check_drift`)
-- [x] **Consolidation** · `torsor consolidate` mines journal entries into curated insight notes
-- [x] **Coach** · hygiene + best-practice recommendations, pushed at session start
-- [x] **HTTP/team transport** · `torsor mcp --http`
+Everything is dogfooded: this repo has its own `.torsor/`, its ADRs carry the
+machine-readable rules that `torsor guard` enforces against this codebase in
+CI, and `torsor map` covers its own symbols and reference edges.
 
-**Intelligence release (v0.2):**
-- [x] **Retrieval** · contextual breadcrumbs · section-aware snippets · importance decay · MMR diversity
-- [x] **Map** · real AST reference edges + honest ref counts · fingerprint skip · `torsor export` (llms.txt + Mermaid)
-- [x] **Guard** · layering/seam rule kinds · severity + `--json` · committed drift baseline (CI ratchet)
-- [x] **Coach** · churn×complexity hotspots · ADR supersedes
+**Recently hardened** (see [docs/audit-report-2026-09-20.md](docs/audit-report-2026-09-20.md)
+for the full inventory, including the findings that turned out not to be real):
 
-**Resilience release (v0.3):**
-- [x] **Supply chain** · offline slopsquatting guard (`torsor deps`) — flag hallucinated dependencies
-- [x] **Blast radius** · impact analysis (`torsor impact`) — who-references a symbol across files
-- [x] **Hidden coupling** · temporal-coupling coach recs from git co-change
-- [x] **Never-nag** · complexity-trend "new findings only" regressions
+- **Safety** · installing hooks can no longer damage a `.claude/settings.json` it cannot parse, or remove a hook it did not write; every caller-supplied path is contained to the project root; command execution is CLI-only; the HTTP transport refuses a routable interface without an explicit opt-in.
+- **Performance** · recall went from 7.6s to ~0.5s and a cold map from 164s to 25s on a generated 5 000-note corpus (`tests/bench/`).
+- **Correctness** · guard scopes are path-aware (`*` no longer crosses `/`, `**` spans directories), wikilink aliases resolve, a partial map can no longer shrink a committed file, and the hashing fallback no longer invents search results for queries with no lexical basis.
+- **Surface** · the memory half of the product has a command line, the MCP server has prompts, and a test now holds the two adapters in parity.
 
-**Token-thrift release (v0.4):**
-- [x] **Navigation** · fuzzy + frecency finder (`torsor find` / `find_files`) over files + mapped symbols
-- [x] **Command book** · `torsor commands` — record & replay project commands (no re-derivation)
-- [x] **Recipes** · `torsor recipes` — learn which deterministic lookups recur
-- [x] **Model routing** · `torsor models` — cheap/smart policy, app-agnostic (MCP · prompt block · JSON), `--client` publish
+**Next:**
 
-**Polyglot map release (v0.7):**
-- [x] **Multi-language map** · JavaScript/TypeScript/TSX + Go join Python in `map`/`impact`/`connect`/`find`/`export`/hub-detection, via the official tree-sitter grammar wheels behind the optional `[languages]` extra — offline, never `tree-sitter-language-pack` (ADR 0013, supersedes ADR 0003)
-- [x] **Guard widening** · `forbid_import` checks JS/TS/Go import specifiers, not just Python imports
-- [x] **Discoverability** · `torsor doctor` and `torsor map` report which languages are available; Coach `uncharted_language` nudges installing `[languages]` when non-Python source is detected but unmapped
-
-**Planned fast-follows:** sampling-based *semantic* drift guard · weaving `impact`/`deps` warnings into `check_drift` and pre-commit flows.
+- **Team memory** · a merge strategy for `.torsor/` across branches — journals and map notes currently conflict on concurrent edits.
+- **Memory ↔ symbol graph** · "before you change `charge_card`, here are the 3 decisions and 2 learnings that mention it". The two indexes exist and do not talk to each other.
+- **Memory lifecycle** · contradiction detection between decisions, and a Coach that can show what you have fixed rather than only what is left.
+- **Sampling-based semantic drift** · the guard is deterministic by design; a sampling check is the long-standing open idea.
 
 ## 🧪 Built with
 
@@ -495,6 +441,24 @@ FastMCP · Typer · Pydantic · PyYAML · SQLite (FTS5) · NumPy · stdlib `ast`
 ## 📚 Design & prior art
 
 Full design + every phase plan live in [`docs/superpowers/`](docs/superpowers/) (including the [v0.2 design spec](docs/superpowers/specs/2026-06-02-torsor-v0.2-intelligence-design.md)). torsor-helper stands on the shoulders of [Cline Memory Bank](https://docs.cline.bot/prompting/cline-memory-bank), [mem0/OpenMemory](https://mem0.ai/openmemory), [Letta/MemGPT](https://docs.letta.com/), [Zep/Graphiti](https://github.com/getzep/graphiti), [basic-memory](https://github.com/basicmachines-co/basic-memory), [cognee](https://github.com/topoteretes/cognee), [Aider's repo map](https://aider.chat/docs/repomap.html), [Serena](https://github.com/oraios/serena), [CodeScene](https://codescene.com/), [ArchUnit](https://www.archunit.org/) / [dependency-cruiser](https://github.com/sverweij/dependency-cruiser), [Anthropic Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval), [llms.txt](https://llmstxt.org/), and [GitHub spec-kit](https://github.com/github/spec-kit).
+
+## 🩺 Troubleshooting
+
+Run **`torsor doctor`** first. It checks the things that fail quietly — a stale
+map, semantic recall silently on the hashing fallback, hooks that were never
+installed, an ADR rule that does not parse — and tells you the command that
+fixes each one. `--json` if you want to act on it in a script.
+
+| Symptom | What it usually is |
+|---|---|
+| `torsor: command not found` | The install put it somewhere off PATH. `uv tool update-shell`, or run `python -m torsor_helper`. |
+| The agent does not see torsor | The MCP client did not pick up the config. `torsor init --client <name>` prints the exact file and contents for your tool. |
+| Recall returns nothing useful | `doctor` will say if you are on the hashing fallback. Install the `embeddings` extra for semantic recall; without it, recall is lexical only and will not invent matches. |
+| `impact` or `connect` finds nothing | The map is stale or was never built. `torsor map`. |
+| The guard passes but I expected a violation | With no file arguments it checks *git-changed* files, so on a clean tree it checks nothing. Pass paths, or `torsor guard $(git ls-files '*.py')`. |
+| The index looks wrong | It is derived and disposable: `torsor clean --apply --deep --yes`, then `torsor index`. Your Markdown is untouched. |
+
+More: [how to install](docs/how-to-install.md) · [how to use](docs/how-to-use.md) · [security](SECURITY.md)
 
 ## 🤝 Contributing & releasing
 

@@ -149,7 +149,7 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `torsor rules [--write <file>] [--client <name>]` | Compact rules digest; `--write`/`--client` maintains a managed block in the agent's instructions file |
 | `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs as guard-enforced ADRs |
 | `torsor primer [--write <file>] [--client <name>] [--tokens N]` | Token-saving prompt-time project primer (managed block) |
-| `torsor commands [--add 'name=cmd'] [--note ...] [--run name]` | Record & replay project commands (test/build/lint) |
+| `torsor commands [--add NAME COMMAND] [--note ...] [--run name]` | Record & replay project commands (test/build/lint) |
 | `torsor recipes [--limit N]` | Most-repeated deterministic lookups — candidates for the cheap model |
 | `torsor models [--cheap … --smart …] [--write <file>\|--client <name>] [--json]` | Cheap/smart model-routing policy (Markdown block, JSON, or MCP) |
 | `torsor find <query> [--mode] [--files-only\|--symbols-only]` | Fuzzy + frecency search over files and mapped symbols |
@@ -158,6 +158,30 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `torsor deps [files…] [--strict]` | Offline hallucinated-dependency check |
 | `torsor coach [context] [--dismiss <key>]` | Recommendations |
 | `torsor consolidate` | Journal → insights maintenance pass |
+| `torsor stats [--json]` | Notes per tier, map size, index size, what gets recalled most, which embedder is really in use |
+| `torsor verify [files…] [--strict] [--severity <lvl>] [--run-tests] [--json]` | One pass/fail gate: guard + deps + staleness, optionally your recorded `test` command. Exits non-zero — use it as a CI or loop completion check |
+| `torsor stale [--mark\|--unmark] [--strict] [--json]` | Memory that contradicts the code: dangling `[[wikilinks]]` and dead file paths |
+| `torsor clean [--apply] [--deep] [--yes]` | Reclaim orphaned map notes, dead index rows and expired journals. Dry run by default |
+| `torsor connect <from> <to> [--max-hops N]` | Shortest call-graph path between two symbols — "how does X reach Y?" |
+| `torsor hooks install [--local] [--on-stop] [--no-git] [--no-claude]` | Wire auto-capture into git and Claude Code |
+| `torsor hooks uninstall` | Remove only torsor's entries, from both settings files |
+| `torsor hooks status` | Which git hooks and Claude Code events carry a torsor entry |
+| `torsor hooks run <event>` | What an installed hook calls; you rarely type this |
+
+### Memory, from the shell
+
+The same operations the MCP server exposes, for scripting, CI, or debugging
+recall without an agent attached.
+
+| Command | What it does |
+|---|---|
+| `torsor recall <query> [--limit N] [--type T] [--kind K] [--include-superseded] [--json]` | Hybrid search across memory, wiki and map |
+| `torsor remember <text> [--kind K] [--link slug]` | Persist an observation, decision or learning |
+| `torsor active --focus … [--progress …] [--open-questions …]` | Update the current working state |
+| `torsor handoff <summary> [--decisions …] [--next-steps …]` | End-of-session handoff the next session resumes from |
+| `torsor bootstrap [--max-tokens N]` | Print the whole-pyramid digest an agent reads at session start |
+| `torsor intent [topic]` | Architecture, decisions and relevant symbols for a topic |
+| `torsor decision <title> --context … --decision … [--supersedes …]` | Record an ADR |
 
 ## MCP tool reference
 
@@ -176,6 +200,28 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `check_drift(files?, as_json?, new_only?)` | Before commits |
 | `check_dependencies(files?)` | After adding imports |
 | `export()` / `recommend(context?)` / `consolidate()` | Periodically |
+| `verify(files?, severity?)` | As a completion check — one JSON verdict over guard + deps + staleness |
+| `stale(mark?, unmark?)` | When memory may have drifted from the code |
+| `connect(source, target, max_hops?)` | "How does X reach Y?" before a refactor |
+| `find_files(query, mode?, limit?, include_files?, include_symbols?)` | Navigation: jump to a file or symbol without exploring |
+| `stats()` | How big the memory is, what is recalled, whether the map is current |
+| `clean(apply?, deep?)` | Housekeeping; dry run unless `apply` |
+| `record_command(name, command, note?)` / `list_commands()` | So no session re-derives how to test or build |
+| `recipes(limit?)` / `get_model_policy(as_json?)` | Which lookups recur, and which model tier to route them to |
+| `dismiss_recommendation(key)` | Stop showing a Coach recommendation |
+| `hooks_status()` | Which auto-capture hooks are installed (read-only; installing is CLI-only) |
+
+### Prompts
+
+MCP clients render these as slash-commands, so the loop does not depend on the
+agent remembering which tool to call in which order.
+
+| Prompt | What it does |
+|---|---|
+| `onboard` | Read the project's memory and the standing rules before touching anything |
+| `checkpoint` | Close out a session: active state, handoff, anything durable |
+| `review_drift` | Run the verification gate and act on what fails |
+| `coach` | Get the health recommendations and do the highest-value one |
 
 ## Team / HTTP mode
 
@@ -183,12 +229,12 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 torsor mcp --http --port 8000              # serves http://127.0.0.1:8000/mcp
 ```
 
-stdio is the default and right for a single local agent. **The HTTP transport has no authentication** — binding a non-loopback host (`--host 0.0.0.0`) prints a loud warning because it exposes read/write project memory to anyone who can reach the port. For team use, keep it behind a reverse proxy with auth or an SSH tunnel. Sharing memory via git (commit `.torsor/`) is the simplest team setup.
+stdio is the default and right for a single local agent. **The HTTP transport has no authentication** — binding a non-loopback host (`--host 0.0.0.0`) is refused unless you also pass `--allow-remote`, because it exposes read/write project memory to anyone who can reach the port. For team use, keep it behind a reverse proxy with auth or an SSH tunnel. Sharing memory via git (commit `.torsor/`) is the simplest team setup.
 
 ## FAQ
 
 - **Do I need an API key or internet?** No. Everything works offline; the `embeddings` extra downloads a small local model once.
-- **The index broke / looks stale.** Delete `.torsor/.index/` and run `torsor index`. The index is derived and disposable, always.
+- **The index broke / looks stale.** `torsor clean --apply --deep --yes`, then `torsor index`. The index is derived and disposable, always.
 - **Can I edit the Markdown by hand?** Yes — that's the point. Obsidian works too (`[[wikilinks]]` are first-class). Malformed frontmatter degrades gracefully; it never breaks recall.
 - **How do I stop one noisy recommendation?** `torsor coach --dismiss <key>` (the key is printed with each recommendation).
 - **What goes in git?** `.torsor/` yes, `.torsor/.index/` no (scaffolded `.gitignore` handles it).

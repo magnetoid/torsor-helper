@@ -420,4 +420,4 @@ def run(root: Path | str, transport: str = "stdio", host: str = "127.0.0.1", por
     if transport != "stdio":
         mcp.settings.host = host
         mcp.settings.port = port
-    mcp.run(transport=transport)
+    mcp.run(transport=transport)  # type: ignore[arg-type]  # validated by the CLI's choices

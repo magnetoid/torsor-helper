@@ -662,6 +662,13 @@ def guard(
         return
 
     if not violations:
+        if not result["checked"]:
+            # "No drift" after checking nothing reads exactly like a pass. On a
+            # clean tree the default file list is empty, which is how a real
+            # violation in this repo survived a green --strict run in CI.
+            typer.echo("No files to check (the default is git-changed files; "
+                       "pass paths, or `torsor guard $(git ls-files '*.py')`).")
+            return
         typer.echo("No drift from declared intent detected.")
         return
     for v in violations:
@@ -814,11 +821,12 @@ def clean(
 
 
 def _human_bytes(n: int) -> str:
-    for unit in ("B", "KB", "MB"):
-        if n < 1024 or unit == "MB":
-            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
-        n /= 1024
-    return f"{n} B"
+    size = float(n)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    raise AssertionError("unreachable")  # the loop always returns at GB
 
 
 @app.command()
@@ -868,7 +876,7 @@ def commands(
     """Record & replay the project's commands so agents don't re-derive them each session."""
     tp, _, store = _load(root, config=False)
     name, command = add if add else (None, None)
-    if name:
+    if name and command:
         # Two arguments, not 'name=command': the ad-hoc split broke any command
         # containing "=" (`FOO=bar pytest`), which is a normal thing to record.
         ops.record_command(store, name.strip(), command.strip(), note)
