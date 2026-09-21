@@ -4,8 +4,9 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T00:06:45'
-updated: '2026-09-21T00:06:45'
+created: '2026-09-21T17:33:16'
+updated: '2026-09-21T17:33:16'
+rules: []
 ---
 
 # src/torsor_helper/cleaner.py
@@ -21,7 +22,7 @@ Symbols in `src/torsor_helper/cleaner.py`.
 - L58 `_plan_map_orphans(store, out: CleanPlan)` (function)
 - L80 `_dead_rows(store, conn)` (function)
 - L93 `_plan_journal_expiry(store, config, out: CleanPlan)` (function)
-- L112 `plan(store, config, *, deep: bool=False)` (function) — Compute what a clean pass would reclaim. Strictly read-only: this is the
-- L132 `_purge_dead_rows(store, conn)` (function)
-- L144 `apply(store, config, plan: CleanPlan)` (function) — Execute `plan`. Only ever removes derived or expired artefacts — never a
-- L184 `_vacuum(conn, db_path: Path)` (function) — VACUUM the index and report the bytes it actually gave back.
+- L116 `plan(store, config, *, deep: bool=False)` (function) — Compute what a clean pass would reclaim. Strictly read-only: this is the
+- L136 `_purge_dead_rows(store, conn)` (function)
+- L148 `apply(store, config, plan: CleanPlan)` (function) — Execute `plan`. Only ever removes derived or expired artefacts — never a
+- L188 `_vacuum(conn, db_path: Path)` (function) — VACUUM the index and report the bytes it actually gave back.

@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T02:06:04'
-updated: '2026-09-21T02:06:04'
+created: '2026-09-21T17:33:16'
+updated: '2026-09-21T17:33:16'
 rules: []
 ---
 
@@ -13,12 +13,6 @@ rules: []
 
 Modules and their key symbols (ranked by references).
 
-- **cli.py** — 49 symbol(s)
-  - `stats(root: Path=typer.Option(Path('.'), '--root', '-r', envvar='TORSOR_ROOT', help='Project root containing .torsor/.'), as_json: bool=typer.Option(False, '--json', help='Emit the numbers as JSON.'))` (function)
-  - `_load(root: Path, *, config: bool=True)` (function)
-  - `_emit(payload, as_json: bool)` (function)
-  - `_resolve_block_target(root: Path, write: Optional[Path], client: Optional[str])` (function)
-  - `_doctor_report(checks, as_json)` (function)
 - **src/torsor_helper/baseline.py** — 4 symbol(s)
   - `_key(v: Violation)` (function)
   - `load(path: Path)` (function)
@@ -41,6 +35,12 @@ Modules and their key symbols (ranked by references).
   - `_size(path: Path)` (function)
   - `_map_note_name(module: str)` (function)
   - `_live_map_notes(store)` (function)
+- **src/torsor_helper/cli.py** — 54 symbol(s)
+  - `stats(root: Path=typer.Option(Path('.'), '--root', '-r', envvar='TORSOR_ROOT', help='Project root containing .torsor/.'), as_json: bool=typer.Option(False, '--json', help='Emit the numbers as JSON.'))` (function)
+  - `_load(root: Path, *, config: bool=True)` (function)
+  - `_emit(payload, as_json: bool)` (function)
+  - `_human_bytes(n: int)` (function)
+  - `_resolve_block_target(root: Path, write: Optional[Path], client: Optional[str])` (function)
 - **src/torsor_helper/clients.py** — 5 symbol(s)
   - `config_snippet(client: str, root: str)` (function)
   - `write_mcp_json(project_root, server_root: str)` (function)
@@ -67,8 +67,8 @@ Modules and their key symbols (ranked by references).
   - `find_hubs(conn, *, min_fan_in: int=8, sigma: float=2.0)` (function)
   - `find_hub_recs(conn, limit: int=3, *, min_fan_in: int=8)` (function)
 - **src/torsor_helper/coach/mining.py** — 4 symbol(s)
-  - `_all_entries(store: Store)` (function)
   - `parse_journal_entries(body: str)` (function)
+  - `_all_entries(store: Store)` (function)
   - `mine_insights(store: Store)` (function)
   - `find_duplicate_entries(store: Store)` (function)
 - **src/torsor_helper/coach/recommender.py** — 1 symbol(s)
@@ -93,13 +93,13 @@ Modules and their key symbols (ranked by references).
 - **src/torsor_helper/coach/trend.py** — 2 symbol(s)
   - `current_complexity(root: Path)` (function)
   - `find_regressions(root: Path, conn, rel: float=0.25, abs_min: int=5, limit: int=5)` (function)
-- **src/torsor_helper/config.py** — 12 symbol(s)
+- **src/torsor_helper/config.py** — 13 symbol(s)
   - `TorsorConfig` (class)
   - `load_config(paths: TorsorPaths)` (function)
   - `_Strict` (class)
   - `save_config(paths: TorsorPaths, config: TorsorConfig)` (function)
   - `AutomationConfig` (class)
-- **src/torsor_helper/db.py** — 53 symbol(s)
+- **src/torsor_helper/db.py** — 55 symbol(s)
   - `meta_get(conn, key)` (function)
   - `meta_set(conn, key, value)` (function)
   - `_fts_rowid(conn, path)` (function)
@@ -129,16 +129,16 @@ Modules and their key symbols (ranked by references).
   - `fuzzy_score(query: str, text: str)` (function)
   - `_literal_score(query: str, text: str)` (function)
   - `_regex_score(query: str, text: str)` (function)
-- **src/torsor_helper/gitinfo.py** — 10 symbol(s)
+- **src/torsor_helper/gitinfo.py** — 13 symbol(s)
   - `output(root, *args)` (function)
-  - `_zlines(root, *args)` (function)
   - `_run(root, *args)` (function)
+  - `_zlines(root, *args)` (function)
   - `toplevel(root)` (function)
   - `rel_to_root(root, top, files)` (function)
-- **src/torsor_helper/guard.py** — 14 symbol(s)
+- **src/torsor_helper/guard.py** — 18 symbol(s)
   - `violations_for_file(relpath: str, text: str, rule: Rule)` (function)
-  - `_violation(rule: Rule, relpath: str, line: int, default_msg: str)` (function)
   - `scope_matches(relpath: str, scope: str)` (function)
+  - `_violation(rule: Rule, relpath: str, line: int, default_msg: str)` (function)
   - `load_rules(store: Store)` (function)
   - `check_drift(store: Store, files)` (function)
 - **src/torsor_helper/hooks.py** — 19 symbol(s)
@@ -147,11 +147,12 @@ Modules and their key symbols (ranked by references).
   - `_managed_block(inner: str)` (function)
   - `claude_command(root: str)` (function)
   - `claude_start_command(root: str)` (function)
-- **src/torsor_helper/indexer.py** — 4 symbol(s)
+- **src/torsor_helper/indexer.py** — 5 symbol(s)
   - `reindex(store: Store, conn, embedder, *, full: bool=False)` (function)
   - `_embedder_identity(embedder)` (function)
-  - `_is_fallback(stored: str | None, embedder)` (function)
   - `_breadcrumb(note)` (function)
+  - `_is_fallback(stored: str | None, embedder)` (function)
+  - `_backfill_mentions(store: Store, conn, *, skip)` (function)
 - **src/torsor_helper/languages/__init__.py** — 9 symbol(s)
   - `LanguageSpec` (class)
   - `is_available(name: str)` (function)
@@ -160,6 +161,4 @@ Modules and their key symbols (ranked by references).
   - `available()` (function)
 - **src/torsor_helper/languages/go.py** — 9 symbol(s)
   - `_params(node)` (function)
-  - `extract_symbols(source: str, module: str)` (function)
-  - `_owner(node)` (function)
-  - `_walk(node)` (function)…[truncated]
+  - `extract_symbols(source: str, module: str)`…[truncated]

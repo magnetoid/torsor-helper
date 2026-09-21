@@ -106,12 +106,14 @@ Changed your mind? `record_decision(..., supersedes="0003")` marks the old ADR s
 
 ```bash
 torsor map                 # symbol map + real "who calls what" reference edges (skips when unchanged)
-torsor impact format_date  # blast radius: every resolved caller of a symbol, across files
+torsor impact format_date  # blast radius: every caller, AND every decision that mentions it
 torsor export              # portable llms.txt + Mermaid module-dependency diagram
 ```
 
 - `get_intent(topic)` (MCP) combines architecture notes with relevant existing symbols — call it before building a feature.
 - Run `torsor impact <symbol>` **before letting an agent rename/regenerate a function** — one regenerated symbol silently breaking far-off callers is a classic agent failure.
+- `impact` answers both halves of that question. Alongside the callers it lists the decisions, learnings and handoffs that name the symbol in backticks — so the recorded reason a function looks the way it does arrives *with* the list of what breaks, instead of being rediscovered afterwards. The two are independent: a symbol nothing calls can still be the one the team argued about.
+- `torsor recall <query> --symbol <name>` narrows memory to what was written down about one function or class.
 - The map covers Python (stdlib `ast`, always on) plus JavaScript/TypeScript/TSX and Go via the optional `[languages]` extra (official tree-sitter grammar wheels, offline — see ADR 0013, which supersedes ADR 0003); without the extra installed it stays Python-only. Ref counts only count *resolved* references, never comments or strings.
 
 ## Dependency safety
@@ -144,7 +146,7 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `torsor doctor` | Verify the project is healthy |
 | `torsor index [--full]` | Build/refresh the derived search index |
 | `torsor map [--force]` | Generate the symbol map + reference edges |
-| `torsor impact <symbol>` | Who references a symbol, across files |
+| `torsor impact <symbol>` | Who references a symbol across files, and which decisions and learnings mention it |
 | `torsor export` | `llms.txt` + Mermaid module diagram |
 | `torsor rules [--write <file>] [--client <name>]` | Compact rules digest; `--write`/`--client` maintains a managed block in the agent's instructions file |
 | `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs as guard-enforced ADRs |
@@ -177,7 +179,7 @@ recall without an agent attached.
 
 | Command | What it does |
 |---|---|
-| `torsor recall <query> [--limit N] [--type T] [--kind K] [--include-superseded] [--json]` | Hybrid search across memory, wiki and map |
+| `torsor recall <query> [--limit N] [--type T] [--kind K] [--symbol S] [--include-superseded] [--json]` | Hybrid search across memory, wiki and map; `--symbol` keeps only notes that mention that code symbol |
 | `torsor remember <text> [--kind K] [--link slug]` | Persist an observation, decision or learning |
 | `torsor active --focus … [--progress …] [--open-questions …]` | Update the current working state |
 | `torsor handoff <summary> [--decisions …] [--next-steps …]` | End-of-session handoff the next session resumes from |

@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T01:02:54'
-updated: '2026-09-21T01:02:54'
+created: '2026-09-21T17:33:16'
+updated: '2026-09-21T17:33:16'
 rules: []
 ---
 
@@ -36,9 +36,10 @@ Symbols in `src/torsor_helper/paths.py`.
 - L104 `baseline_file(self)` (method)
 - L110 `index_dir(self)` (method)
 - L114 `map_dependencies(self)` (method)
-- L122 `state_dir(self)` (method)
-- L132 `index_db(self)` (method)
-- L136 `claude_settings(self)` (method)
-- L142 `claude_rules_dir(self)` (method)
-- L149 `claude_settings_local(self)` (method)
-- L153 `journal_file(self, date_str: str)` (method)
+- L122 `gitattributes(self)` (method)
+- L128 `state_dir(self)` (method)
+- L138 `index_db(self)` (method)
+- L142 `claude_settings(self)` (method)
+- L148 `claude_rules_dir(self)` (method)
+- L155 `claude_settings_local(self)` (method)
+- L159 `journal_file(self, date_str: str, author: str='')` (method) — `<date>.md`, or `<date>.<author>.md` when journals are partitioned.

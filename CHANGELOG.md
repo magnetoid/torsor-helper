@@ -6,6 +6,30 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🔗 `impact` now tells you what was *decided* about a symbol, not just what calls it
+torsor kept two graphs and never connected them: `[[wikilinks]]` link notes to notes, `symbol_edges` links code
+to code, and nothing linked a decision to the function it was about. So an agent could see every caller of a
+function and none of the recorded reason it looks the way it does — which is the one question this
+architecture is uniquely able to answer.
+
+- **`torsor impact <symbol>` and the `impact` MCP tool** now list the decisions, learnings and handoffs that
+  name the symbol in backticks, alongside the callers. The two halves are independent: a symbol nothing calls
+  can still be the one the team argued about, and that renders correctly.
+- **`get_intent <topic>`** gains what was recorded about that topic — including journal entries, which its
+  list of ADR titles never reached.
+- **`torsor recall <query> --symbol <name>`** (and `symbol=` on the MCP tool) keeps only notes that mention
+  that code symbol.
+
+Mentions are extracted unfiltered and joined at query time, which is the whole design (ADR 0016). Filtering
+them against the symbol table while indexing would have tied the feature to the order the two indexes were
+built in — `reindex` screens on `(mtime, size)`, so a note written before the first `torsor map` would have
+been scanned once, found no symbols, and never been looked at again. Map notes contribute nothing: they are
+rendered *from* the symbol table, so their mentions are that table restated.
+
+Existing indexes are backfilled on the next reindex **without re-embedding** — the mention table carries its
+own format stamp rather than borrowing `INDEX_FORMAT_VERSION`, which would have re-embedded the whole corpus
+to populate a regex result.
+
 ### 🤝 Two branches can now write `.torsor/` at the same time
 Committing `.torsor/` is what makes it *team* memory rather than one developer's cache — and it was also what
 made two branches collide. Both sides append to `memory/journal/<date>.md`, and `auto_map_on_commit` makes

@@ -74,3 +74,10 @@ def recall_hit(hit) -> str:
     """One recall result as it lands in an agent's context. budget.hit_cost bills
     exactly this shape, so the two must change together."""
     return f"### {hit.title} ({hit.tier.name})\n{hit.snippet}"
+
+
+def mention(entry) -> str:
+    """A note that names a symbol, as it reads in impact output. The type is the
+    part that tells you whether to go read it — a decision carries weight a
+    passing journal note does not."""
+    return f"{entry['title']} [{entry['type']}] — {entry['path']}"

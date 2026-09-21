@@ -4,8 +4,9 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T00:06:46'
-updated: '2026-09-21T00:06:46'
+created: '2026-09-21T17:33:16'
+updated: '2026-09-21T17:33:16'
+rules: []
 ---
 
 # src/torsor_helper/render.py
@@ -22,3 +23,4 @@ Symbols in `src/torsor_helper/render.py`.
 - L60 `command(entry, *, quote: bool=False)` (function) — One entry from the learned command book.
 - L67 `recipe(entry)` (function) — One row of the op-frequency log: a lookup worth routing to a cheap model.
 - L73 `recall_hit(hit)` (function) — One recall result as it lands in an agent's context. budget.hit_cost bills
+- L79 `mention(entry)` (function) — A note that names a symbol, as it reads in impact output. The type is the

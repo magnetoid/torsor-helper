@@ -20,6 +20,12 @@ from torsor_helper.models import Frontmatter, Note, Tier
 from torsor_helper.paths import TorsorPaths
 
 _WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
+_FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
+_INLINE_CODE = re.compile(r"`([^`\n]+)`")
+# A bare name or a dotted path, both plausible spellings of a symbol. No
+# leading dash, so `--json` and `-r` never look like code identifiers.
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
+_MAX_MENTIONS = 200
 _FM_BLOCK = re.compile(r"^---[ \t]*\n(.*?)^---[ \t]*\n?(.*)$", re.DOTALL | re.MULTILINE)
 _H1 = re.compile(r"^\s*#\s+(.+?)\s*$", re.MULTILINE)
 
@@ -139,6 +145,39 @@ class Store:
             if target and target not in out:
                 out.append(target)
         return out
+
+    @staticmethod
+    def extract_symbol_mentions(text: str) -> list[str]:
+        """Code identifiers a note names in `backticks`, in order, deduplicated.
+
+        This is the note→symbol half of the graph: `[[wikilinks]]` link notes to
+        notes, and this links a note to the code it is *about*, which is what
+        makes "which decisions mention this symbol" answerable.
+
+        Deliberately dumb and deliberately unfiltered against the symbols table.
+        A token is kept when it reads like an identifier, and whether it names a
+        real symbol is decided at query time by joining — because filtering here
+        would tie the feature to the order the note index and the symbol map
+        happen to be built in, and reindex screens on (mtime, size), so a note
+        written before the first `torsor map` would never be looked at again.
+
+        Fenced blocks are stripped first: a code sample is an illustration, not
+        a claim about a symbol. A dotted `ops.recall` yields both itself and
+        `recall`, since either spelling may be what the symbol table holds."""
+        text = _FENCE.sub("\n", text)
+        out: list[str] = []
+        for m in _INLINE_CODE.finditer(text):
+            token = m.group(1).strip().removesuffix("()")
+            if not _IDENTIFIER.fullmatch(token):
+                continue
+            for candidate in (token, token.rsplit(".", 1)[-1]):
+                if candidate not in out:
+                    out.append(candidate)
+            # One note must not be able to flood the table. A note naming 200
+            # distinct symbols is a generated index, not a decision about code.
+            if len(out) >= _MAX_MENTIONS:
+                break
+        return out[:_MAX_MENTIONS]
 
     @staticmethod
     def content_hash(text: str) -> str:

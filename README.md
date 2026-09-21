@@ -188,7 +188,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 |---|---|---|
 | `torsor map` | Builds a symbol map (functions/classes) **+ real reference edges** ("who calls what") — Python via stdlib `ast`; JavaScript/TypeScript/TSX and Go via the optional `[languages]` extra. | **After big changes** (it auto-skips when nothing changed). Powers everything below. |
 | `get_intent(topic)` | Surfaces the architecture + relevant existing symbols for a topic. | Before building a feature — *"what already exists around payments?"* |
-| `torsor impact <symbol>` | Lists every caller of a symbol, across files — the **blast radius**. | **Before you let the agent change/rename a function** — see what breaks first. |
+| `torsor impact <symbol>` | Every caller of a symbol **and** every decision or learning that mentions it — the **blast radius**, in code and in intent. | **Before you let the agent change/rename a function** — see what breaks, and why it was written that way. |
 | `torsor find <query>` | **Fuzzy, frecency-ranked** search over files **and** mapped symbols (literal/regex too). | *"jump me to the file/function that does X"* — fast navigation without exact names. |
 | `torsor export` | Writes a portable `llms.txt` + a GitHub-rendered **Mermaid** module diagram. | Onboarding a teammate/another tool, or you want an at-a-glance architecture picture. |
 
@@ -333,7 +333,7 @@ Everything below is **derived from your Markdown** and rebuildable. Delete `.tor
 | `torsor doctor` | Verify the project is healthy |
 | `torsor index [--full]` | Build/refresh the derived search index |
 | `torsor map [--force]` | Generate the repository symbol map + reference edges (skips when unchanged; `--force` to re-scan) |
-| `torsor impact <symbol>` | Show the blast radius of a symbol — who references it, across files |
+| `torsor impact <symbol>` | Blast radius of a symbol — who references it across files, and what was decided about it |
 | `torsor find <query> [--mode] [--files-only/--symbols-only]` | Fuzzy + frecency search over files and mapped symbols (fuzzy/literal/regex) |
 | `torsor export` | Write a portable `llms.txt` + a Mermaid module-dependency diagram into the map |
 | `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs (python · javascript · typescript · go · rust · agent) — `--apply` records an ADR the guard enforces |

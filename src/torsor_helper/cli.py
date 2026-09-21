@@ -354,12 +354,13 @@ def recall(
     type_: Optional[str] = typer.Option(None, "--type", help="Only notes of this frontmatter type (e.g. decision)."),
     kind: Optional[str] = typer.Option(None, "--kind", help="Only notes of this kind (e.g. learning)."),
     include_superseded: bool = typer.Option(False, "--include-superseded", help="Include superseded decisions."),
+    symbol: Optional[str] = typer.Option(None, "--symbol", help="Only notes that mention this code symbol in backticks."),
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable hits."),
 ) -> None:
     """Hybrid search across memory, wiki and map — ranked snippets, token-budgeted."""
     _, config, store = _load(root)
     result = ops.recall(store, config, " ".join(query), limit=limit, type_=type_, kind=kind,
-                        include_superseded=include_superseded)
+                        include_superseded=include_superseded, symbol=symbol)
     if _emit({"query": result.query, "total_tokens": result.total_tokens,
               "hits": [h.model_dump(mode="json") for h in result.hits]}, as_json):
         return
@@ -523,17 +524,28 @@ def impact(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     limit: int = typer.Option(0, "--limit", help="Max callers to list (0 = budgets.max_items)."),
 ) -> None:
-    """Show the blast radius of a symbol — who references it, across files (run `torsor map` first)."""
+    """Blast radius of a symbol: the code that references it, and the decisions and
+    learnings that mention it (run `torsor map` first)."""
     paths, config, store = _load(root)
     res = ops.impact(store, config, symbol, limit=limit or None)
-    if res["count"] == 0:
+    if res["count"] == 0 and not res["mentions"]:
         typer.echo(f"No references to {symbol!r} found (is the map current? run `torsor map`).")
         return
-    typer.echo(f"{res['count']} reference(s) to {symbol!r}:")
-    for c in res["callers"]:
-        typer.echo(f"  {render.caller(c)}")
-    if res["truncated"]:
-        typer.echo(f"  … +{res['truncated']} more (--limit to list them)")
+    if res["count"]:
+        typer.echo(f"{res['count']} reference(s) to {symbol!r}:")
+        for c in res["callers"]:
+            typer.echo(f"  {render.caller(c)}")
+        if res["truncated"]:
+            typer.echo(f"  … +{res['truncated']} more (--limit to list them)")
+    if res["mentions"]:
+        if res["count"]:
+            typer.echo("")
+        typer.echo(f"{res['mentions_count']} note(s) mention {symbol!r}:")
+        for m in res["mentions"]:
+            typer.echo(f"  {render.mention(m)}")
+        hidden = res["mentions_count"] - len(res["mentions"])
+        if hidden:
+            typer.echo(f"  … +{hidden} more (--limit to list them)")
 
 
 @app.command()

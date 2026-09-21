@@ -57,10 +57,10 @@ def build_server(root: Path | str) -> FastMCP:
 
     @tool
     def recall(query: str, limit: int = 8, type: str | None = None, kind: str | None = None,
-               include_superseded: bool = False) -> str:
-        """Hybrid search across memory, wiki and map — ranked snippets. Narrow it with type (e.g. "decision") or kind (e.g. "learning") instead of filtering the results yourself; superseded decisions are excluded unless you ask for them."""
+               include_superseded: bool = False, symbol: str | None = None) -> str:
+        """Hybrid search across memory, wiki and map — ranked snippets. Narrow it with type (e.g. "decision") or kind (e.g. "learning"), or with symbol to get only what was recorded about a particular function or class, instead of filtering the results yourself; superseded decisions are excluded unless you ask for them."""
         result = ops.recall(store, config, query, limit=limit, type_=type, kind=kind,
-                            include_superseded=include_superseded)
+                            include_superseded=include_superseded, symbol=symbol)
         if not result.hits:
             return f"No matches for: {query!r}"
         lines = [render.recall_hit(h) for h in result.hits]
@@ -109,15 +109,25 @@ def build_server(root: Path | str) -> FastMCP:
 
     @tool
     def impact(symbol: str, limit: int = config.budgets.max_items) -> str:
-        """Blast radius of a symbol before you change it: which functions/files reference it (run map_repo first). The reported count is the true total; raise limit to list more of them."""
+        """Blast radius of a symbol before you change it: which functions/files reference it, AND which decisions and learnings mention it — so you see the recorded intent before you break it (run map_repo first). The reported counts are the true totals; raise limit to list more."""
         res = ops.impact(store, config, symbol, limit=limit)
-        if res["count"] == 0:
+        if res["count"] == 0 and not res["mentions"]:
             return f"No references to {symbol!r} found (run map_repo to refresh the symbol graph)."
-        lines = [f"- {render.caller(c)}" for c in res["callers"]]
-        out = f"{res['count']} reference(s) to {symbol!r}:\n" + "\n".join(lines)
-        if res["truncated"]:
-            out += f"\n… +{res['truncated']} more (raise limit to list them)"
-        return out
+        blocks = []
+        if res["count"]:
+            lines = [f"- {render.caller(c)}" for c in res["callers"]]
+            block = f"{res['count']} reference(s) to {symbol!r}:\n" + "\n".join(lines)
+            if res["truncated"]:
+                block += f"\n… +{res['truncated']} more (raise limit to list them)"
+            blocks.append(block)
+        if res["mentions"]:
+            lines = [f"- {render.mention(m)}" for m in res["mentions"]]
+            block = f"{res['mentions_count']} note(s) mention {symbol!r}:\n" + "\n".join(lines)
+            hidden = res["mentions_count"] - len(res["mentions"])
+            if hidden:
+                block += f"\n… +{hidden} more (raise limit to list them)"
+            blocks.append(block)
+        return "\n\n".join(blocks)
 
     @tool
     def connect(source: str, target: str, max_hops: int = config.index.connect_max_hops) -> str:
