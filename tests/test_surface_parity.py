@@ -27,9 +27,31 @@ def tools(tmp_path):
 
 
 def _cli_options(command: str) -> set[str]:
-    out = runner.invoke(app, [command, "--help"]).output
-    return {tok.lstrip("-").replace("-", "_")
-            for tok in out.split() if tok.startswith("--") and len(tok) > 2}
+    """Option names read off the registered command, not scraped out of rendered
+    `--help` text.
+
+    Parsing the help output made this test depend on how Rich decided to draw a
+    box on whatever terminal it found. It passed on every local combination of
+    Python version and extras — 3.11, 3.12 and 3.13, with and without `--exact`
+    — and came back *empty* on the CI runner, which reads as "this command has
+    no options at all" and fails for a reason that has nothing to do with the
+    two surfaces being out of parity. The registry is what the parity claim is
+    actually about, so read that.
+    """
+    import inspect
+
+    from typer.models import OptionInfo
+
+    info = next(c for c in app.registered_commands
+                if (c.name or c.callback.__name__) == command)
+    return {name for name, param in inspect.signature(info.callback).parameters.items()
+            if isinstance(param.default, OptionInfo)}
+
+
+def test_the_option_reader_can_actually_see_options():
+    """A helper that silently returns nothing makes every parity assertion below
+    pass or fail for the wrong reason — which is exactly what happened."""
+    assert "root" in _cli_options("guard")
 
 
 @pytest.mark.parametrize("tool, cli, shared", [
