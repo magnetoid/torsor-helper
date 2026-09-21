@@ -246,15 +246,20 @@ def build_server(root: Path | str) -> FastMCP:
     @tool
     def check_dependencies(files: list[str] | None = None, as_json: bool = False) -> str:
         """Flag imports that resolve to no known package — possible hallucinated dependencies (slopsquatting). Offline; defaults to git-changed files."""
-        findings = ops.check_dependencies(store, config, files)
+        targets = ops.dependency_targets(store, files)
+        findings = ops.check_dependencies(store, config, targets) if targets else []
         if as_json:
             # A gate could not tell "clean" from "three phantom imports" without
-            # parsing English.
+            # parsing English — nor, until `checked`, from "looked at nothing".
             import json
 
-            return json.dumps({"ok": not findings, "count": len(findings), "findings": findings})
+            return json.dumps({"ok": not findings, "count": len(findings), "checked": len(targets),
+                               "findings": findings})
+        if not targets:
+            return ("No files to check (the default is git-changed files, and there are none) — "
+                    "pass `files` to check specific paths.")
         if not findings:
-            return "No unknown imports — every import resolves to a known package."
+            return f"No unknown imports in {len(targets)} file(s) — every import resolves to a known package."
         kept, tail = cap_items(findings, config.budgets.max_items)
         lines = [f"- {render.unknown_import(f)}" for f in kept]
         return (f"{len(findings)} possible hallucinated dependenc(y/ies); verify before installing:\n"

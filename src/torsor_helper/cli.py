@@ -736,9 +736,16 @@ def deps(
 ) -> None:
     """Flag imports that resolve to no known package — possible hallucinated dependencies (slopsquatting). Offline."""
     tp, config, store = _load(root)
-    findings = ops.check_dependencies(store, config, files or None)
+    targets = ops.dependency_targets(store, files or None)
+    if not targets:
+        # The guard's bug, in the other gate: on a clean tree the default list is
+        # empty, and a pass message after checking nothing hid 1 966 findings.
+        typer.echo("No files to check (the default is git-changed files; "
+                       "pass paths, or `torsor deps $(git ls-files '*.py' '*.ts' '*.tsx' '*.js' '*.go')`).")
+        return
+    findings = ops.check_dependencies(store, config, targets)
     if not findings:
-        typer.echo("No unknown imports — every import resolves to a known package.")
+        typer.echo(f"No unknown imports in {len(targets)} file(s) — every import resolves to a known package.")
         return
     for f in findings:
         typer.echo(f"{render.unknown_import(f)} (possible hallucinated dependency)")

@@ -6,6 +6,38 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🔍 The dependency check stopped crying wolf on real projects
+Run on a real JS/TS + Python monorepo instead of on itself, the Coach's phantom-dependency check reported
+**1 966 possible hallucinated dependencies** — `react`, `vitest`, `@/lib`, `@janus/ink`, `discord`, `_common` —
+on a project whose every import works. ADR 0006 promises the opposite trade. It is now 83, each one a real
+import of a package the importing code does not declare, and the check runs in 8 s instead of ~21 s.
+
+- **Resolution by ancestry.** Only the root `package.json`, root `node_modules` and root `go.mod` were read,
+  so every dependency a nested app declares was unknown. A file now sees the manifests of every directory
+  between it and the root — Node's own resolution model — plus every workspace package in the repo.
+  Precision is kept: `react` declared by one app is still flagged in a tool beside it.
+- **tsconfig path aliases**, parsed as the JSONC they actually are (comments, trailing commas, and a
+  `"$schema": "https://…"` that a naive `//` stripper cuts in half). `@/x` is recognised with no config at
+  all — npm scopes cannot be empty. A `"*"` catch-all or bare `baseUrl` is resolved against the filesystem
+  rather than treated as a wildcard that would switch the check off. `@types/hast` makes `hast` importable.
+- **Python scripts may import the module beside them.** `from _common import x` with `scripts/_common.py`
+  right there is first-party by Python's own sys.path rule. Nested `requirements.txt` files govern their
+  subtree, and distributions declared under another name are recognised (`discord.py`, `firecrawl-py`,
+  `python-telegram-bot`, `PyNaCl`).
+- **An import inside `try/except ImportError` is optional by the code's own declaration** and is not
+  flagged. That was 57 of the 119 remaining Python findings.
+- **`torsor deps` and the `check_dependencies` tool say when they checked nothing.** The default is
+  git-changed files, so on a clean checkout it checked zero files and printed "every import resolves to a
+  known package" — which is how the 1 966 stayed hidden. It is the same bug `guard` had, fixed there in 0.8.0
+  and not here. `--json` gained `checked`.
+- A project's own invalid escape sequences no longer print `SyntaxWarning` lines, with no filename, to your
+  stderr while torsor parses it.
+
+Re-measuring on the real project also caught a regression the unit suite could not: detecting the
+`try/except` guards with a second full AST walk took the check from 18 s to **280 s**. It is now a single
+pass over statements only — an import cannot appear inside an expression, and expressions are most of any
+AST — and a regex prefilter skips parsing any file whose imports all name something known.
+
 ## [0.8.0] — Team Memory (2026-09-21)
 
 Everything below shipped as one eight-phase pass over the whole codebase: safety, structural seams, a
