@@ -48,8 +48,39 @@ def check_unruled(store: Store) -> list[Recommendation]:
     return []
 
 
-def check_uncharted(store: Store, modules_in_map: set[str]) -> list[Recommendation]:
-    source = {p.relative_to(store.paths.root).as_posix() for p in cartographer.iter_source_files(store.paths.root)}
+def check_uncharted(store: Store, modules_in_map: set[str], *, map_current: bool | None = None,
+                    mapped_at_ns: int | None = None) -> list[Recommendation]:
+    """Source the map has not seen.
+
+    "Source files minus modules that have symbols" was the whole check, and it
+    confused NOT SCANNED with SCANNED, DEFINES NOTHING. On a real 3 200-file
+    project that was 265 files right after a full `torsor map` — empty and
+    re-export __init__.py, __main__.py, a main.tsx entry point, a vite.config.ts
+    that only does `export default` — so it said "run `torsor map`" forever and
+    running it changed nothing: the kind of false alarm that teaches people to
+    stop reading the Coach (ADR 0010).
+
+    So when the map can speak for itself, ask it: the fingerprint says whether
+    anything changed since the last full map, and `mapped_at_ns` says what
+    changed since the last map of any kind. Set difference is only the answer
+    when there has never been a map at all."""
+    if map_current:
+        return []
+    root = store.paths.root
+    if mapped_at_ns is not None:
+        changed = sorted(
+            p.relative_to(root).as_posix() for p in cartographer.iter_source_files(root)
+            if _mtime_ns(p) > mapped_at_ns
+        )
+        if not changed:
+            return []
+        return [Recommendation(
+            kind="uncharted", severity="suggest",
+            message=(f"The map is out of date — {len(changed)} source file(s) changed since the last "
+                     f"`torsor map` (e.g. {changed[0]})."),
+            action="torsor map", source=changed[0], key="uncharted",
+        )]
+    source = {p.relative_to(root).as_posix() for p in cartographer.iter_source_files(root)}
     missing = sorted(source - modules_in_map)
     if not missing:
         return []
@@ -58,6 +89,13 @@ def check_uncharted(store: Store, modules_in_map: set[str]) -> list[Recommendati
         message=f"{len(missing)} source module(s) not in the map (e.g. {missing[0]}) — run `torsor map`.",
         action="torsor map", source=missing[0], key="uncharted",
     )]
+
+
+def _mtime_ns(path) -> int:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return 0
 
 
 _UNCHARTED_LANGUAGE_MIN_FILES = 5
@@ -86,11 +124,12 @@ def check_uncharted_language(store: Store) -> list[Recommendation]:
     return out
 
 
-def run_health(store: Store, modules_in_map: set[str]) -> list[Recommendation]:
+def run_health(store: Store, modules_in_map: set[str], *, map_current: bool | None = None,
+               mapped_at_ns: int | None = None) -> list[Recommendation]:
     return [
         *check_thin(store),
         *check_stale(store),
         *check_unruled(store),
-        *check_uncharted(store, modules_in_map),
+        *check_uncharted(store, modules_in_map, map_current=map_current, mapped_at_ns=mapped_at_ns),
         *check_uncharted_language(store),
     ]

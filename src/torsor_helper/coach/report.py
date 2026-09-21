@@ -36,8 +36,16 @@ def _phantom_dep_recs(store: Store) -> list[Recommendation]:
 
 def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embedder=None) -> list[Recommendation]:
     modules_in_map: set[str] = set(db.modules(conn)) if conn is not None else set()
+    map_current: bool | None = None
+    mapped_at_ns: int | None = None
+    if conn is not None:
+        stamp = db.meta_get(conn, "map_fingerprint")
+        map_current = bool(stamp) and stamp == cartographer.repo_fingerprint(store.paths.root)
+        raw = db.meta_get(conn, "mapped_at_ns")
+        mapped_at_ns = int(raw) if raw and raw.isdigit() else None
 
-    recs: list[Recommendation] = health.run_health(store, modules_in_map)
+    recs: list[Recommendation] = health.run_health(
+        store, modules_in_map, map_current=map_current, mapped_at_ns=mapped_at_ns)
     # Only dangling wikilinks surface passively (deletion is unambiguous). Dead
     # path refs (check_path_refs) can still catch an example path, so they live
     # only in the explicit `torsor stale` command, not the always-on Coach.

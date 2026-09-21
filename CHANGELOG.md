@@ -6,6 +6,27 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### ⏱ `torsor coach` on a real project, and a recommendation that could never be satisfied
+On a 3 200-file project the Coach took ~53 s — and `recommend` is an MCP tool, so in most clients that is a
+timeout. Two checks were ~41 s of it, and both computed far more than they reported.
+
+- **Hotspots parse only the files that could still make the top three.** Complexity was computed for every
+  file git had touched in the window — 3 200 parses — to report three. Complexity is newlines plus branch
+  nodes, and every branch node needs at least one branch *token*, so counting those tokens is an upper bound
+  without parsing; candidates are visited by churn × bound and the walk stops once no remaining bound can
+  reach the third-best real score. The result is exact, not approximate — a test compares it with the
+  unpruned version — and the bound was verified against all 3 216 files of the real project (median 1.05×
+  the real value, never below it). 18.1 s → 5.4 s.
+- **`_churn` asked for the source-extension list once per line of `git log` output**, and each call
+  re-checked that every language's modules import. Now once.
+- **"265 source modules not in the map", immediately after `torsor map`.** Every one had been scanned; they
+  just define no symbols — empty and re-export `__init__.py`, `__main__.py`, a `main.tsx` entry point, a
+  `vite.config.ts` that only does `export default`. The check subtracted "modules with symbols" from "source
+  files", so on any real repo it said "run `torsor map`" forever and running it changed nothing. It now asks
+  the map: the fingerprint says whether anything changed since the last full map, and a new `mapped_at_ns`
+  stamp says what changed since the last map of any kind — which matters because the post-commit hook runs a
+  *partial* map that clears the fingerprint on purpose.
+
 ### 🔍 The dependency check stopped crying wolf on real projects
 Run on a real JS/TS + Python monorepo instead of on itself, the Coach's phantom-dependency check reported
 **1 966 possible hallucinated dependencies** — `react`, `vitest`, `@/lib`, `@janus/ink`, `discord`, `_common` —

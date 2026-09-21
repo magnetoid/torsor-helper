@@ -7,6 +7,7 @@ key, so a consumer compares it against `norm_path(sym.module)` and never
 re-normalizes it."""
 from __future__ import annotations
 
+import time
 from collections import deque
 from pathlib import Path
 
@@ -47,6 +48,9 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
                 "languages": _language_counts(db.modules(conn), store.paths.root),
             }
 
+        # Before the scan, not after: a file saved while the scan runs must still
+        # count as changed since this map.
+        scan_started_ns = time.time_ns()
         symbols, edges = cartographer.scan_repo_with_edges(store.paths.root, paths)
         if not full_scan:
             # Merge the rescanned modules into the existing graph rather than
@@ -82,6 +86,10 @@ def map_repo(store: Store, config: TorsorConfig, paths: list[str] | None = None,
 
         db.replace_all_symbols(conn, symbols)
         db.replace_all_edges(conn, edges)
+        # Full or partial: either way every file older than this was scanned.
+        # The fingerprint alone cannot say that — a partial map clears it on
+        # purpose, and the post-commit hook runs one on every commit.
+        db.meta_set(conn, "mapped_at_ns", str(scan_started_ns))
         reindex(store, conn, _embedder_for(config))
         if full_scan:
             db.meta_set(conn, "map_fingerprint", fingerprint)
