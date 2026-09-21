@@ -1,3 +1,9 @@
+> **Status: Executed (v0.1).**
+>
+> **The unticked checkboxes below mean nothing.** No plan in this directory ever had its
+> boxes ticked, including phases that shipped a year ago, so they all read as "not started".
+> The `Status:` line above is the truth; git history is the detail.
+
 # torsor-helper Phase 2 (Index) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
