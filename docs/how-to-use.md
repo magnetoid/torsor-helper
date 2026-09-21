@@ -167,6 +167,8 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `torsor hooks uninstall` | Remove only torsor's entries, from both settings files |
 | `torsor hooks status` | Which git hooks and Claude Code events carry a torsor entry |
 | `torsor hooks run <event>` | What an installed hook calls; you rarely type this |
+| `torsor merge install` | Set `.torsor/` up for concurrent branches: writes `.gitattributes` (commit it) and registers the map merge driver in this clone |
+| `torsor merge status [--json]` | Whether both halves are in place here — the committed one and the one only your clone can have |
 
 ### Memory, from the shell
 
@@ -229,7 +231,37 @@ agent remembering which tool to call in which order.
 torsor mcp --http --port 8000              # serves http://127.0.0.1:8000/mcp
 ```
 
-stdio is the default and right for a single local agent. **The HTTP transport has no authentication** — binding a non-loopback host (`--host 0.0.0.0`) is refused unless you also pass `--allow-remote`, because it exposes read/write project memory to anyone who can reach the port. For team use, keep it behind a reverse proxy with auth or an SSH tunnel. Sharing memory via git (commit `.torsor/`) is the simplest team setup.
+stdio is the default and right for a single local agent. **The HTTP transport has no authentication** — binding a non-loopback host (`--host 0.0.0.0`) is refused unless you also pass `--allow-remote`, because it exposes read/write project memory to anyone who can reach the port. For team use, keep it behind a reverse proxy with auth or an SSH tunnel.
+
+### Sharing memory through git
+
+Committing `.torsor/` is the simplest team setup, and the thing that makes it
+sustainable is that concurrent branches stop conflicting:
+
+```bash
+torsor merge install    # once per clone — and it means once per person
+git add .torsor/.gitattributes && git commit -m "torsor: merge rules"
+```
+
+Two halves, because git only lets you distribute one of them:
+
+- **`.torsor/.gitattributes` is committed**, so every clone gets it. It gives
+  `memory/journal/*.md` a `union` merge, which keeps both sides' entries. This
+  half needs no setup at all — it is the common conflict, and it is solved for
+  everyone the moment the file is committed.
+- **The `map/**` driver lives in `.git/config`**, which cannot be committed, so
+  each person runs `torsor merge install` once. Map notes are derived, so the
+  driver keeps yours and queues the note for regeneration; the next
+  `torsor map --force` (or the post-commit hook) rebuilds it from source.
+
+Git does **not** warn when the attributes file names a driver your clone has
+not registered — it quietly falls back to the ordinary text merge, which looks
+identical to having configured nothing. `torsor merge status` and `torsor
+doctor` both say so explicitly, which is the only way to find out.
+
+On a larger team, `memory.journal_partition = "date-author"` in `torsor.toml`
+gives each git identity its own journal file, so concurrent work never touches
+the same path in the first place.
 
 ## FAQ
 
@@ -237,4 +269,5 @@ stdio is the default and right for a single local agent. **The HTTP transport ha
 - **The index broke / looks stale.** `torsor clean --apply --deep --yes`, then `torsor index`. The index is derived and disposable, always.
 - **Can I edit the Markdown by hand?** Yes — that's the point. Obsidian works too (`[[wikilinks]]` are first-class). Malformed frontmatter degrades gracefully; it never breaks recall.
 - **How do I stop one noisy recommendation?** `torsor coach --dismiss <key>` (the key is printed with each recommendation).
-- **What goes in git?** `.torsor/` yes, `.torsor/.index/` no (scaffolded `.gitignore` handles it).
+- **What goes in git?** `.torsor/` yes, `.torsor/.index/` and `.torsor/state/` no (the scaffolded `.gitignore` handles it). `.torsor/.gitattributes` **is** committed — it is how a clone learns the merge rules.
+- **Two branches both wrote memory and git conflicted.** Run `torsor merge install` (see Team mode). Journals then union-merge and map notes regenerate.

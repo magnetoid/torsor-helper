@@ -37,7 +37,7 @@ def build_server(root: Path | str) -> FastMCP:
             config = load_config(paths)
         except Exception as exc:  # noqa: BLE001 - surfaced to the caller verbatim
             return f"{paths.config_file} could not be loaded: {exc}"
-        store = Store(paths)
+        store = Store(paths, journal_partition=config.memory.journal_partition)
         return None
 
     def tool(fn):

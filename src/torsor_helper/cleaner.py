@@ -101,7 +101,11 @@ def _plan_journal_expiry(store, config, out: CleanPlan) -> None:
     expired = []
     for path in sorted(store.paths.journal_dir.glob("*.md")):
         try:
-            stamp = date.fromisoformat(path.stem)
+            # Only the leading token: a partitioned journal is
+            # `<date>.<author>.md` (memory.journal_partition), and parsing the
+            # whole stem raised ValueError on every one of them — which reads
+            # as "not a journal" and switched retention off in silence.
+            stamp = date.fromisoformat(path.stem.split(".")[0])
         except ValueError:
             continue  # not a dated journal file — never ours to expire
         if stamp < cutoff:

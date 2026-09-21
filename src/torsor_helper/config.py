@@ -127,6 +127,16 @@ class CoachConfig(_Strict):
     history_days: int = 365
 
 
+class MemoryConfig(_Strict):
+    # How journal files are named. "date" is one file per day, which two
+    # branches both append to — fine, because `.torsor/.gitattributes` gives
+    # journals a union merge. "date-author" gives each git identity its own
+    # file, so concurrent work never touches the same path at all; use it when
+    # the team is large enough that union merges get noisy. Changing it does
+    # not rewrite existing journals — both shapes are read.
+    journal_partition: Literal["date", "date-author"] = "date"
+
+
 class CleanConfig(_Strict):
     # `torsor clean` retention. Journals are the only episodic tier that grows
     # unboundedly (one file per active day) and the only category clean can
@@ -144,6 +154,7 @@ class TorsorConfig(_Strict):
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     automation: AutomationConfig = Field(default_factory=AutomationConfig)
     coach: CoachConfig = Field(default_factory=CoachConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     clean: CleanConfig = Field(default_factory=CleanConfig)
 
 

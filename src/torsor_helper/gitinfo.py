@@ -101,3 +101,33 @@ def commit_source_files(root, ref: str = "HEAD") -> list[str]:
         return []
     names = _zlines(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", ref)
     return rel_to_root(root, top, names)
+
+
+def config_get(root, key: str) -> str:
+    """A git config value, or "" when unset — indistinguishable on purpose, since
+    every caller treats "unset" and "not a repo" the same way."""
+    return output(root, "config", "--get", key)
+
+
+def config_set(root, key: str, value: str) -> bool:
+    """Write to this clone's local config. Local, never --global: a merge driver
+    is a property of one checkout, and writing it globally would silently apply
+    to every repo on the machine."""
+    r = _run(root, "config", "--local", key, value)
+    return r is not None and r.returncode == 0
+
+
+def author_slug(root) -> str:
+    """A filename-safe identity for this checkout, from git's configured author.
+
+    Used to partition journals per author so two people never append to the same
+    file. Empty when git has no identity — which is not an error, it just means
+    there is no partition to apply."""
+    ident = config_get(root, "user.email") or config_get(root, "user.name")
+    local = ident.split("@")[0].strip().lower()
+    # ASCII only: str.isalnum() is true for "ć" and every other letter, and a
+    # journal filename travels through git, zip archives and Windows.
+    slug = "".join(ch if ch.isascii() and ch.isalnum() else "-" for ch in local).strip("-")
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug

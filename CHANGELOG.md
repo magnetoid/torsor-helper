@@ -6,6 +6,32 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🤝 Two branches can now write `.torsor/` at the same time
+Committing `.torsor/` is what makes it *team* memory rather than one developer's cache — and it was also what
+made two branches collide. Both sides append to `memory/journal/<date>.md`, and `auto_map_on_commit` makes
+every commit regenerate notes under `map/`, so any two branches that touched code conflicted across dozens of
+derived files. Neither conflict deserved a human.
+
+- **`torsor init` writes `.torsor/.gitattributes`** (committed; a managed block that leaves your own lines
+  alone). Journals get git's built-in `union` merge, which keeps both sides' entries — this half needs no
+  setup at all and covers the common case for everyone the moment the file is committed.
+- **Journal headers no longer carry the wall clock.** A journal is stamped with its own date, so two branches
+  that both start the day's file write a byte-identical header. Without that, the union merge unioned the
+  frontmatter too and left a duplicate `created:`/`updated:` pair inside the `---` block on every merge. The
+  date is also the truer value: the stamp was never refreshed on append, so it only ever meant "this day".
+- **`torsor merge install`** registers a `torsor-map` merge driver in this clone. Map notes are derived, so
+  the driver keeps yours and queues the note; the next `torsor map --force` rebuilds it from source.
+- **`torsor merge status` and `torsor doctor` report the half that can go missing.** Git does *not* warn when
+  a committed attributes file names a driver your clone never registered — it silently falls back to the
+  ordinary text merge, which looks exactly like having configured nothing.
+- **New `memory.journal_partition = "date-author"`** gives each git identity its own journal file, for teams
+  where union merges get noisy. The date stays the leading token in the filename, because `clean` reads the
+  retention date out of the stem — and parsing the whole stem would have switched journal expiry off in
+  silence.
+
+See ADR 0015. Registering a driver writes to `.git/config`, so it is CLI-only, the same rule as the hook
+installers (ADR 0009) — and machine-checked the same way.
+
 - **`torsor coach` no longer reads the whole git history, twice.** Churn and temporal coupling each walked
   every commit ever made, so the Coach got slower every year regardless of how much code there was — and a
   file that was hot three years ago is not the signal either check looks for. New `coach.history_days`

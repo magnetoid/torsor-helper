@@ -23,10 +23,35 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 HOW_TO_USE = (ROOT / "docs" / "how-to-use.md").read_text(encoding="utf-8")
 
 
+def _sub_apps(tree) -> dict[str, str]:
+    """{typer variable name: the word a user types}, read off add_typer calls —
+    so a new sub-app is prefixed correctly without editing this test. Hardcoding
+    "hooks " here meant `torsor merge status` was checked as bare "status",
+    which the README happened to contain, and the check passed for nothing."""
+    out: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "add_typer"
+            and node.args
+            and isinstance(node.args[0], ast.Name)
+        ):
+            name = next((k.value.value for k in node.keywords if k.arg == "name"), None)
+            if name:
+                out[node.args[0].id] = name
+    return out
+
+
 def _cli_commands() -> set[str]:
     """Every invocable command, spelled the way a user types it — so the hooks
-    sub-app contributes "hooks install", not "install"."""
+    sub-app contributes "hooks install", not "install".
+
+    Hidden commands are excluded: `merge driver` is a git merge driver, invoked
+    by git with git's own arguments, and documenting it as something to type
+    would be wrong rather than merely redundant."""
     tree = ast.parse((ROOT / "src" / "torsor_helper" / "cli.py").read_text(encoding="utf-8"))
+    sub_apps = _sub_apps(tree)
     names = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef):
@@ -35,9 +60,12 @@ def _cli_commands() -> set[str]:
             text = ast.unparse(dec)
             if ".command" not in text:
                 continue
+            if any(k.arg == "hidden" and k.value.value for k in getattr(dec, "keywords", [])):
+                continue
             explicit = [a for a in getattr(dec, "args", []) if isinstance(a, ast.Constant)]
             name = explicit[0].value if explicit else node.name
-            prefix = "hooks " if text.startswith("hooks_app") else ""
+            owner = text.split(".command")[0]
+            prefix = f"{sub_apps[owner]} " if owner in sub_apps else ""
             names.add(prefix + name)
     return names
 

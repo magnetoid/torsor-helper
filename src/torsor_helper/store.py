@@ -72,9 +72,16 @@ class Store:
         self,
         paths: TorsorPaths,
         clock: Callable[[], datetime] = datetime.now,
+        journal_partition: str = "date",
     ) -> None:
         self.paths = paths
         self.clock = clock
+        # One layout knob, passed in like the clock rather than read from
+        # torsor.toml in here, because Store has to stay usable on a project
+        # whose config is malformed — that is the whole reason `remember` and
+        # `handoff` load without it.
+        self.journal_partition = journal_partition
+        self._author: str | None = None
 
     # ---- static parsing helpers ----
     @staticmethod
@@ -179,6 +186,13 @@ class Store:
         if force or not gitignore.exists():
             gitignore.write_text("".join(f"{line}\n" for line in _IGNORED), encoding="utf-8")
 
+        # Committed, unlike everything .gitignore covers: it is how a clone
+        # learns that journals union-merge. The custom map driver it names still
+        # needs a per-clone `torsor merge install` — see merge.py.
+        from torsor_helper.merge import write_attributes
+
+        write_attributes(self.paths)
+
     def write_note(
         self, path: Path, frontmatter: Frontmatter, title: str, body: str
     ) -> Note:
@@ -242,9 +256,21 @@ class Store:
                 continue
             yield note
 
+    def journal_author(self) -> str:
+        """The author slug this Store partitions journals by, cached per Store
+        because it shells out to git. Empty unless partitioning is on."""
+        if self.journal_partition != "date-author":
+            return ""
+        if self._author is None:
+            from torsor_helper import gitinfo
+
+            self._author = gitinfo.author_slug(self.paths.root)
+        return self._author
+
     def append_journal(self, content: str, kind: str, links: list[str]) -> Path:
         now = self.clock()
-        path = self.paths.journal_file(now.strftime("%Y-%m-%d"))
+        day = now.strftime("%Y-%m-%d")
+        path = self.paths.journal_file(day, self.journal_author())
         path.parent.mkdir(parents=True, exist_ok=True)
         link_text = " ".join(f"[[{link}]]" for link in links)
         entry = (
@@ -254,9 +280,17 @@ class Store:
         if link_text:
             entry += f"\nLinks: {link_text}\n"
         if not path.exists():
+            # Stamped with the journal's own date, NOT the wall clock: two
+            # branches that both start the day's journal must write a
+            # byte-identical header, or the union merge that keeps both sides'
+            # entries unions the frontmatter too and leaves a duplicate
+            # created:/updated: pair inside the `---` block, one per merge.
+            # The date is also the truer answer — the stamp was never refreshed
+            # on append, so it only ever meant "this day".
+            stamp = f"{day}T00:00:00"
             header = self.serialize(
-                Frontmatter(type="journal", tags=["journal"]),
-                f"Journal {now.strftime('%Y-%m-%d')}",
+                Frontmatter(type="journal", tags=["journal"], created=stamp, updated=stamp),
+                f"Journal {day}",
                 "",
             )
             path.write_text(header, encoding="utf-8")
