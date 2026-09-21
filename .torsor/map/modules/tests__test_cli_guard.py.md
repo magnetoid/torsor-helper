@@ -4,8 +4,9 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-20T21:54:01'
-updated: '2026-09-20T21:54:01'
+created: '2026-09-21T17:33:16'
+updated: '2026-09-21T17:33:16'
+rules: []
 ---
 
 # tests/test_cli_guard.py
@@ -24,3 +25,5 @@ Symbols in `tests/test_cli_guard.py`.
 - L89 `test_guard_baseline_grandfathers_then_fails_on_new(tmp_path)` (function)
 - L106 `test_guard_json_is_emitted_even_when_baselining(tmp_path)` (function)
 - L122 `test_guard_json_marks_which_violations_are_new(tmp_path)` (function)
+- L134 `test_guard_says_when_it_checked_nothing(tmp_path)` (function) — On a clean tree the default file list is empty, so the guard checked no
+- L146 `test_guard_with_files_still_reports_a_real_pass(tmp_path)` (function)

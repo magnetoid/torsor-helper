@@ -4,6 +4,7 @@ import warnings
 from pathlib import Path
 
 from torsor_helper import db
+from torsor_helper.models import Tier
 from torsor_helper.store import Store
 
 
@@ -14,6 +15,13 @@ from torsor_helper.store import Store
 # stored vector is still valid. Tying the two meant a pure-DDL change re-embedded
 # the whole corpus.
 INDEX_FORMAT_VERSION = 2
+
+# The note -> symbol mention table (db.note_symbols) separately, because it is
+# derived from a note's body WITHOUT touching the breadcrumb, the FTS title or
+# the embedding input. Bumping INDEX_FORMAT_VERSION would have worked and would
+# have re-embedded the whole corpus to populate a regex result; this backfills
+# it by reading each note once. Bump when the extraction rule changes.
+MENTIONS_FORMAT_VERSION = 1
 
 
 def _is_fallback(stored: str | None, embedder) -> bool:
@@ -36,6 +44,23 @@ def _breadcrumb(note) -> str:
     """
     segments = [s for s in Path(note.path).as_posix().split("/") if s][-3:]
     return " ".join([note.tier.name.lower(), *segments, note.title])
+
+
+def _backfill_mentions(store: Store, conn, *, skip) -> None:
+    """Fill db.note_symbols for notes this run did not re-read. Reads and parses
+    each one; deliberately does not embed, which is the whole point of keeping
+    this stamp separate from INDEX_FORMAT_VERSION."""
+    done = set(skip)
+    for md in store.iter_note_paths():
+        path = md.as_posix()
+        if path in done:
+            continue
+        try:
+            note = store.read_note(md)
+        except (OSError, UnicodeDecodeError):
+            continue
+        mentions = [] if note.tier is Tier.MAP else store.extract_symbol_mentions(note.body)
+        db.replace_note_symbols(conn, path, mentions)
 
 
 def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
@@ -111,6 +136,12 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
         if slug_index is None:  # built lazily: an unchanged corpus never needs it
             slug_index = db.SlugIndex(conn)
         db.replace_edges(conn, path, store.extract_wikilinks(note.body), slug_index)
+        # Map notes are excluded: they are rendered *from* the symbol table, so
+        # their mentions are that table restated — the single largest source of
+        # rows and the one that carries no information. What the feature is for
+        # is authored memory: decisions, learnings, handoffs.
+        mentions = [] if note.tier is Tier.MAP else store.extract_symbol_mentions(note.body)
+        db.replace_note_symbols(conn, path, mentions)
         pending.append((path, f"{breadcrumb}\n{note.body}"))  # breadcrumb also situates the embedding
 
     if pending and embedder_matches:
@@ -137,6 +168,14 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
     # pure cost on every recall, and recall reindexes before it searches.
     if pending or deleted:
         db.reresolve_edges(conn)
+
+    # Notes the stat pre-screen skipped never reached the loop above, so on an
+    # index built before mentions existed the table would stay empty forever —
+    # the feature would simply return nothing, with no way to tell that from
+    # "nothing was recorded about this symbol".
+    if db.meta_get(conn, "mentions_format") != str(MENTIONS_FORMAT_VERSION):
+        _backfill_mentions(store, conn, skip=[path for path, _ in pending])
+        db.meta_set(conn, "mentions_format", str(MENTIONS_FORMAT_VERSION))
 
     if embedder_matches:
         db.meta_set(conn, "embedder", identity)

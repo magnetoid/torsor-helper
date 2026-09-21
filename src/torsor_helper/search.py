@@ -66,14 +66,19 @@ def _mmr_order(hits, vec_by_path, lam: float):
     return selected
 
 
-def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, type_=None, kind=None, include_superseded=False) -> RecallResult:
+def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, type_=None,
+                  kind=None, include_superseded=False, symbol=None) -> RecallResult:
     terms = [t for t in _WORD.findall(query.lower()) if t]
     if not terms:
         return RecallResult(query=query, hits=[], total_tokens=0)
 
     k = config.index.rrf_k
     pool = max(limit * 4, 20)
-    if type_ is not None or kind is not None:
+    # Notes naming this symbol in backticks (store.extract_symbol_mentions).
+    # An empty set is a real answer — nothing recorded about it — so it must be
+    # distinguishable from "no filter asked for".
+    mentioning = set(db.notes_mentioning(conn, symbol)) if symbol else None
+    if type_ is not None or kind is not None or symbol is not None:
         # Filters are applied after RRF fusion; with a selective filter, matches
         # ranked below the unfiltered top pool would be unreachable (empty result
         # despite good matches). Widen the candidate pool to the whole corpus.
@@ -124,6 +129,8 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
         if type_ is not None and row["type"] != type_:
             continue
         if kind is not None and row["kind"] != kind:
+            continue
+        if mentioning is not None and path not in mentioning:
             continue
         # superseded decisions are stale intent — drop them unless explicitly asked
         if not include_superseded and row["type"] == "decision" and row["status"] == "superseded":

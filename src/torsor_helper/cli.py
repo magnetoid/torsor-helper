@@ -62,7 +62,18 @@ def _load(root: Path, *, config: bool = True):
     if not tp.base.exists():
         typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
         raise typer.Exit(code=1)
-    return tp, (load_config(tp) if config else None), Store(tp)
+    return tp, (load_config(tp) if config else None), Store(tp, journal_partition=_partition(tp))
+
+
+def _partition(tp) -> str:
+    """The journal layout, read best-effort. `remember` and `handoff` deliberately
+    load without a config so a malformed torsor.toml cannot stop you writing
+    memory down — and they are exactly the commands that write journals, so the
+    one setting they do need is read on its own and degrades to the default."""
+    try:
+        return load_config(tp).memory.journal_partition
+    except (OSError, ValueError):
+        return "date"
 
 
 def _check_severity(value):
@@ -277,6 +288,32 @@ def _doctor_git_and_hooks(store, config, check) -> None:
     check("hooks", bool(on or events),
           f"git: {', '.join(on) or 'none'}; claude: {', '.join(events) or 'none'}"
           if (on or events) else "none installed — run `torsor hooks install`", warn=True)
+    _doctor_merge(store, repo, check)
+
+
+def _doctor_merge(store, repo, check) -> None:
+    """The one failure git is completely silent about: `.torsor/.gitattributes`
+    is committed and names the `torsor-map` driver, but this clone never
+    registered it, so git falls back to the normal text merge — which looks
+    exactly like having no merge configuration at all."""
+    from torsor_helper import merge
+
+    status = merge.status(store.paths.root, store.paths)
+    if not status["attributes"]:
+        check("merge", True, "no .torsor/.gitattributes — run `torsor merge install` for team use", warn=True)
+        return
+    if not repo:
+        return
+    if not status["driver_registered"]:
+        check("merge", False,
+              f"{merge.DRIVER_NAME} driver not registered in this clone — map/ notes will "
+              "conflict on every merge, silently (git does not warn). Fix: `torsor merge install`",
+              warn=True)
+        return
+    pending = status["pending_regeneration"]
+    check("merge", not pending,
+          f"{len(pending)} map note(s) resolved by taking ours — run `torsor map --force`"
+          if pending else "journals union-merge; map notes regenerate", warn=True)
 
 
 def _doctor_rules(store, check) -> None:
@@ -317,12 +354,13 @@ def recall(
     type_: Optional[str] = typer.Option(None, "--type", help="Only notes of this frontmatter type (e.g. decision)."),
     kind: Optional[str] = typer.Option(None, "--kind", help="Only notes of this kind (e.g. learning)."),
     include_superseded: bool = typer.Option(False, "--include-superseded", help="Include superseded decisions."),
+    symbol: Optional[str] = typer.Option(None, "--symbol", help="Only notes that mention this code symbol in backticks."),
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable hits."),
 ) -> None:
     """Hybrid search across memory, wiki and map — ranked snippets, token-budgeted."""
     _, config, store = _load(root)
     result = ops.recall(store, config, " ".join(query), limit=limit, type_=type_, kind=kind,
-                        include_superseded=include_superseded)
+                        include_superseded=include_superseded, symbol=symbol)
     if _emit({"query": result.query, "total_tokens": result.total_tokens,
               "hits": [h.model_dump(mode="json") for h in result.hits]}, as_json):
         return
@@ -486,17 +524,28 @@ def impact(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     limit: int = typer.Option(0, "--limit", help="Max callers to list (0 = budgets.max_items)."),
 ) -> None:
-    """Show the blast radius of a symbol — who references it, across files (run `torsor map` first)."""
+    """Blast radius of a symbol: the code that references it, and the decisions and
+    learnings that mention it (run `torsor map` first)."""
     paths, config, store = _load(root)
     res = ops.impact(store, config, symbol, limit=limit or None)
-    if res["count"] == 0:
+    if res["count"] == 0 and not res["mentions"]:
         typer.echo(f"No references to {symbol!r} found (is the map current? run `torsor map`).")
         return
-    typer.echo(f"{res['count']} reference(s) to {symbol!r}:")
-    for c in res["callers"]:
-        typer.echo(f"  {render.caller(c)}")
-    if res["truncated"]:
-        typer.echo(f"  … +{res['truncated']} more (--limit to list them)")
+    if res["count"]:
+        typer.echo(f"{res['count']} reference(s) to {symbol!r}:")
+        for c in res["callers"]:
+            typer.echo(f"  {render.caller(c)}")
+        if res["truncated"]:
+            typer.echo(f"  … +{res['truncated']} more (--limit to list them)")
+    if res["mentions"]:
+        if res["count"]:
+            typer.echo("")
+        typer.echo(f"{res['mentions_count']} note(s) mention {symbol!r}:")
+        for m in res["mentions"]:
+            typer.echo(f"  {render.mention(m)}")
+        hidden = res["mentions_count"] - len(res["mentions"])
+        if hidden:
+            typer.echo(f"  … +{hidden} more (--limit to list them)")
 
 
 @app.command()
@@ -1018,7 +1067,7 @@ def hooks_run(
     if not tp.base.exists():
         return  # nothing to capture; never break the git/agent lifecycle
     config = load_config(tp)
-    store = Store(tp)
+    store = Store(tp, journal_partition=config.memory.journal_partition)
     if event == "post-commit":
         ops.on_commit(store, config)
     elif event == "session-start":
@@ -1072,6 +1121,76 @@ def _hook_payload() -> dict:
     except ValueError:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+merge_app = typer.Typer(help="Team memory: let two branches write .torsor/ at once.")
+app.add_typer(merge_app, name="merge")
+
+
+@merge_app.command("install")
+def merge_install(
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+) -> None:
+    """Write .torsor/.gitattributes and register the map merge driver in this clone.
+
+    The attributes file is committed and covers everyone; the driver lives in
+    .git/config and has to be registered once per clone — including yours."""
+    from torsor_helper import merge as merge_mod
+
+    tp, _, _ = _load(root, config=False)
+    target = merge_mod.write_attributes(tp)
+    typer.echo(f"wrote {target} (commit it — it is how a clone learns the merge rules)")
+    if merge_mod.register_driver(root):
+        typer.echo(f"registered {merge_mod.DRIVER_KEY} = {merge_mod.driver_command(root)}")
+    else:
+        typer.echo("not a git repo here — nothing to register the driver into.", err=True)
+
+
+@merge_app.command("status")
+def merge_status(
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    as_json: bool = typer.Option(False, "--json", help="Emit JSON."),
+) -> None:
+    """Show whether both halves of the merge setup are in place in this clone."""
+    from torsor_helper import merge as merge_mod
+
+    tp, _, _ = _load(root, config=False)
+    status = merge_mod.status(root, tp)
+    if _emit(status, as_json):
+        return
+    typer.echo(f"attributes: {'present' if status['attributes'] else 'missing'} ({status['attributes_path']})")
+    if not status["git_repo"]:
+        typer.echo("git: not a repo here")
+        return
+    if status["driver_registered"]:
+        typer.echo(f"map driver: registered ({status['driver_command']})")
+    else:
+        # Git says nothing at all in this case — it silently falls back to the
+        # normal text merge, so the only way to learn about it is to be told.
+        typer.echo("map driver: NOT registered in this clone — map/ notes will conflict")
+        typer.echo("  fix: torsor merge install")
+    pending = status["pending_regeneration"]
+    if pending:
+        typer.echo(f"awaiting regeneration: {len(pending)} map note(s) — run `torsor map --force`")
+
+
+@merge_app.command("driver", hidden=True)
+def merge_driver(
+    ours: Path = typer.Argument(..., help="git's %A — the file holding our version, and the result."),
+    merged_path: str = typer.Argument(..., help="git's %P — where the result will be stored."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+) -> None:
+    """The `torsor-map` merge driver. Not for humans — git invokes it.
+
+    Exit 0 means resolved. Anything else (including this project not existing)
+    means conflict, which is the safe way to fail: the user sees markers instead
+    of a silently discarded change."""
+    from torsor_helper import merge as merge_mod
+
+    tp = TorsorPaths(root)
+    if not tp.base.exists():
+        raise typer.Exit(code=1)
+    raise typer.Exit(code=merge_mod.resolve_map_note(tp, ours, merged_path))
 
 
 def main() -> None:

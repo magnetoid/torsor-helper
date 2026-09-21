@@ -119,6 +119,12 @@ class TorsorPaths:
         return self.map_dir / "dependencies.md"
 
     @property
+    def gitattributes(self) -> Path:
+        # Committed, unlike .torsor/.gitignore's subjects: it is how a clone
+        # learns that journals union-merge and map notes are regenerated.
+        return self.base / ".gitattributes"
+
+    @property
     def state_dir(self) -> Path:
         # Small, machine-local state that does NOT rebuild from Markdown: the
         # user's Coach dismissals and the auto-handoff watermark. It lived in
@@ -150,5 +156,11 @@ class TorsorPaths:
         # Git-ignored local variant, for hook entries a user doesn't want committed.
         return self.root / ".claude" / "settings.local.json"
 
-    def journal_file(self, date_str: str) -> Path:
-        return self.journal_dir / f"{date_str}.md"
+    def journal_file(self, date_str: str, author: str = "") -> Path:
+        """`<date>.md`, or `<date>.<author>.md` when journals are partitioned.
+
+        The date stays the *leading* token either way: `clean` reads the
+        retention date straight out of the stem, and a suffix in front of it
+        would have silently switched journal expiry off."""
+        stem = f"{date_str}.{author}" if author else date_str
+        return self.journal_dir / f"{stem}.md"

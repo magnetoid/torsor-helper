@@ -1,0 +1,4 @@
+# >>> torsor managed >>>
+memory/journal/*.md merge=union
+map/** merge=torsor-map
+# <<< torsor managed <<<

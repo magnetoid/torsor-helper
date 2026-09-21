@@ -20,6 +20,12 @@ from torsor_helper.models import Frontmatter, Note, Tier
 from torsor_helper.paths import TorsorPaths
 
 _WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
+_FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
+_INLINE_CODE = re.compile(r"`([^`\n]+)`")
+# A bare name or a dotted path, both plausible spellings of a symbol. No
+# leading dash, so `--json` and `-r` never look like code identifiers.
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
+_MAX_MENTIONS = 200
 _FM_BLOCK = re.compile(r"^---[ \t]*\n(.*?)^---[ \t]*\n?(.*)$", re.DOTALL | re.MULTILINE)
 _H1 = re.compile(r"^\s*#\s+(.+?)\s*$", re.MULTILINE)
 
@@ -72,9 +78,16 @@ class Store:
         self,
         paths: TorsorPaths,
         clock: Callable[[], datetime] = datetime.now,
+        journal_partition: str = "date",
     ) -> None:
         self.paths = paths
         self.clock = clock
+        # One layout knob, passed in like the clock rather than read from
+        # torsor.toml in here, because Store has to stay usable on a project
+        # whose config is malformed — that is the whole reason `remember` and
+        # `handoff` load without it.
+        self.journal_partition = journal_partition
+        self._author: str | None = None
 
     # ---- static parsing helpers ----
     @staticmethod
@@ -134,6 +147,39 @@ class Store:
         return out
 
     @staticmethod
+    def extract_symbol_mentions(text: str) -> list[str]:
+        """Code identifiers a note names in `backticks`, in order, deduplicated.
+
+        This is the note→symbol half of the graph: `[[wikilinks]]` link notes to
+        notes, and this links a note to the code it is *about*, which is what
+        makes "which decisions mention this symbol" answerable.
+
+        Deliberately dumb and deliberately unfiltered against the symbols table.
+        A token is kept when it reads like an identifier, and whether it names a
+        real symbol is decided at query time by joining — because filtering here
+        would tie the feature to the order the note index and the symbol map
+        happen to be built in, and reindex screens on (mtime, size), so a note
+        written before the first `torsor map` would never be looked at again.
+
+        Fenced blocks are stripped first: a code sample is an illustration, not
+        a claim about a symbol. A dotted `ops.recall` yields both itself and
+        `recall`, since either spelling may be what the symbol table holds."""
+        text = _FENCE.sub("\n", text)
+        out: list[str] = []
+        for m in _INLINE_CODE.finditer(text):
+            token = m.group(1).strip().removesuffix("()")
+            if not _IDENTIFIER.fullmatch(token):
+                continue
+            for candidate in (token, token.rsplit(".", 1)[-1]):
+                if candidate not in out:
+                    out.append(candidate)
+            # One note must not be able to flood the table. A note naming 200
+            # distinct symbols is a generated index, not a decision about code.
+            if len(out) >= _MAX_MENTIONS:
+                break
+        return out[:_MAX_MENTIONS]
+
+    @staticmethod
     def content_hash(text: str) -> str:
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -178,6 +224,13 @@ class Store:
         gitignore = self.paths.base / ".gitignore"
         if force or not gitignore.exists():
             gitignore.write_text("".join(f"{line}\n" for line in _IGNORED), encoding="utf-8")
+
+        # Committed, unlike everything .gitignore covers: it is how a clone
+        # learns that journals union-merge. The custom map driver it names still
+        # needs a per-clone `torsor merge install` — see merge.py.
+        from torsor_helper.merge import write_attributes
+
+        write_attributes(self.paths)
 
     def write_note(
         self, path: Path, frontmatter: Frontmatter, title: str, body: str
@@ -242,9 +295,21 @@ class Store:
                 continue
             yield note
 
+    def journal_author(self) -> str:
+        """The author slug this Store partitions journals by, cached per Store
+        because it shells out to git. Empty unless partitioning is on."""
+        if self.journal_partition != "date-author":
+            return ""
+        if self._author is None:
+            from torsor_helper import gitinfo
+
+            self._author = gitinfo.author_slug(self.paths.root)
+        return self._author
+
     def append_journal(self, content: str, kind: str, links: list[str]) -> Path:
         now = self.clock()
-        path = self.paths.journal_file(now.strftime("%Y-%m-%d"))
+        day = now.strftime("%Y-%m-%d")
+        path = self.paths.journal_file(day, self.journal_author())
         path.parent.mkdir(parents=True, exist_ok=True)
         link_text = " ".join(f"[[{link}]]" for link in links)
         entry = (
@@ -254,9 +319,17 @@ class Store:
         if link_text:
             entry += f"\nLinks: {link_text}\n"
         if not path.exists():
+            # Stamped with the journal's own date, NOT the wall clock: two
+            # branches that both start the day's journal must write a
+            # byte-identical header, or the union merge that keeps both sides'
+            # entries unions the frontmatter too and leaves a duplicate
+            # created:/updated: pair inside the `---` block, one per merge.
+            # The date is also the truer answer — the stamp was never refreshed
+            # on append, so it only ever meant "this day".
+            stamp = f"{day}T00:00:00"
             header = self.serialize(
-                Frontmatter(type="journal", tags=["journal"]),
-                f"Journal {now.strftime('%Y-%m-%d')}",
+                Frontmatter(type="journal", tags=["journal"], created=stamp, updated=stamp),
+                f"Journal {day}",
                 "",
             )
             path.write_text(header, encoding="utf-8")

@@ -111,7 +111,7 @@ def _recent_journal(store: Store, max_tokens: int, cpt: int) -> str:
 
 def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8, *,
            type_: str | None = None, kind: str | None = None,
-           include_superseded: bool = False) -> RecallResult:
+           include_superseded: bool = False, symbol: str | None = None) -> RecallResult:
     """Hybrid search across the pyramid, token-budgeted.
 
     The filters were implemented in hybrid_search and then dropped here, so no
@@ -126,10 +126,11 @@ def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8, *,
                 conn, _embedder_for(config), config, query,
                 limit=limit, max_tokens=config.budgets.recall_tokens,
                 type_=type_, kind=kind, include_superseded=include_superseded,
+                symbol=symbol,
             )
         finally:
             conn.close()
-    notes = [n for n in store.iter_notes() if _passes(n, type_, kind, include_superseded)]
+    notes = [n for n in store.iter_notes() if _passes(n, type_, kind, include_superseded, symbol)]
     return keyword_recall(
         notes, query, limit=limit,
         chars_per_token=config.budgets.chars_per_token,
@@ -137,12 +138,15 @@ def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8, *,
     )
 
 
-def _passes(note, type_: str | None, kind: str | None, include_superseded: bool) -> bool:
+def _passes(note, type_: str | None, kind: str | None, include_superseded: bool,
+            symbol: str | None = None) -> bool:
     """The same filters hybrid_search applies in SQL, for the no-index path."""
     fm = note.frontmatter
     if type_ is not None and fm.type != type_:
         return False
     if kind is not None and getattr(fm, "kind", None) != kind:
+        return False
+    if symbol is not None and symbol not in Store.extract_symbol_mentions(note.body):
         return False
     if not include_superseded and fm.type == "decision" and fm.status == "superseded":
         return False
@@ -217,10 +221,33 @@ def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> 
         conn = db.connect(store.paths.index_db)
         try:
             syms = db.search_symbols(conn, topic, limit=8)
+            # The memory half of the same question. `Decisions` above lists every
+            # ADR title regardless of topic; this is what was written down about
+            # *this* symbol specifically, including journals, which never reach
+            # that list.
+            base = topic.split(".")[-1]
+            mention_paths: list[str] = []
+            for spelling in dict.fromkeys((topic, base)):
+                # not `path`: that name is a Path in the section loop above, and
+                # reusing it here is how a str quietly ends up in a Path slot.
+                for note_path in db.notes_mentioning(conn, spelling):
+                    if note_path not in mention_paths:
+                        mention_paths.append(note_path)
+            rows = db.note_rows(conn, mention_paths)
         finally:
             conn.close()
         if syms:
             lines = [f"- `{s.signature}` ({s.kind}) — {s.module}:{s.line}" for s in syms]
             sections.append("## Relevant existing symbols\n\n" + "\n".join(lines))
+        if mention_paths:
+            kept, tail = cap_items(mention_paths, config.budgets.max_items,
+                                   more=f"recall --symbol {base}")
+            lines = [
+                f"- {(rows.get(np) or {}).get('title') or np} "
+                f"[{(rows.get(np) or {}).get('type') or 'note'}]"
+                for np in kept
+            ]
+            body = "\n".join(lines) + (f"\n{tail}" if tail else "")
+            sections.append(f"## Recorded about `{base}`\n\n" + body)
 
     return truncate_to_tokens("\n\n".join(sections), total, cpt)

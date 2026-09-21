@@ -139,7 +139,10 @@ class Violation(BaseModel):
 class Recommendation(BaseModel):
     # kind: thin | stale | unruled | uncharted | uncharted_language | reuse | decision | learning
     #       | hotspot | phantom_dep | coupling | hub | regression | dangling_link | stale_path
-    #       | ambiguous_link
+    #       | ambiguous_link | contradiction | resolved
+    # `resolved` is the odd one: it reports what STOPPED being recommended, so it
+    # is good news rather than work, and coach/report excludes its own key from
+    # the resolution sweep or it reports itself forever.
     kind: str
     severity: str = "suggest"  # info | suggest | important
     message: str

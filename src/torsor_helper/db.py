@@ -9,7 +9,7 @@ import numpy as np
 
 from torsor_helper.models import Symbol, SymbolEdge
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -66,6 +66,11 @@ def _create_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS vectors (path TEXT PRIMARY KEY, dim INTEGER, embedding BLOB);
         CREATE TABLE IF NOT EXISTS edges (src TEXT, target_slug TEXT, target_path TEXT);
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+        -- note -> symbol name, the other direction from `edges` (note -> note).
+        -- Unfiltered: whether a mention names a real symbol is decided by
+        -- joining `symbols` at query time, so the two indexes can be built
+        -- in either order. See store.extract_symbol_mentions.
+        CREATE TABLE IF NOT EXISTS note_symbols (path TEXT, symbol TEXT);
         CREATE VIRTUAL TABLE IF NOT EXISTS fts USING fts5(path UNINDEXED, title, body);
         CREATE TABLE IF NOT EXISTS symbols (
             name TEXT, kind TEXT, signature TEXT, module TEXT,
@@ -98,6 +103,8 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             ON symbol_edges(resolved_module, referenced_name);
         CREATE INDEX IF NOT EXISTS idx_symbol_edges_module ON symbol_edges(module);
         CREATE INDEX IF NOT EXISTS idx_notes_type ON notes(type, kind);
+        CREATE INDEX IF NOT EXISTS idx_note_symbols_symbol ON note_symbols(symbol);
+        CREATE INDEX IF NOT EXISTS idx_note_symbols_path ON note_symbols(path);
 
         -- path -> the FTS row holding that note's body. `fts.path` is UNINDEXED
         -- (searching it would pollute the match), so every lookup by path was a
@@ -300,6 +307,29 @@ def replace_edges(conn, src, slugs, index: SlugIndex | None = None):
         )
 
 
+def replace_note_symbols(conn, path, symbols) -> None:
+    conn.execute("DELETE FROM note_symbols WHERE path=?", (path,))
+    conn.executemany(
+        "INSERT INTO note_symbols(path, symbol) VALUES(?,?)",
+        [(path, s) for s in symbols],
+    )
+
+
+def notes_mentioning(conn, symbol: str) -> list[str]:
+    """Note paths that name `symbol` in backticks, newest first.
+
+    No join against `symbols` here: the caller already has a symbol name in
+    hand. The join matters the other way round, for "what does this note talk
+    about", which nothing needs yet."""
+    rows = conn.execute(
+        "SELECT ns.path AS path FROM note_symbols ns "
+        "LEFT JOIN notes n ON n.path = ns.path "
+        "WHERE ns.symbol = ? GROUP BY ns.path ORDER BY n.updated DESC, ns.path",
+        (symbol,),
+    ).fetchall()
+    return [r["path"] for r in rows]
+
+
 def reresolve_edges(conn) -> None:
     """Second resolution pass over ALL edges: insert-time resolution only sees
     notes already upserted, so links to notes indexed later (or created later)
@@ -336,6 +366,7 @@ def delete_note(conn, path):
     conn.execute("DELETE FROM notes WHERE path=?", (path,))
     conn.execute("DELETE FROM vectors WHERE path=?", (path,))
     conn.execute("DELETE FROM edges WHERE src=?", (path,))
+    conn.execute("DELETE FROM note_symbols WHERE path=?", (path,))
     rowid = _fts_rowid(conn, path)
     if rowid is not None:
         conn.execute("DELETE FROM fts WHERE rowid=?", (rowid,))

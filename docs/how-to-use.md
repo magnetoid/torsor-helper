@@ -106,12 +106,14 @@ Changed your mind? `record_decision(..., supersedes="0003")` marks the old ADR s
 
 ```bash
 torsor map                 # symbol map + real "who calls what" reference edges (skips when unchanged)
-torsor impact format_date  # blast radius: every resolved caller of a symbol, across files
+torsor impact format_date  # blast radius: every caller, AND every decision that mentions it
 torsor export              # portable llms.txt + Mermaid module-dependency diagram
 ```
 
 - `get_intent(topic)` (MCP) combines architecture notes with relevant existing symbols — call it before building a feature.
 - Run `torsor impact <symbol>` **before letting an agent rename/regenerate a function** — one regenerated symbol silently breaking far-off callers is a classic agent failure.
+- `impact` answers both halves of that question. Alongside the callers it lists the decisions, learnings and handoffs that name the symbol in backticks — so the recorded reason a function looks the way it does arrives *with* the list of what breaks, instead of being rediscovered afterwards. The two are independent: a symbol nothing calls can still be the one the team argued about.
+- `torsor recall <query> --symbol <name>` narrows memory to what was written down about one function or class.
 - The map covers Python (stdlib `ast`, always on) plus JavaScript/TypeScript/TSX and Go via the optional `[languages]` extra (official tree-sitter grammar wheels, offline — see ADR 0013, which supersedes ADR 0003); without the extra installed it stays Python-only. Ref counts only count *resolved* references, never comments or strings.
 
 ## Dependency safety
@@ -126,13 +128,17 @@ Flags imports that resolve to neither stdlib, installed packages, declared depen
 ## The Coach + housekeeping
 
 ```bash
-torsor coach                       # health · reuse · hotspots · temporal coupling · regressions · phantom deps
+torsor coach                       # health · reuse · hotspots · coupling · regressions · phantom deps · contradictions
 torsor coach --dismiss <key>       # silence a recommendation for good
 torsor consolidate                 # mine journal → per-topic insight notes; reindex; snapshot complexity
 torsor index [--full]              # rebuild the derived index explicitly (recall does this incrementally anyway)
 ```
 
 Every recommendation comes with evidence and a concrete action, ranked by severity, and decays so it never nags. A 3-item digest is also pushed into `bootstrap_session()` output (silent when healthy).
+
+The Coach also tracks what you **fixed**. When a recommendation stops being produced, the next `torsor coach` says so once (`Fixed since last time: …`) and forgets it. An `important` recommendation you have left alone for a week starts carrying its age (`open 14 days`) — as information, not as a higher rank, because the decay that keeps the Coach quiet is deliberate.
+
+One check reads memory rather than code: **contradictions**. Two active `type: decision` notes whose titles are about the same thing and state opposite decisions get flagged, because that is how an ADR set rots — a decision gets reversed in a new ADR and the old one is never marked `status: superseded`, so the guard enforces one rule while the agent reads the other. It is deliberately conservative and will miss more than it catches: detection is term overlap plus polarity, never embeddings, since the default embedder is a hashing fallback that finds similarity between any two texts at all. An explicit `supersedes:` link or `status: superseded` exempts a pair — that is the correct workflow, not a contradiction.
 
 ## CLI reference
 
@@ -144,7 +150,7 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `torsor doctor` | Verify the project is healthy |
 | `torsor index [--full]` | Build/refresh the derived search index |
 | `torsor map [--force]` | Generate the symbol map + reference edges |
-| `torsor impact <symbol>` | Who references a symbol, across files |
+| `torsor impact <symbol>` | Who references a symbol across files, and which decisions and learnings mention it |
 | `torsor export` | `llms.txt` + Mermaid module diagram |
 | `torsor rules [--write <file>] [--client <name>]` | Compact rules digest; `--write`/`--client` maintains a managed block in the agent's instructions file |
 | `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs as guard-enforced ADRs |
@@ -167,6 +173,8 @@ Every recommendation comes with evidence and a concrete action, ranked by severi
 | `torsor hooks uninstall` | Remove only torsor's entries, from both settings files |
 | `torsor hooks status` | Which git hooks and Claude Code events carry a torsor entry |
 | `torsor hooks run <event>` | What an installed hook calls; you rarely type this |
+| `torsor merge install` | Set `.torsor/` up for concurrent branches: writes `.gitattributes` (commit it) and registers the map merge driver in this clone |
+| `torsor merge status [--json]` | Whether both halves are in place here — the committed one and the one only your clone can have |
 
 ### Memory, from the shell
 
@@ -175,7 +183,7 @@ recall without an agent attached.
 
 | Command | What it does |
 |---|---|
-| `torsor recall <query> [--limit N] [--type T] [--kind K] [--include-superseded] [--json]` | Hybrid search across memory, wiki and map |
+| `torsor recall <query> [--limit N] [--type T] [--kind K] [--symbol S] [--include-superseded] [--json]` | Hybrid search across memory, wiki and map; `--symbol` keeps only notes that mention that code symbol |
 | `torsor remember <text> [--kind K] [--link slug]` | Persist an observation, decision or learning |
 | `torsor active --focus … [--progress …] [--open-questions …]` | Update the current working state |
 | `torsor handoff <summary> [--decisions …] [--next-steps …]` | End-of-session handoff the next session resumes from |
@@ -229,7 +237,37 @@ agent remembering which tool to call in which order.
 torsor mcp --http --port 8000              # serves http://127.0.0.1:8000/mcp
 ```
 
-stdio is the default and right for a single local agent. **The HTTP transport has no authentication** — binding a non-loopback host (`--host 0.0.0.0`) is refused unless you also pass `--allow-remote`, because it exposes read/write project memory to anyone who can reach the port. For team use, keep it behind a reverse proxy with auth or an SSH tunnel. Sharing memory via git (commit `.torsor/`) is the simplest team setup.
+stdio is the default and right for a single local agent. **The HTTP transport has no authentication** — binding a non-loopback host (`--host 0.0.0.0`) is refused unless you also pass `--allow-remote`, because it exposes read/write project memory to anyone who can reach the port. For team use, keep it behind a reverse proxy with auth or an SSH tunnel.
+
+### Sharing memory through git
+
+Committing `.torsor/` is the simplest team setup, and the thing that makes it
+sustainable is that concurrent branches stop conflicting:
+
+```bash
+torsor merge install    # once per clone — and it means once per person
+git add .torsor/.gitattributes && git commit -m "torsor: merge rules"
+```
+
+Two halves, because git only lets you distribute one of them:
+
+- **`.torsor/.gitattributes` is committed**, so every clone gets it. It gives
+  `memory/journal/*.md` a `union` merge, which keeps both sides' entries. This
+  half needs no setup at all — it is the common conflict, and it is solved for
+  everyone the moment the file is committed.
+- **The `map/**` driver lives in `.git/config`**, which cannot be committed, so
+  each person runs `torsor merge install` once. Map notes are derived, so the
+  driver keeps yours and queues the note for regeneration; the next
+  `torsor map --force` (or the post-commit hook) rebuilds it from source.
+
+Git does **not** warn when the attributes file names a driver your clone has
+not registered — it quietly falls back to the ordinary text merge, which looks
+identical to having configured nothing. `torsor merge status` and `torsor
+doctor` both say so explicitly, which is the only way to find out.
+
+On a larger team, `memory.journal_partition = "date-author"` in `torsor.toml`
+gives each git identity its own journal file, so concurrent work never touches
+the same path in the first place.
 
 ## FAQ
 
@@ -237,4 +275,5 @@ stdio is the default and right for a single local agent. **The HTTP transport ha
 - **The index broke / looks stale.** `torsor clean --apply --deep --yes`, then `torsor index`. The index is derived and disposable, always.
 - **Can I edit the Markdown by hand?** Yes — that's the point. Obsidian works too (`[[wikilinks]]` are first-class). Malformed frontmatter degrades gracefully; it never breaks recall.
 - **How do I stop one noisy recommendation?** `torsor coach --dismiss <key>` (the key is printed with each recommendation).
-- **What goes in git?** `.torsor/` yes, `.torsor/.index/` no (scaffolded `.gitignore` handles it).
+- **What goes in git?** `.torsor/` yes, `.torsor/.index/` and `.torsor/state/` no (the scaffolded `.gitignore` handles it). `.torsor/.gitattributes` **is** committed — it is how a clone learns the merge rules.
+- **Two branches both wrote memory and git conflicted.** Run `torsor merge install` (see Team mode). Journals then union-merge and map notes regenerate.

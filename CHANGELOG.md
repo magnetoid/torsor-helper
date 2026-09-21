@@ -6,6 +6,83 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🧭 The Coach notices what you fixed — and when two decisions disagree
+It tracked `dismissed` and `times_shown` and nothing else, so a recommendation you *solved* just stopped
+appearing, indistinguishable from one that sank below the limit or one you were never shown. And an
+unaddressed problem had no age: "your charter is still the seed template" read identically on day one and day
+ninety.
+
+- **`Fixed since last time: …`** — one line, once, then forgotten. Three things it deliberately will not do:
+  resolution is computed against everything produced, before the page is truncated (otherwise raising
+  `--limit` would "fix" things); a recommendation you were never shown is never called fixed; and the session
+  digest never sweeps at all, because it runs three checks and a key it did not produce is one it did not
+  look for.
+- **Gentle escalation.** After three showings and seven days, an `important` recommendation carries `(open N
+  days)`. It is *not* re-ranked — rank is what the decay controls, and escalating by rank would quietly
+  reverse it.
+- **New `contradiction` check.** Two active `type: decision` notes whose titles are about the same thing and
+  state opposite decisions. This is how an ADR set rots: a decision is reversed in a new ADR, the old one is
+  never marked `status: superseded`, and `torsor guard` then enforces one rule while `get_intent` hands the
+  agent the other. Both notes are individually well-formed, so nothing else could see it. An explicit
+  `supersedes:` link exempts the pair — that is the correct workflow.
+
+The contradiction check is lexical, never embedding-based, and a guard rule keeps it that way. The spec called
+for near-duplicate vectors; Phase 2 measured what the default hashing embedder does under a similarity
+threshold — it *fabricates* matches, because every text is somewhat similar to every other. Thresholds are set
+so that torsor's own ADRs produce nothing, and a test asserts it: a check that fires on a set known to be
+consistent is wrong, not sensitive. It will miss most real contradictions, which is the deliberate direction
+to be wrong in for advisory output (ADR 0010, ADR 0017).
+
+### 🔗 `impact` now tells you what was *decided* about a symbol, not just what calls it
+torsor kept two graphs and never connected them: `[[wikilinks]]` link notes to notes, `symbol_edges` links code
+to code, and nothing linked a decision to the function it was about. So an agent could see every caller of a
+function and none of the recorded reason it looks the way it does — which is the one question this
+architecture is uniquely able to answer.
+
+- **`torsor impact <symbol>` and the `impact` MCP tool** now list the decisions, learnings and handoffs that
+  name the symbol in backticks, alongside the callers. The two halves are independent: a symbol nothing calls
+  can still be the one the team argued about, and that renders correctly.
+- **`get_intent <topic>`** gains what was recorded about that topic — including journal entries, which its
+  list of ADR titles never reached.
+- **`torsor recall <query> --symbol <name>`** (and `symbol=` on the MCP tool) keeps only notes that mention
+  that code symbol.
+
+Mentions are extracted unfiltered and joined at query time, which is the whole design (ADR 0016). Filtering
+them against the symbol table while indexing would have tied the feature to the order the two indexes were
+built in — `reindex` screens on `(mtime, size)`, so a note written before the first `torsor map` would have
+been scanned once, found no symbols, and never been looked at again. Map notes contribute nothing: they are
+rendered *from* the symbol table, so their mentions are that table restated.
+
+Existing indexes are backfilled on the next reindex **without re-embedding** — the mention table carries its
+own format stamp rather than borrowing `INDEX_FORMAT_VERSION`, which would have re-embedded the whole corpus
+to populate a regex result.
+
+### 🤝 Two branches can now write `.torsor/` at the same time
+Committing `.torsor/` is what makes it *team* memory rather than one developer's cache — and it was also what
+made two branches collide. Both sides append to `memory/journal/<date>.md`, and `auto_map_on_commit` makes
+every commit regenerate notes under `map/`, so any two branches that touched code conflicted across dozens of
+derived files. Neither conflict deserved a human.
+
+- **`torsor init` writes `.torsor/.gitattributes`** (committed; a managed block that leaves your own lines
+  alone). Journals get git's built-in `union` merge, which keeps both sides' entries — this half needs no
+  setup at all and covers the common case for everyone the moment the file is committed.
+- **Journal headers no longer carry the wall clock.** A journal is stamped with its own date, so two branches
+  that both start the day's file write a byte-identical header. Without that, the union merge unioned the
+  frontmatter too and left a duplicate `created:`/`updated:` pair inside the `---` block on every merge. The
+  date is also the truer value: the stamp was never refreshed on append, so it only ever meant "this day".
+- **`torsor merge install`** registers a `torsor-map` merge driver in this clone. Map notes are derived, so
+  the driver keeps yours and queues the note; the next `torsor map --force` rebuilds it from source.
+- **`torsor merge status` and `torsor doctor` report the half that can go missing.** Git does *not* warn when
+  a committed attributes file names a driver your clone never registered — it silently falls back to the
+  ordinary text merge, which looks exactly like having configured nothing.
+- **New `memory.journal_partition = "date-author"`** gives each git identity its own journal file, for teams
+  where union merges get noisy. The date stays the leading token in the filename, because `clean` reads the
+  retention date out of the stem — and parsing the whole stem would have switched journal expiry off in
+  silence.
+
+See ADR 0015. Registering a driver writes to `.git/config`, so it is CLI-only, the same rule as the hook
+installers (ADR 0009) — and machine-checked the same way.
+
 - **`torsor coach` no longer reads the whole git history, twice.** Churn and temporal coupling each walked
   every commit ever made, so the Coach got slower every year regardless of how much code there was — and a
   file that was hot three years ago is not the signal either check looks for. New `coach.history_days`
