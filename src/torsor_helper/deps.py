@@ -5,7 +5,6 @@ import json
 import re
 import sys
 import tomllib
-import warnings
 from pathlib import Path
 
 from torsor_helper.cartographer import DEFAULT_IGNORE
@@ -269,13 +268,10 @@ def _import_candidates(text: str) -> set[str] | None:
 
 
 def _top_imports(text: str) -> list[tuple[str, int]]:
-    try:
-        with warnings.catch_warnings():
-            # A project's own invalid escape sequences are its business, not a
-            # line on this user's stderr with no filename attached.
-            warnings.simplefilter("ignore", SyntaxWarning)
-            tree = ast.parse(text)
-    except SyntaxError:
+    from torsor_helper.languages.python import parse_quietly
+
+    tree = parse_quietly(text)
+    if tree is None:
         return []
     out: list[tuple[str, int]] = []
     for node, guarded in _import_statements(tree.body):

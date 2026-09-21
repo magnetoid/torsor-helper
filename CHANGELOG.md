@@ -6,6 +6,26 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🗜 The index on a real project: 216 MB → 80 MB, same answers
+`symbol_edges` and its two indexes were 172 MB of it: 1 071 508 rows, **79% of them unresolved** — references
+to `self`, `str`, `result`, `monkeypatch`, `len`. Python and JS resolve an edge while extracting it and have no
+cross-file resolver, so an edge unresolved then can never be resolved later, and every query that reads edges
+filters on `resolved_module IS NOT NULL`. They were written, indexed, and reloaded on every partial-map merge,
+and never read. They are no longer stored. Go keeps every edge, because its resolver re-resolves the whole
+merged graph; the rule comes from the language registry, so a language that gains a resolver keeps its edges
+too. `impact`, `connect`, hub detection and every `refs` count are unchanged — checked on the real project,
+and ADR 0008's partial-equals-full invariant is tested with the dropped edges in play.
+
+- **The map fingerprint now carries a format version**, so an index built by an older torsor is remapped
+  once instead of being skipped as "unchanged" forever. That one-time migration also `VACUUM`s: dropping the
+  rows alone left the file at 217 MB.
+- `torsor map` reported every name the extractor saw ("1 071 508 reference edges") while `stats` read the
+  table. It now reports what was stored.
+- **`torsor coach --limit N`.** The MCP tool had it; the CLI could never show more than eight.
+- Every Python parse in torsor goes through one helper, which keeps the parsed project's own
+  `SyntaxWarning`s off your stderr — `map` printed `<unknown>:625: SyntaxWarning: invalid escape sequence`,
+  with no filename, twice.
+
 ### ⏱ `torsor coach` on a real project, and a recommendation that could never be satisfied
 On a 3 200-file project the Coach took ~53 s — and `recommend` is an MCP tool, so in most clients that is a
 timeout. Two checks were ~41 s of it, and both computed far more than they reported.

@@ -33,7 +33,10 @@ REPO = Path(__file__).resolve().parents[1]
              "  select { case <-ch: }\n}\n"),
 ])
 def test_the_bound_is_never_below_the_real_complexity(tmp_path, name, text):
-    if not languages.is_available(languages.spec_for(Path(name)).name):
+    # spec_for is None for a language whose extra is not installed — and then
+    # complexity_bound is infinite, so nothing is pruned (tested below).
+    spec = languages.spec_for(Path(name))
+    if spec is None or not languages.is_available(spec.name):
         pytest.skip("language not available")
     path = tmp_path / name
     path.write_text(text, encoding="utf-8")
@@ -59,6 +62,11 @@ def test_an_unknown_language_is_never_pruned(tmp_path):
     """The bound is only valid for languages whose branch tokens it knows."""
     path = tmp_path / "a.rs"
     assert hotspots.complexity_bound(path, "fn f() {}") == float("inf")
+
+
+def test_an_unavailable_language_is_never_pruned(tmp_path, monkeypatch):
+    monkeypatch.setattr(languages, "spec_for", lambda path: None)
+    assert hotspots.complexity_bound(tmp_path / "a.ts", "if (a) {}") == float("inf")
 
 
 def _repo_with_history(tmp_path, files):

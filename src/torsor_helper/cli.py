@@ -820,6 +820,7 @@ def coach(
     context: list[str] = typer.Argument(None, help="Optional context for best-practice hints (e.g. what you're building)."),
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     dismiss: str = typer.Option(None, help="Dismiss a recommendation by its key."),
+    limit: int = typer.Option(8, "--limit", min=1, help="How many recommendations to show."),
 ) -> None:
     """Show health + best-practice recommendations (the Coach). Advisory; never blocks."""
     tp, config, store = _load(root)
@@ -827,7 +828,7 @@ def coach(
         ops.dismiss_recommendation(store, dismiss)
         typer.echo(f"Dismissed {dismiss}.")
         return
-    recs = ops.recommend(store, config, " ".join(context) if context else None)
+    recs = ops.recommend(store, config, " ".join(context) if context else None, limit=limit)
     if not recs:
         typer.echo("No recommendations right now — the project looks healthy.")
         return

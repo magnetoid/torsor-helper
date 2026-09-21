@@ -60,6 +60,7 @@ def test_the_option_reader_can_actually_see_options():
     ("recall", "recall", {"limit", "kind"}),
     ("map_repo", "map", {"force"}),
     ("check_drift", "guard", {"new_only"}),
+    ("recommend", "coach", {"limit"}),
 ])
 def test_a_feature_offers_the_same_controls_on_both_surfaces(tools, tool, cli, shared):
     assert shared <= tools[tool], f"{tool} is missing {shared - tools[tool]}"

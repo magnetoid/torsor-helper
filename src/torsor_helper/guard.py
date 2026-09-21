@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from torsor_helper.cartographer import absolute_from_module
+from torsor_helper.languages.python import parse_quietly
 from torsor_helper.models import Rule, Violation
 from torsor_helper.store import Store
 from torsor_helper.languages.modules import norm_path
@@ -227,9 +228,8 @@ def load_rules(store: Store) -> list[Rule]:
 def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
     if not relpath.endswith(".py"):
         return _forbid_import_specifiers(relpath, text, rule)
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
+    tree = parse_quietly(text)
+    if tree is None:
         return []
     target = rule.target
     out: list[Violation] = []
@@ -296,9 +296,8 @@ def _imported_modules(tree: ast.Module, relpath: str) -> list[tuple[str, int]]:
 def _require_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
     """Mandatory-seam check: emit ONE file-level violation when a required import
     is ABSENT (inverts the usual find-a-match model)."""
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
+    tree = parse_quietly(text)
+    if tree is None:
         return []
     target = rule.target
     present = any(m == target or m.startswith(target + ".") for m, _ in _imported_modules(tree, relpath))
@@ -315,9 +314,8 @@ def _forbid_layer_import(relpath: str, text: str, rule: Rule) -> list[Violation]
         pattern = re.compile(rule.target)
     except re.error:
         return []
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
+    tree = parse_quietly(text)
+    if tree is None:
         return []
     out: list[Violation] = []
     for node in ast.walk(tree):

@@ -53,6 +53,13 @@ def iter_source_files(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> list[Pat
     return [p for p in iter_files(root, ignore) if p.suffix in exts]
 
 
+# Part of the fingerprint, so a change to WHAT the map stores forces one full
+# remap. Without it, an index built by an older version is skipped forever as
+# "unchanged" — its fingerprint still matches the files — and keeps whatever
+# the old version wrote. 2: unresolvable non-Go edges are no longer stored.
+MAP_FORMAT = 2
+
+
 def repo_fingerprint(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> str:
     """A cheap O(stat) digest of the repo's source files (relpath, mtime, size).
 
@@ -67,7 +74,7 @@ def repo_fingerprint(root: Path, ignore: set[str] = DEFAULT_IGNORE) -> str:
         except OSError:
             continue
         lines.append(f"{path.relative_to(root).as_posix()}:{st.st_mtime_ns}:{st.st_size}")
-    return hashlib.sha256("\n".join(sorted(lines)).encode("utf-8")).hexdigest()
+    return f"{MAP_FORMAT}:" + hashlib.sha256("\n".join(sorted(lines)).encode("utf-8")).hexdigest()
 
 
 def _scan(root: Path, paths: list[str] | None, ignore: set[str]) -> tuple[list[Symbol], list[SymbolEdge]]:
@@ -124,6 +131,36 @@ def compute_refs(symbols: list[Symbol], edges: list[SymbolEdge]) -> None:
             sym.refs = 0  # methods score 0 by design (ADR 0004) — resolution only targets top-level names
             continue
         sym.refs = counts.get((norm_path(sym.module), sym.name), 0)
+
+
+def persistable_edges(edges: list[SymbolEdge]) -> list[SymbolEdge]:
+    """The edges worth writing to the index: resolved ones, plus every edge of a
+    language that has a cross-file resolver.
+
+    On a real 3 200-file project the rest were 845 962 of 1 071 508 rows —
+    references to `self`, `str`, `result`, `len` — and 79% of a 172 MB table
+    and its indexes. Python and JS resolve an edge while extracting it and have
+    no cross-file resolver, so an edge unresolved then stays unresolved forever;
+    and every query that reads edges filters on `resolved_module IS NOT NULL`.
+    Go's resolver re-resolves every Go edge over the merged graph (a bare call
+    resolves once a sibling file gains the symbol), so Go keeps all of them.
+
+    Dropping them keeps ADR 0008's invariant: compute_refs counts resolved edges
+    only and runs resolvers only over languages that have one, so a partial
+    merge reloading this subset reaches the same state as a full remap."""
+    keep_unresolved: dict[str, bool] = {}
+    out: list[SymbolEdge] = []
+    for e in edges:
+        if e.resolved_module:
+            out.append(e)
+            continue
+        suffix = Path(e.module).suffix
+        if suffix not in keep_unresolved:
+            spec = languages.spec_for(Path(e.module))
+            keep_unresolved[suffix] = spec is not None and spec.cross_file_resolver is not None
+        if keep_unresolved[suffix]:
+            out.append(e)
+    return out
 
 
 def scanned_modules(root: Path, paths: list[str]) -> set[str]:
