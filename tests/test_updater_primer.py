@@ -5,6 +5,7 @@ from torsor_helper import updater
 from torsor_helper.config import TorsorConfig
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
+from conftest import fill_seeds
 
 CLOCK = lambda: datetime(2026, 6, 11, 9, 0, 0)
 
@@ -12,6 +13,7 @@ CLOCK = lambda: datetime(2026, 6, 11, 9, 0, 0)
 def _store(tmp_path):
     store = Store(TorsorPaths(tmp_path), clock=CLOCK)
     store.scaffold()
+    fill_seeds(store)  # the scaffold's seeds are not content any more
     return store
 
 

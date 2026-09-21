@@ -4,6 +4,7 @@ from torsor_helper import operations as ops
 from torsor_helper.config import TorsorConfig
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
+from conftest import fill_seeds
 
 CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 
@@ -11,6 +12,7 @@ CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 def _store(tmp_path):
     store = Store(TorsorPaths(tmp_path), clock=CLOCK)
     store.scaffold()
+    fill_seeds(store)
     return store
 
 
@@ -79,7 +81,8 @@ def test_recent_journal_spans_multiple_days(tmp_path):
 
 
 def test_bootstrap_weaves_recommendations_digest(tmp_path):
-    store = _store(tmp_path)  # fresh scaffold -> thin recs present
+    store = Store(TorsorPaths(tmp_path), clock=CLOCK)
+    store.scaffold()  # unfilled on purpose -> the "still the seed template" nudge
     out = ops.bootstrap_session(store, TorsorConfig())
     assert "## Recommendations" in out
     assert "seed template" in out.lower()  # the thin hygiene nudge
@@ -125,6 +128,7 @@ def test_check_drift_when_torsor_root_is_nested_in_git_repo(tmp_path):
     sub.mkdir()
     store = Store(TorsorPaths(sub), clock=CLOCK)
     store.scaffold()
+    fill_seeds(store)
     _adr_forbidding_requests(store)
     (sub / "app.py").write_text("import requests\n")  # untracked change, path sub/app.py at toplevel
 

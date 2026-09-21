@@ -3,7 +3,7 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
-from torsor_helper import db
+from torsor_helper import db, templates
 from torsor_helper.models import Tier
 from torsor_helper.store import Store
 
@@ -46,17 +46,26 @@ def _breadcrumb(note) -> str:
     return " ".join([note.tier.name.lower(), *segments, note.title])
 
 
+def _indexable(store: Store):
+    """(path, reader) for everything the index covers: torsor's own notes, then
+    the project's docs, each read the way its tier needs."""
+    for md in store.iter_note_paths():
+        yield md, store.read_note
+    for md in store.iter_doc_paths():
+        yield md, store.read_doc
+
+
 def _backfill_mentions(store: Store, conn, *, skip) -> None:
     """Fill db.note_symbols for notes this run did not re-read. Reads and parses
     each one; deliberately does not embed, which is the whole point of keeping
     this stamp separate from INDEX_FORMAT_VERSION."""
     done = set(skip)
-    for md in store.iter_note_paths():
+    for md, read in _indexable(store):
         path = md.as_posix()
         if path in done:
             continue
         try:
-            note = store.read_note(md)
+            note = read(md)
         except (OSError, UnicodeDecodeError):
             continue
         mentions = [] if note.tier is Tier.MAP else store.extract_symbol_mentions(note.body)
@@ -92,16 +101,23 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
         full = True
 
     existing = db.note_stats(conn)
+    seeds = set(templates.seed_files(store.paths))  # a handful of paths; checked per note
     seen: set[str] = set()
     slug_index = None
     pending: list[tuple[str, str]] = []  # (path, body) to embed
 
-    for md in store.iter_note_paths():
+    for md, read in _indexable(store):
         # as_posix, not str: SlugIndex, _breadcrumb and the wikilink resolver all
         # split a stored path on "/". On Windows str() gives backslashes, so each
         # of those saw one segment — no wikilink edge ever resolved, and the
         # breadcrumb that situates a note for retrieval collapsed to a filename.
         path = md.as_posix()
+        if md in seeds and templates.is_unfilled(store.paths, md):
+            # An unfilled template says nothing about the project. Checked BEFORE
+            # the stat pre-screen, or a seed indexed by an older version would be
+            # skipped as unchanged and stay indexed forever. Not `seen`, so that
+            # row is swept below; filling it in makes it an ordinary note.
+            continue
         seen.add(path)
         try:
             st = md.stat()
@@ -114,7 +130,7 @@ def reindex(store: Store, conn, embedder, *, full: bool = False) -> dict:
         if not full and row and row["mtime_ns"] == st.st_mtime_ns and row["size"] == st.st_size:
             continue
         try:
-            note = store.read_note(md)
+            note = read(md)
         except (OSError, UnicodeDecodeError) as exc:
             warnings.warn(f"skipping unreadable note {md}: {exc}")
             continue

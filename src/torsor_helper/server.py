@@ -6,7 +6,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 from torsor_helper import operations as ops
-from torsor_helper import render
+from torsor_helper import render, templates
 from torsor_helper.budget import cap_items
 from torsor_helper.config import TorsorConfig, load_config
 from torsor_helper.paths import TorsorPaths
@@ -15,8 +15,8 @@ from torsor_helper.store import Store
 
 def build_server(root: Path | str) -> FastMCP:
     paths = TorsorPaths(Path(root))
-    store = Store(paths)
     config = TorsorConfig()
+    store = Store.for_config(paths, config)
 
     mcp = FastMCP("torsor-helper")
 
@@ -37,7 +37,7 @@ def build_server(root: Path | str) -> FastMCP:
             config = load_config(paths)
         except Exception as exc:  # noqa: BLE001 - surfaced to the caller verbatim
             return f"{paths.config_file} could not be loaded: {exc}"
-        store = Store(paths, journal_partition=config.memory.journal_partition)
+        store = Store.for_config(paths, config)
         return None
 
     def tool(fn):
@@ -407,23 +407,32 @@ def build_server(root: Path | str) -> FastMCP:
             + "\n".join(render.recommendation(r) for r in recs)
         )
 
+    def _note_text(path) -> str:
+        """A resource's content, or one line saying there is none yet. Returning
+        the unfilled seed handed the client "_Describe the product in 2-3
+        sentences._" as if it were the project's charter."""
+        if not path.exists():
+            return ""
+        if templates.is_unfilled(paths, path):
+            rel = path.relative_to(paths.root).as_posix()
+            return f"({rel} is still the seed template — nothing has been recorded here yet.)"
+        return path.read_text(encoding="utf-8")
+
     @mcp.resource("torsor://architecture")
     def architecture_resource() -> str:
-        return (paths.system_patterns.read_text(encoding="utf-8")
-                if paths.system_patterns.exists() else "")
+        return _note_text(paths.system_patterns)
 
     @mcp.resource("torsor://map/overview")
     def map_overview_resource() -> str:
-        return (paths.map_overview.read_text(encoding="utf-8")
-                if paths.map_overview.exists() else "")
+        return _note_text(paths.map_overview)
 
     @mcp.resource("torsor://charter")
     def charter_resource() -> str:
-        return paths.charter.read_text(encoding="utf-8") if paths.charter.exists() else ""
+        return _note_text(paths.charter)
 
     @mcp.resource("torsor://active")
     def active_resource() -> str:
-        return paths.active_context.read_text(encoding="utf-8") if paths.active_context.exists() else ""
+        return _note_text(paths.active_context)
 
     return mcp
 

@@ -8,12 +8,11 @@ import numpy as np
 from torsor_helper import db
 from torsor_helper.budget import hit_cost
 from torsor_helper.indexer import _embedder_identity
-from torsor_helper.models import TIER_WEIGHTS, RecallHit, RecallResult, Tier
+from torsor_helper.models import RecallHit, RecallResult, Tier, recall_weight
 from torsor_helper.snippets import best_snippet
 
 _WORD = re.compile(r"\w+")
 # Aliased for local readability; the object is the canonical one in models.py.
-_TIER_WEIGHTS = TIER_WEIGHTS
 
 
 def _importance(tier: Tier, access_count: int, floors: dict[str, float]) -> float:
@@ -139,7 +138,7 @@ def hybrid_search(conn, embedder, config, query, *, limit=8, max_tokens=1500, ty
         importance = _importance(tier, row["access_count"] or 0, config.index.importance_floors)
         hits.append(RecallHit(
             path=path, title=row["title"] or path, tier=tier,
-            score=score * _TIER_WEIGHTS.get(tier, 1.0) * importance,
+            score=score * recall_weight(tier, row["title"] or "") * importance,
             snippet="",  # filled in below, for the survivors only
         ))
 

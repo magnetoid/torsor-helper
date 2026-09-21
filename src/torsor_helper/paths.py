@@ -1,6 +1,23 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+
+# Test code by the conventions of the languages torsor maps: a tests/ test/
+# __tests__/ spec/ directory anywhere, or a file named test_*.py, *_test.py,
+# *_test.go, *.test.{js,ts,jsx,tsx}, *.spec.{...}, conftest.py.
+_TEST_PATH = re.compile(
+    r"(^|/)(tests?|__tests__|specs?)/"
+    r"|(^|/)(test_[^/]*|conftest)\.py$"
+    r"|_test\.(py|go)$"
+    r"|\.(test|spec)\.[jt]sx?$"
+)
+
+
+def is_test_path(relpath: str) -> bool:
+    """True for a file that is test code by its language's naming convention."""
+    return bool(_TEST_PATH.search(relpath.replace("\\", "/")))
 
 
 def contained(root, candidate) -> Path | None:

@@ -27,6 +27,10 @@ def test_rules_and_primer_client_target(tmp_path):
     r = runner.invoke(app, ["primer", "--root", str(tmp_path), "--client", "cursor"])
     assert r.exit_code == 0
     assert (tmp_path / "AGENTS.md").exists()
+    # A real principle, so there is a rules block to write: on an unfilled
+    # charter `rules` has nothing to say and writes nothing.
+    (tmp_path / ".torsor" / "charter.md").write_text(
+        "# Charter\n\n## Non-negotiable principles\n- Local-first.\n", encoding="utf-8")
     rr = runner.invoke(app, ["rules", "--root", str(tmp_path), "--client", "gemini"])
     assert rr.exit_code == 0
     assert (tmp_path / "GEMINI.md").exists()

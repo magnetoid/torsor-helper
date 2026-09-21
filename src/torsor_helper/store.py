@@ -6,7 +6,7 @@ import re
 import warnings
 from datetime import date, datetime
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Sequence
 
 import yaml
 
@@ -79,6 +79,7 @@ class Store:
         paths: TorsorPaths,
         clock: Callable[[], datetime] = datetime.now,
         journal_partition: str = "date",
+        doc_sources: Sequence[str] = (),
     ) -> None:
         self.paths = paths
         self.clock = clock
@@ -87,7 +88,26 @@ class Store:
         # whose config is malformed — that is the whole reason `remember` and
         # `handoff` load without it.
         self.journal_partition = journal_partition
+        # Globs for project Markdown outside .torsor/, read in place and never
+        # written. Empty for a Store built without config, which is what keeps
+        # every caller that predates them reading exactly what it did.
+        self.doc_sources = tuple(doc_sources)
         self._author: str | None = None
+
+    @classmethod
+    def for_config(cls, paths: TorsorPaths, config, **kwargs) -> "Store":
+        """The Store an adapter should build: every torsor.toml knob that
+        governs Markdown I/O, applied. Built without them, a Store diverges in
+        silence — a reindex from one with no doc sources DELETES every
+        project-doc row, and the next reindex from one with them re-embeds the
+        lot. `config` may be None (a malformed torsor.toml): defaults apply."""
+        memory = getattr(config, "memory", None)
+        return cls(
+            paths,
+            journal_partition=getattr(memory, "journal_partition", "date"),
+            doc_sources=getattr(memory, "sources", ()),
+            **kwargs,
+        )
 
     # ---- static parsing helpers ----
     @staticmethod
@@ -286,6 +306,39 @@ class Store:
                 if name.endswith(".md"):
                     yield here / name
 
+    def iter_doc_paths(self) -> Iterator[Path]:
+        """Project Markdown matched by `doc_sources`, outside .torsor/.
+
+        Each pattern is walked only from its literal prefix — `docs/**/*.md`
+        walks docs/, `README.md` is a single stat — because this runs inside
+        every reindex, and reindex runs before every recall. The same ignored
+        directories as the map are pruned, symlinks that resolve outside the
+        project are dropped, and a pattern that could reach outside it (an
+        absolute path, a `..`) matches nothing: torsor.toml travels in git."""
+        seen: set[Path] = set()
+        for pattern in self.doc_sources:
+            for path in _expand_doc_source(self.paths.root, self.paths.base, pattern):
+                if path not in seen:
+                    seen.add(path)
+                    yield path
+
+    def read_doc(self, path: Path) -> Note:
+        """A project doc as a note: the DOCS tier, and type "doc" unless its
+        own frontmatter declares one (an ADR kept in docs/adr/ with
+        `type: decision` stays findable as a decision)."""
+        note = self.read_note(path)
+        fm = note.frontmatter
+        if fm.type == "note":  # parse_frontmatter's default when none is declared
+            fm = fm.model_copy(update={"type": "doc"})
+        return note.model_copy(update={"tier": Tier.DOCS, "frontmatter": fm})
+
+    def iter_docs(self) -> Iterator[Note]:
+        for path in self.iter_doc_paths():
+            try:
+                yield self.read_doc(path)
+            except (OSError, UnicodeDecodeError) as exc:
+                warnings.warn(f"skipping unreadable doc {path}: {exc}")
+
     def iter_notes(self) -> Iterator[Note]:
         for md in self.iter_note_paths():
             try:
@@ -336,6 +389,52 @@ class Store:
         with path.open("a", encoding="utf-8") as fh:
             fh.write(entry)
         return path
+
+
+_GLOB_CHARS = set("*?[")
+
+
+def _expand_doc_source(root: Path, base: Path, pattern: str) -> Iterator[Path]:
+    from torsor_helper import globs
+    from torsor_helper.cartographer import DEFAULT_IGNORE
+    from torsor_helper.paths import contained
+
+    pattern = pattern.strip().replace("\\", "/")
+    parts = pattern.split("/")
+    if not pattern or pattern.startswith("/") or ".." in parts or ":" in parts[0]:
+        return
+    literal: list[str] = []
+    for part in parts:
+        if _GLOB_CHARS & set(part):
+            break
+        literal.append(part)
+
+    def keep(path: Path) -> bool:
+        if path.suffix != ".md" or contained(root, path) is None:
+            return False
+        try:
+            path.relative_to(base)  # torsor's own notes are indexed as what they are
+            return False
+        except ValueError:
+            return True
+
+    if len(literal) == len(parts):  # no glob at all: one file
+        path = root.joinpath(*parts)
+        if path.is_file() and keep(path):
+            yield path
+        return
+    start = root.joinpath(*literal) if literal else root
+    if not start.is_dir():
+        return
+    for dirpath, dirnames, filenames in os.walk(start):
+        dirnames[:] = sorted(d for d in dirnames if d not in DEFAULT_IGNORE)
+        here = Path(dirpath)
+        for name in sorted(filenames):
+            if not name.endswith(".md"):
+                continue
+            path = here / name
+            if globs.matches_anchored(path.relative_to(root).as_posix(), pattern) and keep(path):
+                yield path
 
 
 _TIER_ANCHOR_CACHE: dict[Path, tuple[tuple[Path, ...], tuple[Path, ...]]] = {}

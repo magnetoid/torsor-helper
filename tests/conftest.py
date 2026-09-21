@@ -46,3 +46,29 @@ def git_project(tmp_path):
     git("add", "calm.py")
     git("commit", "-m", "calm")
     return tmp_path
+
+
+def fill_seeds(store):
+    """Replace every seeded note with a little real content, keeping its title.
+
+    An unfilled seed carries no information, so torsor no longer indexes it,
+    bootstraps it, or hands it to get_intent (templates.is_unfilled). Tests that
+    used the scaffold's seeds as convenient content were really testing "a
+    project with notes in every tier"; this gives them one."""
+    from torsor_helper.templates import seed_files
+
+    body = {
+        "charter.md": ("We build a message gateway that routes chat traffic to platform adapters.\n\n"
+                       "## Non-negotiable principles\n- Local-first; nothing leaves the machine."),
+        "system-patterns.md": "Adapters sit behind a queue; the architecture keeps the core pure.",
+        "tech-context.md": "Python 3.11, SQLite for the index, no network at runtime.",
+        "context.md": "Current focus: routing latency. Open question: batching strategy?",
+        "progress.md": "Routing works end to end; batching is next.",
+        "overview.md": "Modules are mapped here by torsor map.",
+    }
+    for path, seed in seed_files(store.paths).items():
+        title = next((ln[2:].strip() for ln in seed.splitlines() if ln.startswith("# ")), path.stem)
+        head = seed.split("\n# ", 1)[0] if seed.startswith("---") else ""
+        text = body.get(path.name, f"Real content for {path.stem}: the architecture context.")
+        path.write_text(f"{head}\n# {title}\n\n{text}\n" if head else f"# {title}\n\n{text}\n",
+                        encoding="utf-8")

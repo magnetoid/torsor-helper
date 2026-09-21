@@ -106,6 +106,11 @@ def test_mcp_http_loopback_does_not_warn(tmp_path, monkeypatch):
 
 def test_rules_prints_digest_and_writes_managed_block(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
+    # A principle the project actually wrote. The unfilled charter's placeholder
+    # ("_e.g. local-first…_") was what this used to assert on, and what
+    # `rules --write` then put into AGENTS.md as a non-negotiable principle.
+    (tmp_path / ".torsor" / "charter.md").write_text(
+        "# Charter\n\n## Non-negotiable principles\n- Local-first.\n", encoding="utf-8")
     result = runner.invoke(app, ["rules", "--root", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "Non-negotiable principles" in result.output
@@ -181,3 +186,23 @@ def test_root_has_a_short_flag(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["doctor", "-r", str(tmp_path)])
     assert result.exit_code == 0, result.output
+
+
+def test_rules_write_on_a_fresh_project_writes_nothing(tmp_path):
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    target = tmp_path / "AGENTS.md"
+    result = runner.invoke(app, ["rules", "--root", str(tmp_path), "--write", str(target)])
+    assert result.exit_code == 0
+    assert "nothing written" in result.output
+    assert not target.exists()
+
+
+def test_rules_write_clears_a_stale_block(tmp_path):
+    """An existing block is still rewritten when there is nothing left to say —
+    otherwise rules whose ADRs were deleted would linger in AGENTS.md."""
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    target = tmp_path / "AGENTS.md"
+    target.write_text("# Mine\n\n<!-- torsor:rules -->\n- forbid_import: `old`\n<!-- /torsor:rules -->\n")
+    runner.invoke(app, ["rules", "--root", str(tmp_path), "--write", str(target)])
+    text = target.read_text()
+    assert "# Mine" in text and "`old`" not in text

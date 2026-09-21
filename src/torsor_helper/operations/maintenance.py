@@ -12,7 +12,7 @@ from torsor_helper.coach import staleness as _staleness
 from torsor_helper.coach import trend as coach_trend
 from torsor_helper.coach.state import CoachState
 from torsor_helper.indexer import reindex
-from torsor_helper.models import Frontmatter
+from torsor_helper.models import Tier, Frontmatter
 from torsor_helper.operations._shared import _embedder_for, _log_op, _open_index
 from torsor_helper.operations._state import _coach_state_path
 from torsor_helper.paths import contained
@@ -96,6 +96,10 @@ def stats(store, config) -> dict:
         tier = store.tier_for_path(store.paths, path)
         by_tier[tier.name] = by_tier.get(tier.name, 0) + 1
         total += 1
+    docs = sum(1 for _ in store.iter_doc_paths())
+    if docs:
+        by_tier[Tier.DOCS.name] = docs
+        total += docs
 
     out = {
         "notes": {"total": total, "by_tier": by_tier},

@@ -130,3 +130,23 @@ def seed_files(paths: TorsorPaths) -> dict[Path, str]:
         paths.active_context: ACTIVE_CONTEXT,
         paths.progress: PROGRESS,
     }
+
+
+def is_unfilled(paths: TorsorPaths, path) -> bool:
+    """True while a seeded file is still exactly its seed.
+
+    An unfilled template carries no information about the project, and on a
+    fresh `init` it was everywhere: ~283 tokens of "_Describe the product in
+    2-3 sentences._" injected into every session by the SessionStart hook, and
+    the System Patterns template ranking first in recall, riding the
+    architecture tier's weight. One definition, used by bootstrap, intent, the
+    indexer and the Coach — the Coach used to compare on its own."""
+    from pathlib import Path
+
+    seed = seed_files(paths).get(Path(path))
+    if seed is None:
+        return False
+    try:
+        return Path(path).read_text(encoding="utf-8").strip() == seed.strip()
+    except (OSError, UnicodeDecodeError):
+        return False

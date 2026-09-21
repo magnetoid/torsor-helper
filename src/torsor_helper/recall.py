@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 
 from torsor_helper.budget import hit_cost
-from torsor_helper.models import TIER_WEIGHTS, Note, RecallHit, RecallResult, Tier
+from torsor_helper.models import TEST_MAP_WEIGHT, TIER_WEIGHTS, Note, RecallHit, RecallResult, Tier
+from torsor_helper.paths import is_test_path
 from torsor_helper.snippets import best_snippet
 
 _WORD = re.compile(r"\w+")
@@ -32,6 +33,8 @@ def keyword_recall(
         if raw == 0:
             continue
         score = raw * weights.get(note.tier, 1.0)
+        if note.tier is Tier.MAP and is_test_path(note.title):
+            score *= TEST_MAP_WEIGHT
         scored.append(
             RecallHit(
                 path=str(note.path),
