@@ -67,7 +67,12 @@ def test_the_http_transport_actually_binds_and_serves(tmp_path):
         "Accept": "application/json, text/event-stream",
     })
     try:
-        deadline = time.monotonic() + 30
+        # 90s, not 30s: this spawns an interpreter that imports mcp/fastmcp and
+        # binds a port, and it failed once under `-n auto` on a loaded machine
+        # while the process was still alive and simply not up yet. CI runners
+        # are slower and shared, and a flaky test inside the release gate blocks
+        # a publish for no reason.
+        deadline = time.monotonic() + 90
         last = None
         while time.monotonic() < deadline:
             if proc.poll() is not None:
@@ -83,7 +88,15 @@ def test_the_http_transport_actually_binds_and_serves(tmp_path):
             except (urllib.error.URLError, ConnectionError, OSError) as exc:
                 last = exc
                 time.sleep(0.3)
-        pytest.fail(f"never became reachable on {url}: {last}")
+        # Drain the server's own output before failing — a bare "connection
+        # refused" says nothing about why it never bound. Terminate first:
+        # stderr.read() blocks until EOF, and the process is still running here.
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        pytest.fail(f"never became reachable on {url}: {last}\n{proc.stderr.read()}")
     finally:
         proc.terminate()
         try:

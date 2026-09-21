@@ -6,6 +6,84 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+## [0.8.0] — Team Memory (2026-09-21)
+
+Everything below shipped as one eight-phase pass over the whole codebase: safety, structural seams, a
+40× faster recall, correctness, CLI parity, test and CI hardening, and three product bets. 888 tests,
+serially and in parallel, with and without the `languages` extra; `ruff`, `mypy` and
+`torsor guard --strict` clean.
+
+### 🖥 The memory half of torsor is finally on the CLI
+Seven MCP tools — including the five founding ones — had no command, although nearly every feature is meant
+to be both. Memory could not be scripted, used from CI, or debugged without an MCP client attached.
+
+- **`torsor recall`, `remember`, `active`, `handoff`, `bootstrap`, `intent`, `decision`**, over the same
+  operations and the same renderers as the MCP tools.
+- **`recall` gained the filters that already existed in the core and were dropped at the adapters**:
+  `--type`, `--kind`, `--include-superseded`. "Only ADRs" and "only learnings" were inexpressible despite the
+  plumbing being there.
+- **`torsor stats`** — notes per tier, index size, symbols and edges, map fingerprint age, which embedder is
+  really in use, and what gets recalled most. Every number already existed in `db.py` and none was exposed.
+- **`torsor doctor` rewritten** around the things that fail *quietly*: a stale map, semantic recall silently
+  on the hashing fallback, hooks that were never installed, an ADR `rules:` block that does not parse. On
+  this repo it immediately found three true ones. `--json` with per-check rows.
+- **Four MCP prompts** (`onboard`, `checkpoint`, `review-drift`, `coach`) and the two missing resources
+  (`torsor://architecture`, `torsor://map/overview`) — how MCP surfaces slash-commands in Claude Code and
+  Cursor.
+- **`consolidate` now returns the duplicates it finds** instead of computing the list and throwing it away.
+- **New guard rule kind `forbid_cycle`** over the module graph (iterative Tarjan). It is the first rule that
+  needs more than one file's source, so the guard grew a second, graph-wide evaluation path.
+
+**Writing a test for "recall finds nothing" exposed a worse bug than the missing commands.** A query of pure
+nonsense returned the charter: FTS matched 0, the hashing vector leg returned 7, and recall reported 7. The
+fallback hashes a bag of words into 384 buckets, so it is somewhat similar to everything, and fused freely it
+*created* hits — recall could never answer "nothing here". It now ranks only what the lexical side already
+found a basis for. A real embedder is untouched, because introducing a hit with no lexical overlap is exactly
+what semantic search is for.
+
+### 🧩 Correctness: the failures that returned a plausible answer instead of an error
+- **Guard `scope` is now a path-aware glob.** It was `fnmatch`, where `*` crosses `/`: this repo's own ADR
+  0002 scope `src/torsor_helper/*.py` silently governed `coach/` too, and `src/**/*.ts` matched **nothing**.
+  Both failures are invisible, because a scope that matches nothing reports nothing.
+- **`[[note|alias]]`, `[[note#section]]` and `[[dir/note]]` resolve.** They never had, so the edge was lost
+  *and* the dangling-link detector — the one that exists to have no false positives — reported them.
+- **Ambiguous wikilinks are reported rather than guessed.** `[[overview]]` resolved to the first sorted path;
+  duplicate basenames across tiers now surface as an `ambiguous_link` recommendation.
+- **A transient fastembed failure no longer thrashes the corpus.** A first-run model download with no network
+  looked like an embedder change, so the whole corpus was re-embedded with hashing — and re-embedded back on
+  recovery. The good vectors are now left alone and search skips the vector leg while the spaces disagree.
+- **`read_note` reads `utf-8-sig`.** Every other reader already did; a BOM'd note silently lost its
+  frontmatter and its tier.
+- **Scalar `tags:` no longer discards the whole frontmatter.** `tags: architecture` is a natural thing to
+  hand-write, and validation used to reject it and throw away `status`, `kind` and `rules` with it.
+- **Windows: stored note paths are POSIX.** Every consumer splits on `/`, so on Windows no wikilink edge ever
+  resolved and the breadcrumb that situates a note for retrieval collapsed to a filename.
+- **`export` writes its Mermaid diagram to its own note.** It appended into `map/overview.md`, which
+  `map_repo` re-renders from scratch, so the diagram vanished on the next commit.
+- **The cartographer walks the whole AST.** Nested classes, inner functions, `if TYPE_CHECKING:` blocks and
+  function-local imports were invisible, so `refs` was undercounted and `impact` missed callers.
+- **`auto_index = false` is honoured after the first run**, `--severity` rejects a typo instead of widening
+  the gate to "fail on anything", `hooks run <event>` is an enum, and `stale --mark --unmark` is refused
+  instead of silently unmarking.
+- **A partial `map_repo` with no full map behind it falls back to a full scan** instead of rewriting the
+  committed `overview.md` from an empty index.
+
+### 🧱 `operations.py` is a package, and the adapters are thin
+`operations.py` was 1 492 lines across twelve concerns with 29 function-local imports, and the Coach ranked
+it the repo's #1 hotspot.
+
+- **`operations/` is now eleven modules behind a re-export façade** (`__init__.py`: 1 560 → 108 lines).
+  Adapters and tests keep saying `from torsor_helper import operations as ops`. Submodules import siblings by
+  full path, never the façade — ADR 0014 machine-checks it, because the façade is half-initialised while the
+  package loads.
+- **`gitinfo.py`** is the single git wrapper. It passes `-z` and `core.quotePath=false`, which the
+  per-caller `subprocess.run` calls did not — so paths with spaces or non-ASCII names stopped being silently
+  skipped by `find`, the hotspot detector and the coupling detector.
+- **`render.py`** holds how one result item reads, shared by both adapters. The Coach had measured `cli.py`
+  and `server.py` changing together in 84% of commits while neither imports the other.
+- **The Coach no longer lists `operations.py` among this repo's hotspots at all.**
+- `-r` and `TORSOR_ROOT` for every command; one `_emit()` so `--json` means the same thing everywhere.
+
 ### 🧭 The Coach notices what you fixed — and when two decisions disagree
 It tracked `dismissed` and `times_shown` and nothing else, so a recommendation you *solved* just stopped
 appearing, indistinguishable from one that sank below the limit or one you were never shown. And an
@@ -167,6 +245,24 @@ audit pointed somewhere else.
   removes the index wholesale — correctly, since everything else in it rebuilds from Markdown — and was therefore
   silently un-dismissing every recommendation and making the next handoff replay the whole history. Migration
   happens on read, and `.torsor/.gitignore` is updated in place for projects scaffolded before this existed.
+
+### 🧪 Tests, types and CI — two of which found bugs within minutes of being added
+- **`mypy` on `src/`**, as a ratchet rather than `--strict`. Expected a large backlog, got thirty errors — and
+  three of them were real: an `int` parameter rebound to a `float` (making a branch unreachable), a Typer
+  option unpacked without checking both halves, and a dedupe that worked only because `set.add` returns None.
+- **The suite runs in parallel** (`pytest -n auto`), which immediately exposed a test that only passed
+  because a warning had already fired earlier in the same process. Coverage is measured with a floor in CI.
+- **The MCP server is tested through its real entry point.** Every server test called `build_server()`
+  in-process or monkeypatched `FastMCP.run`, so the shipped stdio path was never exercised; six tests now
+  hold a real JSON-RPC conversation with `torsor mcp` as a subprocess — and writing them found that
+  `python -m torsor_helper` did not work at all.
+- **The docs cannot drift from the surface any more.** Fifteen CLI commands and three MCP tools were
+  documented nowhere; a test now walks the real registries and fails when one is missing. The repo already
+  had that pattern for clients and had never pointed it at itself.
+- **`torsor guard` says when it checked nothing.** With no file arguments it checks git-changed files, so on
+  a clean tree it checked nothing and printed "no drift" — indistinguishable from a pass, and that is how an
+  ADR 0002 violation survived a green `--strict` run in CI. Both workflows now pass an explicit file list.
+- `ruff` is pinned, `py.typed` ships, and the CLI has `__main__.py` so `python -m torsor_helper` works.
 
 ### 🔧 Build & CI
 - **`uv.lock` is now committed.** Every runtime dependency except `mcp` was unbounded and the lockfile was

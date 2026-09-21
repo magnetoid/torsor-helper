@@ -8,7 +8,7 @@
 One small Python **MCP** server — works with *every* AI coding tool (Claude Code, Codex, Cursor, …).
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
-![status](https://img.shields.io/badge/release-v0.7%20polyglot%20map-success)
+![status](https://img.shields.io/badge/release-v0.8%20team%20memory-success)
 ![tests](https://img.shields.io/badge/tests-794%20passing-brightgreen)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
@@ -408,11 +408,11 @@ src/torsor_helper/
 ├─ server.py        # FastMCP adapter            cli.py       # Typer CLI
 ```
 
-Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` / `torsor deps` run. **514 tests, lint-clean**, every feature offline-testable.
+Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` / `torsor deps` run. **888 tests, lint-clean and type-checked**, every feature offline-testable.
 
 ## 📍 Status & roadmap
 
-**v0.7 — 794 tests, lint-clean, dogfooded.** What shipped when is in
+**v0.8 — 888 tests, lint-clean, type-checked, dogfooded.** What shipped when is in
 **[CHANGELOG.md](CHANGELOG.md)**; this section is what is true now and what is next.
 
 Everything is dogfooded: this repo has its own `.torsor/`, its ADRs carry the
@@ -462,7 +462,7 @@ More: [how to install](docs/how-to-install.md) · [how to use](docs/how-to-use.m
 
 ## 🤝 Contributing & releasing
 
-`uv run --extra dev --extra languages pytest` (514 tests) · `uv run --with ruff ruff check src tests`. Releasing: see [PUBLISHING.md](PUBLISHING.md).
+`uv run --extra dev --extra languages pytest` (888 tests) · `uv run --with ruff ruff check src tests`. Releasing: see [PUBLISHING.md](PUBLISHING.md).
 
 ## License
 
