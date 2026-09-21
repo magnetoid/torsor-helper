@@ -457,10 +457,11 @@ def index(
 def map(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     force: bool = typer.Option(False, "--force", help="Re-scan even if no source file changed."),
+    path: list[str] = typer.Option(None, "--path", help="Only rescan these files, merged into the existing graph (repeatable)."),
 ) -> None:
     """Generate the repository symbol map under .torsor/map/."""
-    paths, config, store = _load(root)
-    stats = ops.map_repo(store, config, force=force)
+    tp, config, store = _load(root)
+    stats = ops.map_repo(store, config, list(path) if path else None, force=force)
     langs = dict(stats["languages"])
     unavailable = langs.pop("unavailable", {})
     parts = [f"{k} {v}" for k, v in langs.items()]
@@ -631,6 +632,7 @@ def guard(
     severity: Optional[str] = typer.Option(None, "--severity", help="Strict threshold: hint|info|warning|error. Default: fail on any."),
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON findings."),
     update_baseline: bool = typer.Option(False, "--update-baseline", help="Record current violations as the accepted baseline (grandfather existing debt)."),
+    new_only: bool = typer.Option(False, "--new-only", help="Show only violations not in the baseline — the ones that decide the exit code."),
 ) -> None:
     """Check changes against declared architectural intent (ADR rules)."""
 
@@ -640,7 +642,9 @@ def guard(
         store, config, paths or None,
         update_baseline=update_baseline, strict=strict, severity=severity,
     )
-    violations = result["violations"]
+    # --new-only shows exactly the set the exit code is computed from; without
+    # it the printed list and the exit status could disagree.
+    violations = result["new"] if new_only else result["violations"]
 
     # --json is honoured even when baselining: returning first meant
     # `guard --json --update-baseline` printed nothing at all.

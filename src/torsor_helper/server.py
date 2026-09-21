@@ -132,9 +132,11 @@ def build_server(root: Path | str) -> FastMCP:
         return f"{res['hops']} hop(s) from {source!r} to {target!r}:\n{chain}"
 
     @tool
-    def find_files(query: str, mode: str = "fuzzy", limit: int = 20) -> str:
+    def find_files(query: str, mode: str = "fuzzy", limit: int = 20,
+                   include_files: bool = True, include_symbols: bool = True) -> str:
         """Fuzzy, frecency-ranked search over the repo's files and mapped symbols — jump to the right file/symbol fast. mode: fuzzy|literal|regex. Run map_repo first for symbol results."""
-        res = ops.find_targets(store, config, query, mode=mode, limit=limit)
+        res = ops.find_targets(store, config, query, mode=mode, limit=limit,
+                               include_files=include_files, include_symbols=include_symbols)
         if not res:
             return f"No matches for {query!r}."
         return "\n".join(f"- {render.find_hit(r)}" for r in res)
@@ -232,9 +234,15 @@ def build_server(root: Path | str) -> FastMCP:
         return f"{len(violations)} drift violation(s):\n" + "\n".join([*lines, tail] if tail else lines)
 
     @tool
-    def check_dependencies(files: list[str] | None = None) -> str:
+    def check_dependencies(files: list[str] | None = None, as_json: bool = False) -> str:
         """Flag imports that resolve to no known package — possible hallucinated dependencies (slopsquatting). Offline; defaults to git-changed files."""
         findings = ops.check_dependencies(store, config, files)
+        if as_json:
+            # A gate could not tell "clean" from "three phantom imports" without
+            # parsing English.
+            import json
+
+            return json.dumps({"ok": not findings, "count": len(findings), "findings": findings})
         if not findings:
             return "No unknown imports — every import resolves to a known package."
         kept, tail = cap_items(findings, config.budgets.max_items)
@@ -255,11 +263,13 @@ def build_server(root: Path | str) -> FastMCP:
         return json.dumps(ops.verify(store, config, files, severity=severity))
 
     @tool
-    def stale(mark: bool = False) -> str:
+    def stale(mark: bool = False, unmark: bool = False) -> str:
         """Flag memory that contradicts current code: dangling [[wikilinks]] and dead
         file-path references. Read-only unless mark=True, which sets status: stale
         on the offending notes (reversible; the body is untouched)."""
-        result = ops.check_staleness(store, config, mark=mark)
+        if mark and unmark:
+            return "mark and unmark are opposites; pass one."
+        result = ops.check_staleness(store, config, mark=mark, unmark=unmark)
         findings = result["findings"]
         if not findings:
             return "No staleness detected — memory matches the code."
@@ -303,6 +313,12 @@ def build_server(root: Path | str) -> FastMCP:
         return "\n".join(f"- {render.recommendation(r)}" for r in recs)
 
     @tool
+    def dismiss_recommendation(key: str) -> str:
+        """Stop showing a Coach recommendation. `key` is the one printed with it. Reversible only by editing .torsor/state/coach_state.json."""
+        ops.dismiss_recommendation(store, key)
+        return f"Dismissed {key!r}."
+
+    @tool
     def hooks_status() -> str:
         """Report which git hooks and Claude Code events carry a torsor auto-capture
         entry. Read-only — installing and removing hooks is CLI-only (`torsor hooks install`)."""
@@ -312,6 +328,79 @@ def build_server(root: Path | str) -> FastMCP:
         )
         events = ", ".join(status["claude_events"]) or "none"
         return f"git hooks: {git}\nclaude events: {events}"
+
+    # Prompts: the cheapest surface an MCP client has. Claude Code and Cursor
+    # render these as slash-commands, so the loop steps stop depending on the
+    # agent remembering which tool to call in which order. Designed in the
+    # foundation spec and never built.
+
+    @mcp.prompt()
+    def onboard() -> str:
+        """Start here in an unfamiliar project: what it is, how it is shaped, the standing rules."""
+        problem = _refresh()
+        if problem:
+            return problem
+        return (
+            "Read this project's memory before doing anything else, then say what you "
+            "understood in three sentences.\n\n"
+            f"{ops.bootstrap_session(store, config)}\n\n"
+            f"{ops.agent_rules(store, config)}"
+        )
+
+    @mcp.prompt()
+    def checkpoint() -> str:
+        """Close out a work session: record what changed, what was decided, what is next."""
+        problem = _refresh()
+        if problem:
+            return problem
+        return (
+            "Wrap up this session. Call update_active with the current focus, progress and "
+            "open questions, then handoff with a summary, the decisions taken and the next "
+            "steps. Record anything durable with remember, and any load-bearing structural "
+            "choice with record_decision.\n\n"
+            f"Current state:\n{ops.get_intent(store, config)}"
+        )
+
+    @mcp.prompt()
+    def review_drift() -> str:
+        """Check the working tree against the project's declared architecture."""
+        problem = _refresh()
+        if problem:
+            return problem
+        verdict = ops.verify(store, config)
+        return (
+            "Review this verdict. For each failing check, either fix the code or explain "
+            "why the rule should change — and if the rule should change, record an ADR "
+            "rather than editing the baseline.\n\n"
+            f"{verdict['summary']}\n\n" + "\n".join(
+                f"{c['name']}: " + "; ".join(c["reasons"]) for c in verdict["checks"] if c["reasons"]
+            )
+        )
+
+    @mcp.prompt()
+    def coach() -> str:
+        """Ask the Coach what to improve, and act on one thing."""
+        problem = _refresh()
+        if problem:
+            return problem
+        recs = ops.recommend(store, config, None, limit=5)
+        if not recs:
+            return "The Coach has nothing to suggest — the project looks healthy."
+        return (
+            "Pick the single highest-value item below, do it, and dismiss the rest only "
+            "if they are genuinely not worth doing.\n\n"
+            + "\n".join(render.recommendation(r) for r in recs)
+        )
+
+    @mcp.resource("torsor://architecture")
+    def architecture_resource() -> str:
+        return (paths.system_patterns.read_text(encoding="utf-8")
+                if paths.system_patterns.exists() else "")
+
+    @mcp.resource("torsor://map/overview")
+    def map_overview_resource() -> str:
+        return (paths.map_overview.read_text(encoding="utf-8")
+                if paths.map_overview.exists() else "")
 
     @mcp.resource("torsor://charter")
     def charter_resource() -> str:
