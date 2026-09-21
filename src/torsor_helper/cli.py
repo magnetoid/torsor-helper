@@ -563,6 +563,12 @@ def rules(
 ) -> None:
     """Print a compact agent-rules digest (charter principles + ADR rules) — paste it into AGENTS.md/CLAUDE.md so agents follow the rules without spending tool-call tokens."""
     tp, config, store = _load(root)
+    if scoped and (write is not None or client is not None):
+        # It used to return early and ignore them, so the user believed a block
+        # had been written somewhere it had not.
+        typer.echo("--scoped writes one file per ADR into .claude/rules/torsor/; "
+                   "it cannot also target --write or --client.", err=True)
+        raise typer.Exit(code=2)
     if scoped:
         written = ops.write_scoped_rules(store, config)
         rel = tp.claude_rules_dir.relative_to(tp.root).as_posix()
@@ -848,19 +854,21 @@ def recipes(
 @app.command()
 def commands(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-    add: Optional[str] = typer.Option(None, "--add", help="Record a command as 'name=command' (e.g. --add 'test=uv run pytest')."),
+    add: Optional[tuple[str, str]] = typer.Option(
+        (None, None), "--add", help="Record a command: --add NAME COMMAND (e.g. --add test 'uv run pytest').",
+        metavar="NAME COMMAND",
+    ),
     note: str = typer.Option("", help="Optional description for --add."),
     run: Optional[str] = typer.Option(None, "--run", help="Run a recorded command by name."),
 ) -> None:
     """Record & replay the project's commands so agents don't re-derive them each session."""
     tp, _, store = _load(root, config=False)
-    if add is not None:
-        if "=" not in add:
-            typer.echo("Use --add 'name=command' (e.g. 'test=uv run pytest').", err=True)
-            raise typer.Exit(code=1)
-        name, _, command = add.partition("=")
+    name, command = add if add else (None, None)
+    if name:
+        # Two arguments, not 'name=command': the ad-hoc split broke any command
+        # containing "=" (`FOO=bar pytest`), which is a normal thing to record.
         ops.record_command(store, name.strip(), command.strip(), note)
-        typer.echo(f"Recorded command '{name.strip()}'.")
+        typer.echo(f"Recorded command {name.strip()!r}.")
         return
     if run is not None:
         result = ops.run_command(store, run)
@@ -870,7 +878,7 @@ def commands(
         raise typer.Exit(code=result.returncode)
     cmds = ops.list_commands(store)
     if not cmds:
-        typer.echo("No commands recorded yet. Add one:  torsor commands --add 'test=uv run pytest'")
+        typer.echo("No commands recorded yet. Add one:  torsor commands --add test 'uv run pytest'")
         return
     for c in cmds:
         typer.echo(f"  {render.command(c)}")
@@ -882,7 +890,8 @@ def models(
     cheap: Optional[str] = typer.Option(None, help="Model id for basic, deterministic work (torsor lookups, command replays)."),
     smart: Optional[str] = typer.Option(None, help="Model id for thinking & construction (design, code, decisions)."),
     fast: Optional[str] = typer.Option(None, help="Optional mid-tier model id."),
-    write: Optional[Path] = typer.Option(None, "--write", help="Publish the policy to a file: a *.md/AGENTS.md/CLAUDE.md target gets a Markdown block (any agent reads it); a *.json target gets machine-readable JSON (any router reads it)."),
+    write: Optional[Path] = typer.Option(None, "--write", help="Merge the Markdown policy block into an instructions file (AGENTS.md, CLAUDE.md, …). Existing content is preserved."),
+    write_json: Optional[Path] = typer.Option(None, "--write-json", help="Write the machine-readable policy to a JSON file. Replaces the file."),
     client: Optional[str] = typer.Option(None, "--client", help="Write the Markdown policy to a client's conventional instructions file instead of --write."),
     json_out: bool = typer.Option(False, "--json", help="Print the machine-readable policy (for piping into any harness's router)."),
 ) -> None:
@@ -899,14 +908,24 @@ def models(
             config.models.fast = fast
         save_config(tp, config)
         typer.echo("Updated [models] in torsor.toml.")
+    if write is not None and str(write).endswith(".json"):
+        # One flag used to mean two things: a .md target got a merged block, a
+        # .json target had its whole content replaced. Silent data loss if you
+        # aimed it at a config file you already had.
+        typer.echo("--write merges a Markdown block; use --write-json for a JSON policy file.", err=True)
+        raise typer.Exit(code=2)
+    if write_json is not None:
+        # Relative to the project root, like --write — not the shell's cwd.
+        target = write_json if write_json.is_absolute() else root / write_json
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(_json.dumps(ops.model_policy_json(store, config), indent=2) + "\n",
+                          encoding="utf-8")
+        typer.echo(f"Wrote machine-readable model policy to {target} (for programmatic routers).")
+        return
     dest = _resolve_block_target(root, write, client)
     if dest is not None:
-        if str(dest).endswith(".json"):
-            dest.write_text(_json.dumps(ops.model_policy_json(store, config), indent=2) + "\n", encoding="utf-8")
-            typer.echo(f"Wrote machine-readable model policy to {dest} (for programmatic routers).")
-        else:
-            ops.write_model_policy(store, config, dest)
-            typer.echo(f"Wrote Model-routing block to {dest} (any agent that reads this file follows it).")
+        ops.write_model_policy(store, config, dest)
+        typer.echo(f"Wrote Model-routing block to {dest} (any agent that reads this file follows it).")
         return
     if json_out:
         typer.echo(_json.dumps(ops.model_policy_json(store, config), indent=2))
