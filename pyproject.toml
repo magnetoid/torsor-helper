@@ -97,6 +97,18 @@ ignore_missing_imports = true      # the tree-sitter grammar wheels ship no stub
 warn_unused_ignores = true
 warn_redundant_casts = true
 
+[[tool.mypy.overrides]]
+# The one module whose imports are conditional by design (ADR 0013: treesitter.py
+# is the only place that touches tree_sitter, so degradation lives in one place).
+# Its `type: ignore`s are needed when the `languages` extra IS installed and are
+# unused when it is not — so with this on, mypy's verdict depended on the state
+# of whoever's virtualenv it ran in. It passed locally, where the extra had been
+# synced in by an earlier test run, and failed in CI, which installs only `dev`.
+# Every other check still applies to this module; only the unused-ignore warning
+# is dropped, and the result no longer depends on how the venv was last used.
+module = "torsor_helper.languages.treesitter"
+warn_unused_ignores = false
+
 [tool.coverage.run]
 source = ["src/torsor_helper"]
 omit = ["*/__main__.py"]
