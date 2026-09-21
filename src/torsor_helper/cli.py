@@ -62,18 +62,20 @@ def _load(root: Path, *, config: bool = True):
     if not tp.base.exists():
         typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
         raise typer.Exit(code=1)
-    return tp, (load_config(tp) if config else None), Store(tp, journal_partition=_partition(tp))
+    cfg = load_config(tp) if config else None
+    return tp, cfg, Store.for_config(tp, cfg if cfg is not None else _config_best_effort(tp))
 
 
-def _partition(tp) -> str:
-    """The journal layout, read best-effort. `remember` and `handoff` deliberately
-    load without a config so a malformed torsor.toml cannot stop you writing
-    memory down — and they are exactly the commands that write journals, so the
-    one setting they do need is read on its own and degrades to the default."""
+def _config_best_effort(tp):
+    """torsor.toml, or None when it is malformed. `remember` and `handoff`
+    deliberately load without a config so a malformed torsor.toml cannot stop
+    you writing memory down — but the Store still wants the settings that shape
+    Markdown I/O (journal layout, project-doc sources), so they are read on their
+    own and degrade to the defaults."""
     try:
-        return load_config(tp).memory.journal_partition
+        return load_config(tp)
     except (OSError, ValueError):
-        return "date"
+        return None
 
 
 def _check_severity(value):
@@ -627,6 +629,10 @@ def rules(
     dest = _resolve_block_target(root, write, client)
     if dest is not None:
         target = ops.write_rules_block(store, config, dest)
+        if target is None:
+            typer.echo("No rules to export yet — nothing written. Fill the charter's principles "
+                       "or record ADRs with rules.")
+            return
         typer.echo(f"Wrote rules block → {target} (re-run after recording new ADRs)")
         return
     digest = ops.agent_rules(store, config)
@@ -1075,7 +1081,7 @@ def hooks_run(
     if not tp.base.exists():
         return  # nothing to capture; never break the git/agent lifecycle
     config = load_config(tp)
-    store = Store(tp, journal_partition=config.memory.journal_partition)
+    store = Store.for_config(tp, config)
     if event == "post-commit":
         ops.on_commit(store, config)
     elif event == "session-start":

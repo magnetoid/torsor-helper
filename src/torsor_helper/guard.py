@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from torsor_helper.cartographer import absolute_from_module
+from torsor_helper import globs
 from torsor_helper.languages.python import parse_quietly
 from torsor_helper.models import Rule, Violation
 from torsor_helper.store import Store
@@ -160,43 +161,9 @@ _SCOPE_CACHE: dict[str, re.Pattern] = {}
 
 
 def _scope_regex(scope: str) -> re.Pattern:
-    """Translate a scope glob to a regex with path-aware semantics.
-
-    `*` and `?` stay inside one path segment, `**` spans directories (including
-    zero of them), and `[...]` classes pass through. fnmatch has none of this:
-    it lets `*` cross `/`, so `src/pkg/*.py` silently governed everything under
-    src/pkg, and it gives `**` no meaning at all, so `src/**/*.ts` matched
-    nothing directly under src/.
-    """
-    out, i, n = [], 0, len(scope)
-    while i < n:
-        c = scope[i]
-        if c == "*":
-            if scope[i:i + 3] == "**/":
-                out.append("(?:[^/]+/)*")   # zero or more directories
-                i += 3
-                continue
-            if scope[i:i + 2] == "**":
-                out.append(".*")
-                i += 2
-                continue
-            out.append("[^/]*")
-        elif c == "?":
-            out.append("[^/]")
-        elif c == "[":
-            j = scope.index("]", i + 1) if "]" in scope[i + 1:] else -1
-            if j == -1:
-                out.append(re.escape(c))
-            else:
-                body = scope[i + 1:j]
-                body = ("^" + body[1:]) if body.startswith("!") else body
-                out.append(f"[{body}]")
-                i = j + 1
-                continue
-        else:
-            out.append(re.escape(c))
-        i += 1
-    return re.compile("".join(out) + r"\Z")
+    # Kept as a name: the translation now lives in globs.py, shared with the
+    # store's project-doc sources, and this is the historical entry point.
+    return globs.translate(scope)
 
 
 def rule_applies(relpath: str, rule) -> bool:

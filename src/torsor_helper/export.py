@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from torsor_helper import db
+from torsor_helper import db, templates
 from torsor_helper.cartographer import norm_path
 from torsor_helper.models import Frontmatter
 from torsor_helper.store import Store
@@ -31,7 +31,9 @@ def render_llms_txt(store: Store) -> str:
     torsor's MCP protocol."""
     paths = store.paths
     title, summary = "Project", ""
-    if paths.charter.exists():
+    # llms.txt is written for language models; an unfilled charter would give
+    # them "Describe the product in 2-3 sentences." as the project summary.
+    if paths.charter.exists() and not templates.is_unfilled(paths, paths.charter):
         charter = store.read_note(paths.charter)
         title = charter.title or "Project"
         summary = _summary(charter.body)

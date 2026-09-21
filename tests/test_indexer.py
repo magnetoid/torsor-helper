@@ -6,6 +6,7 @@ from torsor_helper.embeddings import HashingEmbedder
 from torsor_helper.indexer import reindex
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
+from conftest import fill_seeds
 
 CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 
@@ -13,6 +14,7 @@ CLOCK = lambda: datetime(2026, 6, 1, 9, 30, 0)
 def _setup(tmp_path):
     store = Store(TorsorPaths(tmp_path), clock=CLOCK)
     store.scaffold()
+    fill_seeds(store)
     conn = db.connect(tmp_path / "idx.db")
     return store, conn
 

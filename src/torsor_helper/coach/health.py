@@ -16,7 +16,7 @@ def check_thin(store: Store) -> list[Recommendation]:
     out: list[Recommendation] = []
     for attr, label, seed in _THIN_TARGETS:
         path = getattr(store.paths, attr)
-        if path.exists() and path.read_text(encoding="utf-8").strip() == seed.strip():
+        if path.exists() and templates.is_unfilled(store.paths, path):
             out.append(Recommendation(
                 kind="thin", severity="important",
                 message=f"{label} is still the seed template — fill it in so the agent has real context.",
@@ -27,7 +27,7 @@ def check_thin(store: Store) -> list[Recommendation]:
 
 def check_stale(store: Store) -> list[Recommendation]:
     path = store.paths.active_context
-    if path.exists() and path.read_text(encoding="utf-8").strip() == templates.ACTIVE_CONTEXT.strip():
+    if path.exists() and templates.is_unfilled(store.paths, path):
         return [Recommendation(
             kind="stale", severity="suggest",
             message="Active context is still the seed template — capture current focus with update_active / handoff.",

@@ -10,7 +10,7 @@ import json
 import re as _re
 from pathlib import Path
 
-from torsor_helper import guard
+from torsor_helper import guard, templates
 from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.config import TorsorConfig
 from torsor_helper.operations._shared import _log_op
@@ -35,7 +35,10 @@ def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int | None = 
     _log_op(store, "get_rules", "")
     sections: list[str] = []
 
-    if store.paths.charter.exists():
+    # Not from an unfilled charter: its "principles" are the seed's placeholder,
+    # and `rules --write` put "_e.g. local-first; Markdown is the source of
+    # truth._" into the user's AGENTS.md as a non-negotiable principle.
+    if store.paths.charter.exists() and not templates.is_unfilled(store.paths, store.paths.charter):
         principles = _charter_section(store.read_note(store.paths.charter).body, "Non-negotiable principles")
         if principles:
             sections.append(f"### Non-negotiable principles\n{principles}")
@@ -75,8 +78,20 @@ def _write_managed_block(target, start: str, end: str, content: str) -> str:
     target.write_text(new, encoding="utf-8")
     return str(target)
 
-def write_rules_block(store: Store, config: TorsorConfig, target) -> str:
-    return _write_managed_block(target, _RULES_START, _RULES_END, agent_rules(store, config))
+def write_rules_block(store: Store, config: TorsorConfig, target) -> str | None:
+    """Write the rules digest into `target` as a managed block. None when there
+    is nothing to write and no block to clear: on a fresh project it used to
+    report "Wrote rules block" and leave an empty one in the user's AGENTS.md.
+    An existing block IS rewritten when the digest is empty — that clears rules
+    whose ADRs were removed, which is what the user wants."""
+    digest = agent_rules(store, config)
+    if not digest:
+        try:
+            if _RULES_START not in Path(target).read_text(encoding="utf-8"):
+                return None
+        except OSError:
+            return None
+    return _write_managed_block(target, _RULES_START, _RULES_END, digest)
 
 def _rule_line(r) -> str:
     scope = f" in `{r.scope}`" if r.scope and r.scope != "*.py" else ""
@@ -110,7 +125,10 @@ def write_scoped_rules(store: Store, config: TorsorConfig) -> list:
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
-    if store.paths.charter.exists():
+    # Not from an unfilled charter: its "principles" are the seed's placeholder,
+    # and `rules --write` put "_e.g. local-first; Markdown is the source of
+    # truth._" into the user's AGENTS.md as a non-negotiable principle.
+    if store.paths.charter.exists() and not templates.is_unfilled(store.paths, store.paths.charter):
         principles = _charter_section(store.read_note(store.paths.charter).body, "Non-negotiable principles")
         if principles:
             target = out_dir / "principles.md"
@@ -163,7 +181,11 @@ def project_primer(store: Store, config: TorsorConfig, *, max_tokens: int | None
         ("How it's architected", store.paths.system_patterns, 0.30),
         ("Repo map (key modules)", store.paths.map_overview, 0.20),
     ]:
-        if path.exists():
+        # An unfilled seed is the worst thing to put here: `primer --write`
+        # lands in AGENTS.md / CLAUDE.md, which the client loads into every
+        # session, so "_Describe the product in 2-3 sentences._" was paid for on
+        # every session until someone re-ran it.
+        if path.exists() and not templates.is_unfilled(store.paths, path):
             body = store.read_note(path).body.strip()
             text = truncate_to_tokens(body, int(max_tokens * frac), cpt)
             if text.strip():

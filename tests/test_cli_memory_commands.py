@@ -16,12 +16,15 @@ from typer.testing import CliRunner
 from torsor_helper.cli import app
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
+from conftest import fill_seeds
 
 runner = CliRunner()
 
 
 def _project(tmp_path):
-    Store(TorsorPaths(tmp_path)).scaffold()
+    store = Store(TorsorPaths(tmp_path))
+    store.scaffold()
+    fill_seeds(store)
     return ["--root", str(tmp_path)]
 
 

@@ -14,6 +14,9 @@ class Tier(IntEnum):
     MAP = 2
     ACTIVE = 3
     EPISODIC = 4
+    # Project Markdown outside .torsor/ (README, docs/) — indexed in place,
+    # never written. Last, so every stored tier integer keeps its meaning.
+    DOCS = 5
 
 
 # Canonical per-tier recall weight. The single source of truth for both the
@@ -22,10 +25,30 @@ class Tier(IntEnum):
 TIER_WEIGHTS: dict[Tier, float] = {
     Tier.CHARTER: 1.5,
     Tier.ARCHITECTURE: 1.4,
+    # Authored by the project, so above working notes and the derived map; not
+    # curated as intent, so below the charter and architecture.
+    Tier.DOCS: 1.3,
     Tier.ACTIVE: 1.2,
     Tier.MAP: 1.1,
     Tier.EPISODIC: 1.0,
 }
+
+# Applied on top of the MAP weight to a map note for test code. Test names are
+# prose about behaviour (test_webhook_routes_message), so lexically they look
+# like answers to natural-language questions and outrank the code they test —
+# on a real project, 2 to 4 of the top 5 recall slots for 7 of 7 questions.
+# Weighted down rather than removed: a question that names a test still finds it.
+TEST_MAP_WEIGHT = 0.5
+
+
+def recall_weight(tier: Tier, title: str) -> float:
+    """The tier weight, adjusted for a map note that documents test code."""
+    from torsor_helper.paths import is_test_path
+
+    weight = TIER_WEIGHTS.get(tier, 1.0)
+    if tier is Tier.MAP and is_test_path(title):
+        weight *= TEST_MAP_WEIGHT
+    return weight
 
 
 class MemoryKind(str, Enum):

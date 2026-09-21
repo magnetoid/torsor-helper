@@ -18,6 +18,7 @@ _DEFAULT_IMPORTANCE_FLOORS = {
     "MAP": 0.9,
     "ACTIVE": 0.85,
     "EPISODIC": 0.7,
+    "DOCS": 0.9,
 }
 
 
@@ -135,6 +136,18 @@ class MemoryConfig(_Strict):
     # the team is large enough that union merges get noisy. Changing it does
     # not rewrite existing journals — both shapes are read.
     journal_partition: Literal["date", "date-author"] = "date"
+    # Project Markdown that already exists, indexed where it is — read-only,
+    # re-read when it changes, never written, never copied into .torsor/.
+    # Globs anchored at the project root (`README.md` is the top-level one, not
+    # every README at any depth); only .md files; nothing outside the root.
+    # CLAUDE.md and AGENTS.md are left out on purpose: every client already
+    # loads its own instructions file, so recalling it again spends tokens on
+    # text the agent is holding. Add `website/docs/**/*.md`, `plans/**/*.md`
+    # and the like for your own layout.
+    sources: list[str] = Field(default_factory=lambda: [
+        "README.md", "CONTRIBUTING.md", "ARCHITECTURE.md", "DESIGN.md",
+        "docs/**/*.md", "doc/**/*.md", "adr/**/*.md", "rfcs/**/*.md",
+    ])
 
 
 class CleanConfig(_Strict):

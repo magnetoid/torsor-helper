@@ -5,7 +5,7 @@ lands in context (see budget.py) — these are the paths an agent pays for on
 every single session, so an overrun here is the most expensive kind."""
 from __future__ import annotations
 
-from torsor_helper import db
+from torsor_helper import db, templates
 from torsor_helper.budget import cap_items, estimate_tokens, truncate_to_tokens
 from torsor_helper.coach import report as coach_report
 from torsor_helper.config import TorsorConfig
@@ -40,8 +40,8 @@ def bootstrap_session(store: Store, config: TorsorConfig, *, max_tokens: int | N
 
     for label, attr, frac in _BOOTSTRAP_ALLOC:
         path = getattr(store.paths, attr)
-        if not path.exists():
-            continue
+        if not path.exists() or templates.is_unfilled(store.paths, path):
+            continue  # a seed says nothing about the project; the Coach says fill it
         note = store.read_note(path)
         text = truncate_to_tokens(note.body.strip(), int(total * frac), cpt)
         if text.strip():
@@ -54,9 +54,13 @@ def bootstrap_session(store: Store, config: TorsorConfig, *, max_tokens: int | N
     # Push a short hygiene digest from the Coach (index-free, dismissible).
     digest = coach_report.session_digest(store, limit=3)
     if digest:
+        # At least its fraction, and whatever the sections above left unused. A
+        # fixed 8% cut the most useful line on a fresh project — every section
+        # above it empty — to "System patterns is st…".
+        used = estimate_tokens("\n\n".join(sections), cpt)
         lines = truncate_to_tokens(
             "\n".join(f"- [{rec.severity}] {rec.message}" for rec in digest),
-            int(total * _COACH_FRACTION), cpt,
+            max(int(total * _COACH_FRACTION), total - used - 20), cpt,
         )
         if lines.strip():
             sections.append(f"## Recommendations\n\n{lines}")
@@ -81,6 +85,11 @@ def session_start_context(store: Store, config: TorsorConfig, *, how: str = "sta
     cpt = config.budgets.chars_per_token
     when = "re-injected after context compaction" if how == "compact" else "injected at session start"
     header = _SESSION_START_HEADER.format(when=when)
+    docs = sum(1 for _ in store.iter_doc_paths())
+    if docs:
+        # The one thing about project docs worth saying every session: that
+        # recall reaches them. Their content is recalled on demand, never here.
+        header = header.rstrip("\n") + f" recall() also searches {docs} project doc(s) (README, docs/).\n\n"
     # The header lands in context alongside the body, so it is spent from the
     # same ceiling — "a 500-token digest" has to mean the whole injected string.
     body = bootstrap_session(
@@ -130,7 +139,8 @@ def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8, *,
             )
         finally:
             conn.close()
-    notes = [n for n in store.iter_notes() if _passes(n, type_, kind, include_superseded, symbol)]
+    notes = [n for n in (*store.iter_notes(), *store.iter_docs())
+             if _passes(n, type_, kind, include_superseded, symbol)]
     return keyword_recall(
         notes, query, limit=limit,
         chars_per_token=config.budgets.chars_per_token,
@@ -196,7 +206,7 @@ def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> 
         ("System Patterns", store.paths.system_patterns, 0.4),
         ("Tech Context", store.paths.tech_context, 0.3),
     ]:
-        if path.exists():
+        if path.exists() and not templates.is_unfilled(store.paths, path):
             note = store.read_note(path)
             text = truncate_to_tokens(note.body.strip(), int(total * frac), cpt)
             if text.strip():

@@ -24,8 +24,22 @@ A disposable SQLite index (FTS5 + local vectors + link graph) is derived from th
    ```bash
    torsor init --write && torsor doctor
    ```
-2. **Fill in the two files that matter most** — open `.torsor/charter.md` (what you're building, why, the principles you refuse to break) and `.torsor/architecture/system-patterns.md` (layering, conventions, patterns in use). Two honest paragraphs each beat empty templates. Your agent can draft them: *"read the codebase and fill in .torsor/charter.md and architecture/system-patterns.md"*.
-3. **Record your first real decision with a rule** so the guard has teeth — e.g. ask the agent to call:
+2. **Your existing docs are already memory.** `README.md`, `CONTRIBUTING.md`,
+   `ARCHITECTURE.md`, `DESIGN.md` and everything under `docs/`, `doc/`, `adr/`
+   and `rfcs/` are indexed where they are — `recall` searches them from the
+   first query, as the `DOCS` tier. torsor reads them and never writes them;
+   nothing is copied into `.torsor/`. Point it at your own layout in
+   `.torsor/torsor.toml`:
+   ```toml
+   [memory]
+   sources = ["README.md", "docs/**/*.md", "website/docs/**/*.md", "plans/**/*.md"]
+   ```
+   Patterns are anchored at the project root (`README.md` is the top-level
+   one, not every README) and cannot reach outside it. `CLAUDE.md` and
+   `AGENTS.md` are left out on purpose: your client already loads them, so
+   recalling them again only spends tokens.
+3. **Fill in the two files that matter most** — open `.torsor/charter.md` (what you're building, why, the principles you refuse to break) and `.torsor/architecture/system-patterns.md` (layering, conventions, patterns in use). Two honest paragraphs each beat empty templates. Your agent can draft them: *"read the codebase and fill in .torsor/charter.md and architecture/system-patterns.md"*.
+4. **Record your first real decision with a rule** so the guard has teeth — e.g. ask the agent to call:
    ```
    record_decision(
      title="Domain layer must not import the web layer",
@@ -33,11 +47,11 @@ A disposable SQLite index (FTS5 + local vectors + link graph) is derived from th
      rules=[{"kind": "forbid_import", "target": "app.web", "scope": "app/domain/*.py"}]
    )
    ```
-4. **Put the rules in the prompt** so every agent sees them for free:
+5. **Put the rules in the prompt** so every agent sees them for free:
    ```bash
    torsor rules --write AGENTS.md     # or CLAUDE.md — refresh after recording new ADRs
    ```
-5. **Map the repo** and **commit `.torsor/`**:
+6. **Map the repo** and **commit `.torsor/`**:
    ```bash
    torsor map && git add .torsor && git commit -m "Add project memory"
    ```

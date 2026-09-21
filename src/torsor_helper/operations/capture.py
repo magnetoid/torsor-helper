@@ -10,7 +10,7 @@ import json
 import re as _re
 from pathlib import Path
 
-from torsor_helper import db, gitinfo
+from torsor_helper import db, gitinfo, templates
 from torsor_helper.operations._state import _state_file
 from torsor_helper.operations.decisions import _next_adr_number
 from torsor_helper.operations.graph import map_repo
@@ -151,9 +151,13 @@ def auto_handoff(store, config, *, session_id=None, transcript_path=None) -> str
         if extra:
             summary += f"\n\n{extra}"
 
-    active_text = store.read_note(store.paths.active_context).body if store.paths.active_context.exists() else ""
+    # An unfilled template contributes nothing — its "Open questions" section is
+    # the placeholder "_Unresolved decisions._", which went into every handoff.
+    active_text = (store.read_note(store.paths.active_context).body
+                   if _has_content(store, store.paths.active_context) else "")
     open_qs = _read_md_section(active_text, "Open questions")
-    next_steps = store.read_note(store.paths.progress).body.strip() if store.paths.progress.exists() else ""
+    next_steps = (store.read_note(store.paths.progress).body.strip()
+                  if _has_content(store, store.paths.progress) else "")
 
     path = record_handoff(store, summary, decisions=", ".join(new_adrs),
                           open_questions=open_qs, next_steps=next_steps)
@@ -181,3 +185,7 @@ def on_commit(store, config) -> dict:
         _snapshot_complexity(store)
         result["snapshot"] = store.paths.index_db.exists()
     return result
+
+
+def _has_content(store, path) -> bool:
+    return path.exists() and not templates.is_unfilled(store.paths, path)

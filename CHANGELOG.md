@@ -6,6 +6,36 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 📚 Day one on a real project: its own docs are memory, and templates stop costing tokens
+On a real project a fresh `torsor init` left memory empty — five seed templates and 2 952 map notes — while
+the project's knowledge sat in README.md, CONTRIBUTING.md and 24 design docs under `docs/`, none of which
+torsor read. `recall` answered with map notes, test files first.
+
+- **Your existing docs are indexed in place.** New `memory.sources` (defaults: `README.md`, `CONTRIBUTING.md`,
+  `ARCHITECTURE.md`, `DESIGN.md`, `docs/`, `doc/`, `adr/`, `rfcs/`) as a new `DOCS` recall tier — above working
+  notes and the derived map, below charter and architecture. Read-only: re-read when they change, dropped
+  when they are deleted, never copied into `.torsor/` and never written; a test runs every path that writes
+  Markdown and checks them byte-for-byte. Patterns are anchored at the root and cannot reach outside it.
+  `CLAUDE.md`/`AGENTS.md` are not in the defaults — your client already loads them. On the real project,
+  "how does the gateway route messages" now returns the multi-gateway design doc first. `impact` also lists
+  docs that mention a symbol.
+- **An unfilled template is not content.** The SessionStart hook injected ~283 tokens of "_Describe the
+  product in 2-3 sentences._" into every session and again after every compaction; it is now 99 tokens that
+  say docs are searchable and the charter needs filling. The same placeholder text reached recall (the
+  unfilled System Patterns ranked first for unrelated questions), `rules --write` (which put "_e.g.
+  local-first…_" into `AGENTS.md` as a non-negotiable principle), `primer --write` (the whole seed charter,
+  loaded into every session), `rules --scoped`, auto-handoff, `llms.txt` and the MCP resources. One definition
+  now, `templates.is_unfilled`, used by all of them.
+- **Map notes for test code are weighted down.** Test names are prose about behaviour, so they matched
+  questions better than the code they test and took 2–4 of the top 5 slots for 7 of 7 questions. Weighted
+  ×0.5, they were replaced by the implementation or a relevant doc in every one; a question naming a test
+  still finds it.
+- `rules --write` with nothing to export writes nothing, instead of reporting success and leaving an empty
+  block. The Coach's share of the session digest grows into room the sections above leave unused, so its
+  most useful line is no longer cut mid-word.
+
+See ADR 0018.
+
 ### 🗜 The index on a real project: 216 MB → 80 MB, same answers
 `symbol_edges` and its two indexes were 172 MB of it: 1 071 508 rows, **79% of them unresolved** — references
 to `self`, `str`, `result`, `monkeypatch`, `len`. Python and JS resolve an edge while extracting it and have no
