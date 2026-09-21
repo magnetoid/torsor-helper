@@ -46,13 +46,19 @@ def guard_run(store, config, files=None, *, update_baseline=False, strict=False,
     return {"violations": violations, "new": new, "baselined": len(violations) - len(new),
             "failed": failed, "updated_baseline": False, "checked": len(checked)}
 
+def dependency_targets(store, files=None) -> list[str]:
+    """The files a dependency check will actually read: `files`, or the
+    git-changed source files when none are given. Separate so an adapter can say
+    how many there were — on a clean tree the default is EMPTY, and "every
+    import resolves" after checking zero files reads exactly like a pass."""
+    return list(files) if files is not None else gitinfo.changed_source_files(store.paths.root)
+
+
 def check_dependencies(store, config, files=None) -> list:
     """Flag imports that resolve to no known package (possible slopsquatting).
     Defaults to git-changed files; fully offline."""
     _log_op(store, "check_dependencies", "")
-    if files is None:
-        files = gitinfo.changed_source_files(store.paths.root)
-    return _deps.unknown_imports(store.paths.root, files)
+    return _deps.unknown_imports(store.paths.root, dependency_targets(store, files))
 
 def _verify_check(name, ok, status, reasons, *, cap: int = 0) -> dict:
     """`count` is the true number of reasons; `reasons` is capped so a gate that

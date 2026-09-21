@@ -342,7 +342,7 @@ Everything below is **derived from your Markdown** and rebuildable. Delete `.tor
 | `torsor rules [--write <file>] [--scoped]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write` maintains a managed block in `AGENTS.md`/`CLAUDE.md`; `--scoped` writes one path-scoped Claude Code rule file per ADR under `.claude/rules/torsor/` — prompt-time rules at zero tool-call cost |
 | `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline; Python, JS/TS, Go) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
-| `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** + **contradiction** recommendations, plus what you fixed since last time |
+| `torsor coach [context] [--dismiss <key>] [--limit N]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** + **contradiction** recommendations, plus what you fixed since last time |
 | `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, snapshot complexity, report duplicates |
 | `torsor clean [--apply] [--deep]` | Garbage-collect derived artefacts: orphaned map notes, dead index rows (+VACUUM), expired journals; `--deep` drops the whole index. Dry run unless `--apply` |
 | `torsor commands [--add 'name=cmd'] [--run name]` | Record & replay project commands (test/build/lint) so agents don't re-derive them |

@@ -84,13 +84,13 @@ def test_js_known_computed_once_per_call(tmp_path, monkeypatch):
     (tmp_path / "b.ts").write_text("import _ from 'lodash';\n")
 
     calls = []
-    original = deps._js_known
+    original = deps._manifest_index
 
     def counting(root):
         calls.append(root)
         return original(root)
 
-    monkeypatch.setattr(deps, "_js_known", counting)
+    monkeypatch.setattr(deps, "_manifest_index", counting)
 
     deps.unknown_imports(tmp_path, ["a.ts", "b.ts"])
     assert len(calls) == 1
@@ -170,13 +170,13 @@ def test_go_known_prefixes_computed_once_per_call(tmp_path, monkeypatch):
     (tmp_path / "b.go").write_text('package a\nimport "github.com/ghost/pkg"\n')
 
     calls = []
-    original = deps._go_known_prefixes
+    original = deps._manifest_index
 
     def counting(root):
         calls.append(root)
         return original(root)
 
-    monkeypatch.setattr(deps, "_go_known_prefixes", counting)
+    monkeypatch.setattr(deps, "_manifest_index", counting)
 
     deps.unknown_imports(tmp_path, ["a.go", "b.go"])
     assert len(calls) == 1

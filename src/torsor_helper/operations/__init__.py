@@ -91,6 +91,7 @@ from torsor_helper.operations.capture import (  # noqa: F401  (facade re-exports
 )
 from torsor_helper.operations.gate import (  # noqa: F401  (facade re-exports)
     check_dependencies,
+    dependency_targets,
     check_drift,
     guard_run,
     new_drift,
@@ -136,6 +137,7 @@ __all__ = [
     "auto_handoff",
     "bootstrap_session",
     "check_dependencies",
+    "dependency_targets",
     "check_drift",
     "check_staleness",
     "clean",

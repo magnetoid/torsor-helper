@@ -6,6 +6,79 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🗜 The index on a real project: 216 MB → 80 MB, same answers
+`symbol_edges` and its two indexes were 172 MB of it: 1 071 508 rows, **79% of them unresolved** — references
+to `self`, `str`, `result`, `monkeypatch`, `len`. Python and JS resolve an edge while extracting it and have no
+cross-file resolver, so an edge unresolved then can never be resolved later, and every query that reads edges
+filters on `resolved_module IS NOT NULL`. They were written, indexed, and reloaded on every partial-map merge,
+and never read. They are no longer stored. Go keeps every edge, because its resolver re-resolves the whole
+merged graph; the rule comes from the language registry, so a language that gains a resolver keeps its edges
+too. `impact`, `connect`, hub detection and every `refs` count are unchanged — checked on the real project,
+and ADR 0008's partial-equals-full invariant is tested with the dropped edges in play.
+
+- **The map fingerprint now carries a format version**, so an index built by an older torsor is remapped
+  once instead of being skipped as "unchanged" forever. That one-time migration also `VACUUM`s: dropping the
+  rows alone left the file at 217 MB.
+- `torsor map` reported every name the extractor saw ("1 071 508 reference edges") while `stats` read the
+  table. It now reports what was stored.
+- **`torsor coach --limit N`.** The MCP tool had it; the CLI could never show more than eight.
+- Every Python parse in torsor goes through one helper, which keeps the parsed project's own
+  `SyntaxWarning`s off your stderr — `map` printed `<unknown>:625: SyntaxWarning: invalid escape sequence`,
+  with no filename, twice.
+
+### ⏱ `torsor coach` on a real project, and a recommendation that could never be satisfied
+On a 3 200-file project the Coach took ~53 s — and `recommend` is an MCP tool, so in most clients that is a
+timeout. Two checks were ~41 s of it, and both computed far more than they reported.
+
+- **Hotspots parse only the files that could still make the top three.** Complexity was computed for every
+  file git had touched in the window — 3 200 parses — to report three. Complexity is newlines plus branch
+  nodes, and every branch node needs at least one branch *token*, so counting those tokens is an upper bound
+  without parsing; candidates are visited by churn × bound and the walk stops once no remaining bound can
+  reach the third-best real score. The result is exact, not approximate — a test compares it with the
+  unpruned version — and the bound was verified against all 3 216 files of the real project (median 1.05×
+  the real value, never below it). 18.1 s → 5.4 s.
+- **`_churn` asked for the source-extension list once per line of `git log` output**, and each call
+  re-checked that every language's modules import. Now once.
+- **"265 source modules not in the map", immediately after `torsor map`.** Every one had been scanned; they
+  just define no symbols — empty and re-export `__init__.py`, `__main__.py`, a `main.tsx` entry point, a
+  `vite.config.ts` that only does `export default`. The check subtracted "modules with symbols" from "source
+  files", so on any real repo it said "run `torsor map`" forever and running it changed nothing. It now asks
+  the map: the fingerprint says whether anything changed since the last full map, and a new `mapped_at_ns`
+  stamp says what changed since the last map of any kind — which matters because the post-commit hook runs a
+  *partial* map that clears the fingerprint on purpose.
+
+### 🔍 The dependency check stopped crying wolf on real projects
+Run on a real JS/TS + Python monorepo instead of on itself, the Coach's phantom-dependency check reported
+**1 966 possible hallucinated dependencies** — `react`, `vitest`, `@/lib`, `@janus/ink`, `discord`, `_common` —
+on a project whose every import works. ADR 0006 promises the opposite trade. It is now 83, each one a real
+import of a package the importing code does not declare, and the check runs in 8 s instead of ~21 s.
+
+- **Resolution by ancestry.** Only the root `package.json`, root `node_modules` and root `go.mod` were read,
+  so every dependency a nested app declares was unknown. A file now sees the manifests of every directory
+  between it and the root — Node's own resolution model — plus every workspace package in the repo.
+  Precision is kept: `react` declared by one app is still flagged in a tool beside it.
+- **tsconfig path aliases**, parsed as the JSONC they actually are (comments, trailing commas, and a
+  `"$schema": "https://…"` that a naive `//` stripper cuts in half). `@/x` is recognised with no config at
+  all — npm scopes cannot be empty. A `"*"` catch-all or bare `baseUrl` is resolved against the filesystem
+  rather than treated as a wildcard that would switch the check off. `@types/hast` makes `hast` importable.
+- **Python scripts may import the module beside them.** `from _common import x` with `scripts/_common.py`
+  right there is first-party by Python's own sys.path rule. Nested `requirements.txt` files govern their
+  subtree, and distributions declared under another name are recognised (`discord.py`, `firecrawl-py`,
+  `python-telegram-bot`, `PyNaCl`).
+- **An import inside `try/except ImportError` is optional by the code's own declaration** and is not
+  flagged. That was 57 of the 119 remaining Python findings.
+- **`torsor deps` and the `check_dependencies` tool say when they checked nothing.** The default is
+  git-changed files, so on a clean checkout it checked zero files and printed "every import resolves to a
+  known package" — which is how the 1 966 stayed hidden. It is the same bug `guard` had, fixed there in 0.8.0
+  and not here. `--json` gained `checked`.
+- A project's own invalid escape sequences no longer print `SyntaxWarning` lines, with no filename, to your
+  stderr while torsor parses it.
+
+Re-measuring on the real project also caught a regression the unit suite could not: detecting the
+`try/except` guards with a second full AST walk took the check from 18 s to **280 s**. It is now a single
+pass over statements only — an import cannot appear inside an expression, and expressions are most of any
+AST — and a regex prefilter skips parsing any file whose imports all name something known.
+
 ## [0.8.0] — Team Memory (2026-09-21)
 
 Everything below shipped as one eight-phase pass over the whole codebase: safety, structural seams, a

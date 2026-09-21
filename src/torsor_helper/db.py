@@ -457,6 +457,13 @@ def replace_all_edges(conn, edges):
     conn.commit()
 
 
+def vacuum(conn) -> None:
+    """Give freed pages back to the filesystem. SQLite keeps them otherwise, so
+    deleting most of a table leaves the file exactly as large as it was."""
+    conn.commit()
+    conn.execute("VACUUM")
+
+
 def who_references(conn, resolved_module, name):
     """Return [(caller, module)] of references to `name` resolving to `resolved_module`."""
     rows = conn.execute(

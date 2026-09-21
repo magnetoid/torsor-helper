@@ -162,7 +162,7 @@ One check reads memory rather than code: **contradictions**. Two active `type: d
 | `torsor update [--print-only]` | Self-update the CLI (detects uv tool / pipx / pip) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | ADR-rule drift check with CI ratchet |
 | `torsor deps [files…] [--strict]` | Offline hallucinated-dependency check |
-| `torsor coach [context] [--dismiss <key>]` | Recommendations |
+| `torsor coach [context] [--dismiss <key>] [--limit N]` | Recommendations |
 | `torsor consolidate` | Journal → insights maintenance pass |
 | `torsor stats [--json]` | Notes per tier, map size, index size, what gets recalled most, which embedder is really in use |
 | `torsor verify [files…] [--strict] [--severity <lvl>] [--run-tests] [--json]` | One pass/fail gate: guard + deps + staleness, optionally your recorded `test` command. Exits non-zero — use it as a CI or loop completion check |

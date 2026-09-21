@@ -1,10 +1,28 @@
 from __future__ import annotations
 
 import ast
+import warnings
 
 from torsor_helper.languages.modules import norm_module, norm_path
 from torsor_helper.models import Symbol, SymbolEdge
 
+
+
+def parse_quietly(source: str):
+    """`ast.parse` for someone else's code: None instead of an exception, and
+    without that code's own SyntaxWarnings landing on the user's stderr.
+
+    On a real project `torsor map` printed `<unknown>:625: SyntaxWarning:
+    invalid escape sequence '\\d'` — no filename, nothing actionable, and about
+    their code rather than torsor's. Every parse site in torsor goes through
+    here. ValueError is caught because compile()'s documented contract raises
+    it for NUL bytes (the interpreters tested raise SyntaxError instead)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        try:
+            return ast.parse(source)
+        except (SyntaxError, ValueError):
+            return None
 
 def _signature(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     try:
@@ -18,9 +36,8 @@ def _first_line(text: str | None) -> str:
 
 
 def extract_symbols(source: str, module: str) -> list[Symbol]:
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_quietly(source)
+    if tree is None:
         return []
     out: list[Symbol] = []
     for node in tree.body:
@@ -125,9 +142,8 @@ def extract_edges(source: str, module: str) -> list[SymbolEdge]:
     counting). Resolves only the two cheap, reliable cases — same-module
     top-level defs and `from x import y` aliases — and leaves everything else
     unresolved (resolved_module=None), degrading gracefully."""
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = parse_quietly(source)
+    if tree is None:
         return []
     top_defs = {
         n.name for n in tree.body
@@ -188,8 +204,7 @@ _DECISION_NODES = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.BoolOp
 
 
 def complexity(text: str, module: str = "") -> int:
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
+    tree = parse_quietly(text)
+    if tree is None:
         return 0
     return text.count("\n") + 1 + sum(isinstance(n, _DECISION_NODES) for n in ast.walk(tree))
