@@ -46,6 +46,7 @@ dev = [
     # it parallelizes; -n auto roughly halves it.
     "pytest-xdist>=3.5",
     "hypothesis>=6.100",
+    "mypy>=1.11",
 ]
 embeddings = ["fastembed>=0.3"]
 languages = [
@@ -84,6 +85,17 @@ testpaths = ["tests"]
 markers = [
     "slow: spawns a subprocess or binds a port (the end-to-end transports)",
 ]
+
+[tool.mypy]
+# No python_version pin: it makes mypy parse installed stubs under that version,
+# and numpy's use 3.12 syntax. The CI matrix covers the versions instead.
+ignore_missing_imports = true      # the tree-sitter grammar wheels ship no stubs
+# Deliberately not --strict: this is a ratchet, not a rewrite. It already found
+# three real bugs at this level (an int parameter rebound to a float, a Typer
+# option unpacked without checking both halves, a dedupe that worked only
+# because set.add returns None). Raise it when the next batch is worth fixing.
+warn_unused_ignores = true
+warn_redundant_casts = true
 
 [tool.coverage.run]
 source = ["src/torsor_helper"]

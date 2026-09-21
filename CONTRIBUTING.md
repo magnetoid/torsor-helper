@@ -4,6 +4,7 @@
 uv run --extra dev pytest -q -n auto           # the suite (~45s parallel)
 uv run --extra dev --extra languages pytest -q # with the JS/TS/Go extractors
 uv run --extra dev ruff check src tests        # exactly what CI runs
+uv run --extra dev mypy src/torsor_helper      # a ratchet, not --strict
 uv run torsor guard --strict $(git ls-files '*.py')
 ```
 

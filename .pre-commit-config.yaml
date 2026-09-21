@@ -21,3 +21,10 @@ repos:
         entry: uv run torsor deps --strict
         language: system
         types: [python]
+
+      - id: mypy
+        name: mypy
+        entry: uv run --extra dev mypy src/torsor_helper
+        language: system
+        pass_filenames: false
+        types: [python]

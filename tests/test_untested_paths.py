@@ -167,3 +167,40 @@ def test_deps_export_find_and_impact_have_a_working_cli(tmp_path):
         assert result.exit_code == 0, f"torsor {argv[0]}: {result.output}"
 
     assert "app.py" in runner.invoke(app, ["impact", "engine", *root]).output
+
+
+# --- bugs the type checker found --------------------------------------------
+
+def test_human_bytes_scales_without_rebinding_its_parameter():
+    """`n /= 1024` turned an int parameter into a float, and because the loop
+    always returned, the trailing `return f"{n} B"` was unreachable."""
+    from torsor_helper.cli import _human_bytes
+
+    assert _human_bytes(512) == "512 B"
+    assert _human_bytes(2048) == "2.0 KB"
+    assert _human_bytes(5 * 1024 * 1024) == "5.0 MB"
+    assert _human_bytes(3 * 1024 ** 3).endswith(" GB")   # used to fall off the loop
+
+
+def test_commands_add_needs_both_halves(tmp_path):
+    """Typer hands back (None, None) when --add is absent, and only the name
+    was checked — so a half-specified option reached .strip() on None."""
+    root = ["--root", str(tmp_path)]
+    runner.invoke(app, ["init", *root])
+
+    assert runner.invoke(app, ["commands", *root]).exit_code == 0
+
+
+def test_mined_insights_are_deduplicated(tmp_path):
+    """The dedupe read `not (it in seen or seen.add(it))`, which is correct only
+    because set.add returns None. Rewritten as what it is."""
+    from torsor_helper.coach import mining
+
+    store = _store(tmp_path)
+    for _ in range(3):
+        store.append_journal("the same learning twice over", kind="learning", links=[])
+
+    written = mining.mine_insights(store)
+
+    body = "\n".join(p.read_text(encoding="utf-8") for p in written)
+    assert body.count("the same learning twice over") == 1

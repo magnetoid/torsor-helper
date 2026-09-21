@@ -22,6 +22,9 @@ jobs:
         # whatever is newest — its default rule selection has changed under this
         # repo before, turning CI red with no code change.
         run: uv run --extra dev ruff check src tests
+      - name: Types
+        run: uv run --extra dev mypy src/torsor_helper
+
       - name: Test (no extras — proves degradation)
         # --exact prunes anything a previous step installed, so this really is a
         # no-[languages] environment rather than the union of both steps' deps.

@@ -19,7 +19,7 @@ def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=
     Idempotent, foreign-content-preserving, and CLI-only (footgun parity with the
     self-updater — an agent should not rewrite its own hooks; ADR 0009)."""
     root = str(store.paths.root)
-    result = {"git_hooks": [], "claude_settings": None, "warnings": [], "skipped": []}
+    result: dict = {"git_hooks": [], "claude_settings": None, "warnings": [], "skipped": []}
 
     if git:
         hooks_dir = _hooks.resolve_hooks_dir(root)
@@ -78,7 +78,7 @@ def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=
 
 def uninstall_hooks(store, config, *, local=False) -> dict:
     """Remove only torsor-owned git hooks + Claude Code hook entries."""
-    result = {"removed": [], "claude_settings": None, "cleaned": [], "warnings": []}
+    result: dict = {"removed": [], "claude_settings": None, "cleaned": [], "warnings": []}
     hooks_dir = _hooks.resolve_hooks_dir(str(store.paths.root))
     if hooks_dir is not None:
         for name in ("post-commit", "pre-push"):
@@ -108,7 +108,7 @@ def uninstall_hooks(store, config, *, local=False) -> dict:
 def hooks_status(store, config) -> dict:
     """Read-only report of which git hooks + Claude Code events carry a torsor
     entry. The only auto-capture surface exposed as an MCP tool (writes are CLI-only)."""
-    status = {"git_repo": False, "git_hooks": {}, "claude_events": []}
+    status: dict = {"git_repo": False, "git_hooks": {}, "claude_events": []}
     hooks_dir = _hooks.resolve_hooks_dir(str(store.paths.root))
     if hooks_dir is not None:
         status["git_repo"] = True

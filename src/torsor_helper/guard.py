@@ -45,7 +45,7 @@ def load_rules_by_note(store: Store) -> list[tuple[Path, str, list[Rule]]]:
                 continue
         if rules:
             out.append((path, note.title, rules))
-    load_rules_by_note.errors = rule_errors  # read by `torsor doctor`
+    load_rules_by_note.errors = rule_errors  # type: ignore[attr-defined]  # read by `torsor doctor`
     return out
 
 
@@ -235,7 +235,7 @@ def _forbid_import(relpath: str, text: str, rule: Rule) -> list[Violation]:
     out: list[Violation] = []
 
     def hit(name: str | None) -> bool:
-        return bool(name) and (name == target or name.startswith(target + "."))
+        return name is not None and (name == target or name.startswith(target + "."))
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):

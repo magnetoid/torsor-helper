@@ -12,7 +12,9 @@ torsor-helper is a persistent-memory + architectural-drift-guardrail MCP server 
 uv run --extra dev pytest -q                  # full test suite
 uv run --extra dev pytest tests/test_guard_rules.py -q        # one file
 uv run --extra dev pytest -k "test_name" -q                   # one test
-uv run --with ruff ruff check src tests       # lint (CI runs exactly this)
+uv run --extra dev ruff check src tests       # lint (pinned; CI runs exactly this)
+uv run --extra dev mypy src/torsor_helper     # types (a ratchet, not --strict)
+uv run --extra dev pytest -q -n auto          # the suite in parallel (~45s)
 uv run torsor <command>                       # run the CLI locally
 ```
 

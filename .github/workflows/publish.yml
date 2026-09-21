@@ -21,6 +21,9 @@ jobs:
           python-version: "3.12"
       - name: Lint
         run: uv run --with ruff ruff check src tests
+      - name: Types
+        run: uv run --extra dev mypy src/torsor_helper
+
       - name: Test (no extras — proves the degradation path)
         run: uv run --exact --extra dev pytest -q
       - name: Test (with languages)
