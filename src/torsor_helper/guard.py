@@ -86,9 +86,12 @@ def check_cycles(store: Store, rules: list[Rule]) -> list[Violation]:
     out: list[Violation] = []
     for rule in wanted:
         prefix = rule.target.rstrip(".")
+        excluded = {norm_path(src) for src, _ in edges
+                    if rule.exclude and scope_matches(src, rule.exclude)}
         scoped = {
-            node: {d for d in dests if _in_scope(d, prefix)}
-            for node, dests in graph.items() if _in_scope(node, prefix)
+            node: {d for d in dests if _in_scope(d, prefix) and d not in excluded}
+            for node, dests in graph.items()
+            if _in_scope(node, prefix) and node not in excluded
         }
         for cycle in _cycles(scoped):
             first = cycle[0]
@@ -193,6 +196,13 @@ def _scope_regex(scope: str) -> re.Pattern:
             out.append(re.escape(c))
         i += 1
     return re.compile("".join(out) + r"\Z")
+
+
+def rule_applies(relpath: str, rule) -> bool:
+    """Is this file inside the rule's scope and outside its exception?"""
+    if not scope_matches(relpath, rule.scope):
+        return False
+    return not (rule.exclude and scope_matches(relpath, rule.exclude))
 
 
 def scope_matches(relpath: str, scope: str) -> bool:
@@ -392,6 +402,6 @@ def check_drift(store: Store, files) -> list[Violation]:
             continue
         relpath = abs_path.relative_to(Path(root).resolve()).as_posix()
         for rule in rules:
-            if scope_matches(relpath, rule.scope):
+            if rule_applies(relpath, rule):
                 out.extend(violations_for_file(relpath, text, rule))
     return out

@@ -662,6 +662,13 @@ def guard(
         return
 
     if not violations:
+        if not result["checked"]:
+            # "No drift" after checking nothing reads exactly like a pass. On a
+            # clean tree the default file list is empty, which is how a real
+            # violation in this repo survived a green --strict run in CI.
+            typer.echo("No files to check (the default is git-changed files; "
+                       "pass paths, or `torsor guard $(git ls-files '*.py')`).")
+            return
         typer.echo("No drift from declared intent detected.")
         return
     for v in violations:

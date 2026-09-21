@@ -129,3 +129,24 @@ def test_guard_json_marks_which_violations_are_new(tmp_path):
 
     payload = json.loads(result.output)
     assert payload and not any(v["new"] for v in payload)   # all grandfathered now
+
+
+def test_guard_says_when_it_checked_nothing(tmp_path):
+    """On a clean tree the default file list is empty, so the guard checked no
+    files and printed "no drift" — indistinguishable from a real pass. That is
+    how a violation in this very repo survived a green `torsor guard --strict`
+    in CI and in a commit."""
+    _seed(tmp_path)
+    result = runner.invoke(app, ["guard", "--root", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "no files" in result.output.lower()
+
+
+def test_guard_with_files_still_reports_a_real_pass(tmp_path):
+    _seed(tmp_path)
+    (tmp_path / "domain" / "ok.py").write_text("import os\n")
+    result = runner.invoke(app, ["guard", "--root", str(tmp_path), "domain/ok.py"])
+
+    assert result.exit_code == 0
+    assert "no drift" in result.output.lower()

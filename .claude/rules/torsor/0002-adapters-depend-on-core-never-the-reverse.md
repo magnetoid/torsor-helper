@@ -7,7 +7,7 @@ paths:
 
 # ADR 0002: Adapters depend on core, never the reverse
 
-- forbid_import: `torsor_helper.cli` in `src/torsor_helper/**/*.py` — nothing should import the CLI entry point
+- forbid_import: `torsor_helper.cli` in `src/torsor_helper/**/*.py` — nothing should import the CLI entry point (except __main__, which exists to be one)
 - forbid_import: `torsor_helper.server` in `src/torsor_helper/operations/*.py` — operations (core) must not import the MCP server adapter
 - forbid_import: `torsor_helper.operations` in `src/torsor_helper/guard.py` — guard stays pure (models + store only)
 

@@ -18,7 +18,7 @@ uv run torsor <command>                       # run the CLI locally
 
 CI (`.github/workflows/ci.yml`) runs lint + tests on Python 3.11 and 3.12, and runs the test suite twice per matrix cell — once with no extras (proves the `[languages]` degradation path stays Python-only) and once with `--extra languages` (proves JS/TS/Go extraction actually works). Releasing is documented in `PUBLISHING.md`. The version lives in `src/torsor_helper/__init__.py` (hatch dynamic version).
 
-This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules `uv run torsor guard --strict` enforces against this codebase. Run it after structural changes.
+This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules the guard enforces against this codebase. Run `uv run torsor guard --strict $(git ls-files "*.py")` after structural changes — **with the file list**, because the default is git-changed files and on a clean tree that is empty, so a bare run checks nothing and passes.
 
 ## Architecture
 

@@ -26,7 +26,10 @@ jobs:
       - name: Test (with languages)
         run: uv run --extra dev --extra languages pytest -q
       - name: Dogfood the guard
-        run: uv run torsor guard --strict
+        # Explicit file list: the default is git-changed files, which on a clean
+        # checkout is empty — so a bare `guard --strict` checks nothing and
+        # passes. That is how a real violation here survived a green CI run.
+        run: uv run torsor guard --strict $(git ls-files '*.py')
       - name: The tag must match the packaged version
         run: |
           set -euo pipefail

@@ -114,6 +114,11 @@ class Rule(BaseModel):
     # stay inside one segment, `**` spans directories, and a pattern with no
     # "/" matches at any depth the way a .gitignore pattern does.
     scope: str = "*.py"
+    # "everywhere in scope, except here". A rule without one is unchanged; a
+    # rule that needs one otherwise has to choose between lying and forbidding
+    # something legitimate — ADR 0002 forbids importing the CLI, which is right
+    # for every core module and wrong for the __main__ that has to.
+    exclude: str = ""
     message: str = ""
     source: str = ""     # ADR/title that declared this rule (for citation)
     severity: str = "warning"  # hint | info | warning | error
