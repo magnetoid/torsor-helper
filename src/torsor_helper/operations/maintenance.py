@@ -5,7 +5,7 @@ All advisory. Nothing here edits source code, and the only writes are to
 torsor's own derived artefacts or to a note's frontmatter `status`."""
 from __future__ import annotations
 
-from torsor_helper import cleaner, db
+from torsor_helper import cartographer, cleaner, db
 from torsor_helper.coach import mining as coach_mining
 from torsor_helper.coach import report as coach_report
 from torsor_helper.coach import staleness as _staleness
@@ -81,6 +81,52 @@ def _set_note_status(store, rels: list[str], status: str) -> list[str]:
         changed.append(rel)
     return changed
 
+def stats(store, config) -> dict:
+    """What this project actually contains, and whether the derived parts are
+    current. Everything here already existed as a query; nothing surfaced it,
+    so "how big is my memory, what is being recalled, is the map current" had
+    no answer."""
+    from torsor_helper.indexer import _embedder_identity
+
+    from torsor_helper.embeddings import get_embedder
+
+    by_tier: dict[str, int] = {}
+    total = 0
+    for path in store.iter_note_paths():
+        tier = store.tier_for_path(store.paths, path)
+        by_tier[tier.name] = by_tier.get(tier.name, 0) + 1
+        total += 1
+
+    out = {
+        "notes": {"total": total, "by_tier": by_tier},
+        "symbols": 0,
+        "modules": 0,
+        "edges": 0,
+        "index_bytes": 0,
+        "map_current": None,
+        "embedder": _embedder_identity(get_embedder(config)),
+        "top_recalled": [],
+        "op_totals": {},
+    }
+    if not store.paths.index_db.exists():
+        return out
+
+    out["index_bytes"] = store.paths.index_db.stat().st_size
+    conn = db.connect(store.paths.index_db)
+    try:
+        out["symbols"] = conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0]
+        out["edges"] = conn.execute("SELECT COUNT(*) FROM symbol_edges").fetchone()[0]
+        out["modules"] = len(db.modules(conn))
+        out["top_recalled"] = [list(row) for row in db.top_accessed(conn, 5)]
+        out["op_totals"] = dict(db.op_totals(conn))
+        stored = db.meta_get(conn, "map_fingerprint")
+        if stored is not None:
+            out["map_current"] = stored == cartographer.repo_fingerprint(store.paths.root)
+    finally:
+        conn.close()
+    return out
+
+
 def clean(store, config, *, apply: bool = False, deep: bool = False) -> dict:
     """Reclaim derived and expired torsor artefacts. Dry-run by default: without
     `apply` nothing is touched and the returned stats describe what *would* go.
@@ -125,6 +171,9 @@ def consolidate(store, config) -> dict:
     return {
         "insights": len(written),
         "duplicates": len(duplicates),
+        # The list was computed and thrown away, so "found 7 duplicate entries"
+        # was a dead end: no way to see or act on which ones.
+        "duplicate_entries": [list(d) for d in duplicates[:10]],
         "indexed": indexed,
         "top_accessed": top_accessed,
     }

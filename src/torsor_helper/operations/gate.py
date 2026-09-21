@@ -33,6 +33,9 @@ def guard_run(store, config, files=None, *, update_baseline=False, strict=False,
     the baseline ratchet, and decide strict failure — so the MCP tool and the
     CLI command can't diverge in behavior."""
     violations = check_drift(store, config, files)
+    # A cycle is a property of the whole import graph, so it cannot come out of
+    # the per-file pass — it is evaluated once, here, where the store is in hand.
+    violations = violations + guard.check_cycles(store, guard.load_rules(store))
     if update_baseline:
         _baseline.save(store.paths.baseline_file, violations)
         return {"violations": violations, "new": [], "baselined": len(violations),

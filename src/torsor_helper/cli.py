@@ -180,30 +180,262 @@ def update(
 
 
 @app.command()
-def doctor(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/.")) -> None:
-    """Verify a torsor-helper project is healthy."""
+def doctor(
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root to check."),
+    as_json: bool = typer.Option(False, "--json", help="Emit the structured verdict."),
+) -> None:
+    """Check whether this project is healthy — and whether the parts that fail
+    quietly are working: a stale index, semantic recall silently on the hashing
+    fallback, hooks that were never installed, an ADR rule that does not parse."""
     paths = TorsorPaths(root)
-    if not paths.base.exists():
-        typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
-        raise typer.Exit(code=1)
-    missing = [
-        p.name
-        for p in (paths.charter, paths.system_patterns, paths.active_context, paths.progress)
-        if not p.exists()
-    ]
-    if missing:
-        typer.echo(f"Project incomplete; missing: {', '.join(missing)}", err=True)
-        raise typer.Exit(code=1)
-    try:
-        load_config(paths)
-    except Exception as exc:  # malformed TOML or invalid schema
-        typer.echo(f"Config malformed in {paths.config_file}:\n{exc}", err=True)
-        raise typer.Exit(code=1)
-    from torsor_helper import languages
+    checks: list[dict] = []
 
-    for name, ok in languages.available().items():
-        typer.echo(f"{name}: {'ready' if ok else 'install torsor-helper[languages]'}")
-    typer.echo("OK: torsor-helper project is healthy.")
+    def check(name, ok, detail, *, warn=False):
+        checks.append({"name": name, "status": "warn" if warn and not ok else ("ok" if ok else "fail"),
+                       "detail": detail})
+        return ok
+
+    missing = [p.name for p in (paths.charter, paths.system_patterns, paths.active_context, paths.progress)
+               if not p.exists()]
+    if not paths.base.exists():
+        check("layout", False, f"not initialized: no .torsor/ at {root} — run `torsor init`")
+        _doctor_report(checks, as_json)
+        raise typer.Exit(code=1)
+    check("layout", not missing, "seed files present" if not missing else f"missing: {', '.join(missing)}")
+
+    try:
+        config = load_config(paths)
+        check("config", True, str(paths.config_file))
+    except Exception as exc:
+        check("config", False, f"{paths.config_file}: {exc}")
+        _doctor_report(checks, as_json)
+        raise typer.Exit(code=1)
+
+    store = Store(paths)
+    _doctor_index(paths, store, config, check)
+    _doctor_languages(check)
+    _doctor_git_and_hooks(store, config, check)
+    _doctor_rules(store, check)
+
+    _doctor_report(checks, as_json)
+    if any(c["status"] == "fail" for c in checks):
+        raise typer.Exit(code=1)
+
+
+def _doctor_index(paths, store, config, check) -> None:
+    from torsor_helper import cartographer, db
+
+    if not paths.index_db.exists():
+        check("index", True, "not built yet (recall builds it on demand)", warn=True)
+        check("map", True, "not built yet — run `torsor map`", warn=True)
+        return
+    size = paths.index_db.stat().st_size
+    conn = db.connect(paths.index_db)
+    try:
+        stamp = db.meta_get(conn, "map_fingerprint")
+        notes = db.note_count(conn)
+    finally:
+        conn.close()
+    check("index", True, f"{notes} note(s), {size / 1e6:.1f} MB")
+    if stamp is None:
+        check("map", True, "never fully mapped — run `torsor map`", warn=True)
+    else:
+        current = stamp == cartographer.repo_fingerprint(paths.root)
+        check("map", current, "current" if current else "stale — run `torsor map`", warn=True)
+
+
+def _doctor_languages(check) -> None:
+    from torsor_helper import languages
+    from torsor_helper.embeddings import get_embedder
+    from torsor_helper.config import TorsorConfig
+
+    name = get_embedder(TorsorConfig()).name
+    check("embeddings", name != "hashing",
+          "fastembed" if name != "hashing"
+          else "using the hashing fallback — recall is lexical only; "
+               "install torsor-helper[embeddings] for semantic search",
+          warn=True)
+    avail = languages.available()
+    # Name each one: "some languages missing" does not tell you which extra to
+    # install, and the per-language line is what the map summary echoes too.
+    detail = "; ".join(
+        f"{name}: {'ready' if ok else 'install torsor-helper[languages]'}"
+        for name, ok in sorted(avail.items())
+    )
+    check("languages", all(avail.values()), detail, warn=True)
+
+
+def _doctor_git_and_hooks(store, config, check) -> None:
+    from torsor_helper import gitinfo
+
+    repo = gitinfo.is_repo(store.paths.root)
+    check("git", repo, "repository detected" if repo
+          else "not a git repository — churn, coupling and auto-capture are off", warn=True)
+    status = ops.hooks_status(store, config)
+    on = [n for n, enabled in status["git_hooks"].items() if enabled]
+    events = status["claude_events"]
+    check("hooks", bool(on or events),
+          f"git: {', '.join(on) or 'none'}; claude: {', '.join(events) or 'none'}"
+          if (on or events) else "none installed — run `torsor hooks install`", warn=True)
+
+
+def _doctor_rules(store, check) -> None:
+    from torsor_helper import guard
+
+    by_note = guard.load_rules_by_note(store)
+    errors = getattr(guard.load_rules_by_note, "errors", [])
+    total = sum(len(rules) for _, _, rules in by_note)
+    if errors:
+        detail = "; ".join(f"{p.name}: {msg}" for p, msg in errors[:3])
+        check("rules", False, f"{len(errors)} rule(s) did not parse and are NOT enforced — {detail}", warn=True)
+    else:
+        check("rules", True, f"{total} machine-enforced rule(s) across {len(by_note)} note(s)")
+
+
+def _doctor_report(checks, as_json) -> None:
+    ok = not any(c["status"] == "fail" for c in checks)
+    if _emit({"ok": ok, "checks": checks}, as_json):
+        return
+    for c in checks:
+        mark = {"ok": "ok  ", "warn": "warn", "fail": "FAIL"}[c["status"]]
+        typer.echo(f"{mark}  {c['name']}: {c['detail']}")
+    typer.echo("\n" + ("OK: torsor-helper project is healthy."
+                        if ok else "Problems found — see FAIL above."))
+
+
+# ---- Memory: the same seven operations the MCP server exposes -------------
+# These were MCP-only, including the five founding tools, although nearly every
+# feature is meant to be both (CLAUDE.md). Without them memory cannot be
+# scripted, used from CI, or debugged without an MCP client attached.
+
+
+@app.command()
+def recall(
+    query: list[str] = typer.Argument(..., help="What to search memory for."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    limit: int = typer.Option(8, "--limit", help="Maximum hits."),
+    type_: Optional[str] = typer.Option(None, "--type", help="Only notes of this frontmatter type (e.g. decision)."),
+    kind: Optional[str] = typer.Option(None, "--kind", help="Only notes of this kind (e.g. learning)."),
+    include_superseded: bool = typer.Option(False, "--include-superseded", help="Include superseded decisions."),
+    as_json: bool = typer.Option(False, "--json", help="Emit machine-readable hits."),
+) -> None:
+    """Hybrid search across memory, wiki and map — ranked snippets, token-budgeted."""
+    _, config, store = _load(root)
+    result = ops.recall(store, config, " ".join(query), limit=limit, type_=type_, kind=kind,
+                        include_superseded=include_superseded)
+    if _emit({"query": result.query, "total_tokens": result.total_tokens,
+              "hits": [h.model_dump(mode="json") for h in result.hits]}, as_json):
+        return
+    if not result.hits:
+        typer.echo(f"No matches for {' '.join(query)!r}.")
+        return
+    for hit in result.hits:
+        typer.echo(render.recall_hit(hit))
+        typer.echo("")
+
+
+@app.command()
+def remember(
+    content: list[str] = typer.Argument(..., help="What to remember."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    kind: str = typer.Option("observation", "--kind", help="observation | decision | learning."),
+    link: list[str] = typer.Option(None, "--link", help="Wikilink slug to relate this to (repeatable)."),
+) -> None:
+    """Persist an observation, decision or learning to episodic memory."""
+    _, _, store = _load(root, config=False)
+    path = ops.remember(store, " ".join(content), kind=kind, links=list(link or []))
+    typer.echo(f"Remembered ({kind}) → {path}")
+
+
+@app.command()
+def active(
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    focus: str = typer.Option(..., "--focus", help="What you are working on now."),
+    progress: str = typer.Option("", "--progress", help="What is done."),
+    open_questions: str = typer.Option("", "--open-questions", help="What is still unresolved."),
+) -> None:
+    """Update the active working state (current focus, progress, open questions)."""
+    _, _, store = _load(root, config=False)
+    ops.update_active(store, focus, progress, open_questions)
+    typer.echo("Active context updated.")
+
+
+@app.command()
+def handoff(
+    summary: list[str] = typer.Argument(..., help="What this session did."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    decisions: str = typer.Option("", "--decisions", help="Decisions taken."),
+    open_questions: str = typer.Option("", "--open-questions", help="Left unresolved."),
+    next_steps: str = typer.Option("", "--next-steps", help="What the next session should pick up."),
+) -> None:
+    """Write a structured end-of-session handoff the next session resumes from."""
+    _, _, store = _load(root, config=False)
+    path = ops.record_handoff(store, " ".join(summary), decisions, open_questions, next_steps)
+    typer.echo(f"Handoff written → {path}")
+
+
+@app.command()
+def bootstrap(
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    max_tokens: Optional[int] = typer.Option(None, "--max-tokens", help="Override the budget for this call."),
+) -> None:
+    """Print the budgeted whole-pyramid digest an agent reads at session start."""
+    _, config, store = _load(root)
+    typer.echo(ops.bootstrap_session(store, config, max_tokens=max_tokens))
+
+
+@app.command()
+def intent(
+    topic: list[str] = typer.Argument(None, help="Optional topic to surface relevant symbols for."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+) -> None:
+    """Surface the architecture (patterns, tech, ADRs) and symbols for a topic."""
+    _, config, store = _load(root)
+    typer.echo(ops.get_intent(store, config, " ".join(topic) if topic else None))
+
+
+@app.command()
+def decision(
+    title: str = typer.Argument(..., help="The decision, as a title."),
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    context: str = typer.Option(..., "--context", help="Why this came up."),
+    decision_text: str = typer.Option(..., "--decision", help="What was decided."),
+    consequences: str = typer.Option("", "--consequences", help="What follows from it."),
+    supersedes: Optional[str] = typer.Option(None, "--supersedes", help="ADR id or slug this replaces."),
+) -> None:
+    """Record an Architecture Decision Record. Add machine-readable `rules:` by
+    hand afterwards, or adopt a practice pack — `torsor guard` enforces them."""
+    _, _, store = _load(root, config=False)
+    path = ops.record_decision(store, title, context, decision_text, consequences,
+                               None, supersedes)
+    typer.echo(f"Recorded → {path}")
+    typer.echo("Add a `rules:` block to make it machine-enforced, then: torsor rules --scoped")
+
+
+@app.command()
+def stats(
+    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
+    as_json: bool = typer.Option(False, "--json", help="Emit the numbers as JSON."),
+) -> None:
+    """How big this project's memory is, what gets recalled, whether the map is current."""
+    _, config, store = _load(root)
+    data = ops.stats(store, config)
+    if _emit(data, as_json):
+        return
+    notes = data["notes"]
+    typer.echo(f"notes:    {notes['total']}  (" +
+               ", ".join(f"{tier.lower()} {n}" for tier, n in sorted(notes["by_tier"].items())) + ")")
+    typer.echo(f"map:      {data['symbols']} symbol(s), {data['modules']} module(s), {data['edges']} edge(s)")
+    if data["map_current"] is not None:
+        typer.echo(f"          {'current' if data['map_current'] else 'stale — run `torsor map`'}")
+    typer.echo(f"index:    {data['index_bytes'] / 1e6:.1f} MB")
+    typer.echo(f"embedder: {data['embedder']}")
+    if data["top_recalled"]:
+        typer.echo("recalled most:")
+        for path, count in data["top_recalled"]:
+            typer.echo(f"  {count}x  {path}")
+    if data["op_totals"]:
+        typer.echo("operations: " + ", ".join(f"{op} {n}" for op, n in sorted(data["op_totals"].items())))
 
 
 @app.command()
@@ -225,10 +457,11 @@ def index(
 def map(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     force: bool = typer.Option(False, "--force", help="Re-scan even if no source file changed."),
+    path: list[str] = typer.Option(None, "--path", help="Only rescan these files, merged into the existing graph (repeatable)."),
 ) -> None:
     """Generate the repository symbol map under .torsor/map/."""
-    paths, config, store = _load(root)
-    stats = ops.map_repo(store, config, force=force)
+    tp, config, store = _load(root)
+    stats = ops.map_repo(store, config, list(path) if path else None, force=force)
     langs = dict(stats["languages"])
     unavailable = langs.pop("unavailable", {})
     parts = [f"{k} {v}" for k, v in langs.items()]
@@ -331,6 +564,12 @@ def rules(
 ) -> None:
     """Print a compact agent-rules digest (charter principles + ADR rules) — paste it into AGENTS.md/CLAUDE.md so agents follow the rules without spending tool-call tokens."""
     tp, config, store = _load(root)
+    if scoped and (write is not None or client is not None):
+        # It used to return early and ignore them, so the user believed a block
+        # had been written somewhere it had not.
+        typer.echo("--scoped writes one file per ADR into .claude/rules/torsor/; "
+                   "it cannot also target --write or --client.", err=True)
+        raise typer.Exit(code=2)
     if scoped:
         written = ops.write_scoped_rules(store, config)
         rel = tp.claude_rules_dir.relative_to(tp.root).as_posix()
@@ -393,6 +632,7 @@ def guard(
     severity: Optional[str] = typer.Option(None, "--severity", help="Strict threshold: hint|info|warning|error. Default: fail on any."),
     as_json: bool = typer.Option(False, "--json", help="Emit machine-readable JSON findings."),
     update_baseline: bool = typer.Option(False, "--update-baseline", help="Record current violations as the accepted baseline (grandfather existing debt)."),
+    new_only: bool = typer.Option(False, "--new-only", help="Show only violations not in the baseline — the ones that decide the exit code."),
 ) -> None:
     """Check changes against declared architectural intent (ADR rules)."""
 
@@ -402,7 +642,9 @@ def guard(
         store, config, paths or None,
         update_baseline=update_baseline, strict=strict, severity=severity,
     )
-    violations = result["violations"]
+    # --new-only shows exactly the set the exit code is computed from; without
+    # it the printed list and the exit status could disagree.
+    violations = result["new"] if new_only else result["violations"]
 
     # --json is honoured even when baselining: returning first meant
     # `guard --json --update-baseline` printed nothing at all.
@@ -588,6 +830,9 @@ def consolidate(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TOR
         f"Mined {stats['insights']} insight file(s); reindexed {stats['indexed']} note(s); "
         f"found {stats['duplicates']} duplicate entr(y/ies)."
     )
+    for text, n in stats["duplicate_entries"][:5]:
+        # "found 7 duplicates" with no way to see them was a dead end.
+        typer.echo(f"  {n}x  {text[:80]}")
     if stats["top_accessed"]:
         hot = ", ".join(f"{path} ({n}x)" for path, n in stats["top_accessed"])
         typer.echo(f"Most-recalled: {hot}")
@@ -613,19 +858,21 @@ def recipes(
 @app.command()
 def commands(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-    add: Optional[str] = typer.Option(None, "--add", help="Record a command as 'name=command' (e.g. --add 'test=uv run pytest')."),
+    add: Optional[tuple[str, str]] = typer.Option(
+        (None, None), "--add", help="Record a command: --add NAME COMMAND (e.g. --add test 'uv run pytest').",
+        metavar="NAME COMMAND",
+    ),
     note: str = typer.Option("", help="Optional description for --add."),
     run: Optional[str] = typer.Option(None, "--run", help="Run a recorded command by name."),
 ) -> None:
     """Record & replay the project's commands so agents don't re-derive them each session."""
     tp, _, store = _load(root, config=False)
-    if add is not None:
-        if "=" not in add:
-            typer.echo("Use --add 'name=command' (e.g. 'test=uv run pytest').", err=True)
-            raise typer.Exit(code=1)
-        name, _, command = add.partition("=")
+    name, command = add if add else (None, None)
+    if name:
+        # Two arguments, not 'name=command': the ad-hoc split broke any command
+        # containing "=" (`FOO=bar pytest`), which is a normal thing to record.
         ops.record_command(store, name.strip(), command.strip(), note)
-        typer.echo(f"Recorded command '{name.strip()}'.")
+        typer.echo(f"Recorded command {name.strip()!r}.")
         return
     if run is not None:
         result = ops.run_command(store, run)
@@ -635,7 +882,7 @@ def commands(
         raise typer.Exit(code=result.returncode)
     cmds = ops.list_commands(store)
     if not cmds:
-        typer.echo("No commands recorded yet. Add one:  torsor commands --add 'test=uv run pytest'")
+        typer.echo("No commands recorded yet. Add one:  torsor commands --add test 'uv run pytest'")
         return
     for c in cmds:
         typer.echo(f"  {render.command(c)}")
@@ -647,7 +894,8 @@ def models(
     cheap: Optional[str] = typer.Option(None, help="Model id for basic, deterministic work (torsor lookups, command replays)."),
     smart: Optional[str] = typer.Option(None, help="Model id for thinking & construction (design, code, decisions)."),
     fast: Optional[str] = typer.Option(None, help="Optional mid-tier model id."),
-    write: Optional[Path] = typer.Option(None, "--write", help="Publish the policy to a file: a *.md/AGENTS.md/CLAUDE.md target gets a Markdown block (any agent reads it); a *.json target gets machine-readable JSON (any router reads it)."),
+    write: Optional[Path] = typer.Option(None, "--write", help="Merge the Markdown policy block into an instructions file (AGENTS.md, CLAUDE.md, …). Existing content is preserved."),
+    write_json: Optional[Path] = typer.Option(None, "--write-json", help="Write the machine-readable policy to a JSON file. Replaces the file."),
     client: Optional[str] = typer.Option(None, "--client", help="Write the Markdown policy to a client's conventional instructions file instead of --write."),
     json_out: bool = typer.Option(False, "--json", help="Print the machine-readable policy (for piping into any harness's router)."),
 ) -> None:
@@ -664,14 +912,24 @@ def models(
             config.models.fast = fast
         save_config(tp, config)
         typer.echo("Updated [models] in torsor.toml.")
+    if write is not None and str(write).endswith(".json"):
+        # One flag used to mean two things: a .md target got a merged block, a
+        # .json target had its whole content replaced. Silent data loss if you
+        # aimed it at a config file you already had.
+        typer.echo("--write merges a Markdown block; use --write-json for a JSON policy file.", err=True)
+        raise typer.Exit(code=2)
+    if write_json is not None:
+        # Relative to the project root, like --write — not the shell's cwd.
+        target = write_json if write_json.is_absolute() else root / write_json
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(_json.dumps(ops.model_policy_json(store, config), indent=2) + "\n",
+                          encoding="utf-8")
+        typer.echo(f"Wrote machine-readable model policy to {target} (for programmatic routers).")
+        return
     dest = _resolve_block_target(root, write, client)
     if dest is not None:
-        if str(dest).endswith(".json"):
-            dest.write_text(_json.dumps(ops.model_policy_json(store, config), indent=2) + "\n", encoding="utf-8")
-            typer.echo(f"Wrote machine-readable model policy to {dest} (for programmatic routers).")
-        else:
-            ops.write_model_policy(store, config, dest)
-            typer.echo(f"Wrote Model-routing block to {dest} (any agent that reads this file follows it).")
+        ops.write_model_policy(store, config, dest)
+        typer.echo(f"Wrote Model-routing block to {dest} (any agent that reads this file follows it).")
         return
     if json_out:
         typer.echo(_json.dumps(ops.model_policy_json(store, config), indent=2))

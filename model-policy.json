@@ -1,0 +1,30 @@
+{
+  "cheap": "ha",
+  "smart": "",
+  "fast": "",
+  "route": {
+    "cheap": [
+      "recall",
+      "get_intent",
+      "find_files",
+      "impact",
+      "get_rules",
+      "get_primer",
+      "check_drift",
+      "check_dependencies",
+      "check_staleness",
+      "verify",
+      "map_repo",
+      "consolidate",
+      "list_commands",
+      "recipes"
+    ],
+    "smart": [
+      "designing architecture",
+      "writing & refactoring code",
+      "making decisions (record_decision)",
+      "debugging novel failures"
+    ]
+  },
+  "note": "Run the 'cheap' ops + command replays on the cheap model; reserve 'smart' for design/code/decisions. torsor declares the policy; the harness routes."
+}

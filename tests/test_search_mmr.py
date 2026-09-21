@@ -75,6 +75,11 @@ def test_omitted_marker_count_reflects_full_pool(tmp_path):
     assert res.hits[-1].path == ""  # marker present
     m = re.search(r"… (\d+) more", res.hits[-1].title)
     assert m
-    # count = full relevant pool minus what was shown (not the limit-capped candidate set)
-    total = conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0]
-    assert int(m.group(1)) == total - len(real)
+    # count = full relevant pool minus what was shown (not the limit-capped
+    # candidate set). "Relevant" means what the lexical side found a basis for:
+    # the hashing fallback reorders those and no longer adds notes of its own,
+    # so the pool is the FTS match set rather than every note in the project.
+    from torsor_helper import db
+
+    relevant = len({path for path, _ in db.fts_search(conn, "architecture context", 1000)})
+    assert int(m.group(1)) == relevant - len(real)

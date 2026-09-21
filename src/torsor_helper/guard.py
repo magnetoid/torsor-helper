@@ -7,6 +7,7 @@ from pathlib import Path
 from torsor_helper.cartographer import absolute_from_module
 from torsor_helper.models import Rule, Violation
 from torsor_helper.store import Store
+from torsor_helper.languages.modules import norm_path
 from torsor_helper.paths import contained
 
 
@@ -21,6 +22,7 @@ def load_rules_by_note(store: Store) -> list[tuple[Path, str, list[Rule]]]:
         notes.append(store.paths.system_patterns)
 
     out: list[tuple[Path, str, list[Rule]]] = []
+    rule_errors: list[tuple[Path, str]] = []
     for path in notes:
         try:
             note = store.read_note(path)
@@ -35,11 +37,119 @@ def load_rules_by_note(store: Store) -> list[tuple[Path, str, list[Rule]]]:
                 continue
             try:
                 rules.append(Rule.model_validate({**item, "source": note.title}))
-            except Exception:
-                continue  # malformed rule: skip, never fatal
+            except Exception as exc:  # noqa: BLE001 - one bad ADR must not break the guard
+                # Still skipped, so the guard keeps working — but recorded, so
+                # `torsor doctor` can say the rule the author wrote is not
+                # being enforced. Silently dropping it looked like it passed.
+                rule_errors.append((path, str(exc).splitlines()[0]))
+                continue
         if rules:
             out.append((path, note.title, rules))
+    load_rules_by_note.errors = rule_errors  # read by `torsor doctor`
     return out
+
+
+def check_cycles(store: Store, rules: list[Rule]) -> list[Violation]:
+    """Import cycles among the modules a `forbid_cycle` rule covers.
+
+    Every other rule kind reads one file's source, which is why this needed its
+    own path: a cycle is a property of the whole graph, so it is evaluated once
+    per guard call over the symbol map rather than per file. No map means no
+    answer, not an error — the same degradation rule as everywhere else, and the
+    reason `torsor guard` still works before `torsor map` has ever run.
+
+    Reports one violation per cycle, attributed to the alphabetically first
+    module in it, so the finding is stable enough to baseline.
+    """
+    from torsor_helper import db
+
+    wanted = [r for r in rules if r.kind == "forbid_cycle"]
+    if not wanted or not store.paths.index_db.exists():
+        return []
+
+    conn = db.connect(store.paths.index_db)
+    try:
+        edges = db.module_edges(conn)
+    finally:
+        conn.close()
+
+    # `module` is a file relpath and `resolved_module` is already a canonical
+    # dotted key, so only the source side is normalized — norm_path, never
+    # norm_module (see languages/modules.py). Skipping this leaves the graph
+    # with two spellings of every node and no edge ever joins up.
+    graph: dict[str, set[str]] = {}
+    for src, dst in edges:
+        node = norm_path(src)
+        if node != dst:
+            graph.setdefault(node, set()).add(dst)
+
+    out: list[Violation] = []
+    for rule in wanted:
+        prefix = rule.target.rstrip(".")
+        scoped = {
+            node: {d for d in dests if _in_scope(d, prefix)}
+            for node, dests in graph.items() if _in_scope(node, prefix)
+        }
+        for cycle in _cycles(scoped):
+            first = cycle[0]
+            chain = " -> ".join([*cycle, first])
+            v = _violation(rule, first, 0, f"import cycle: {chain}")
+            if rule.message:  # the cycle itself is the finding; keep it either way
+                v = v.model_copy(update={"message": f"{rule.message} ({chain})"})
+            out.append(v)
+    return out
+
+
+def _in_scope(module: str, prefix: str) -> bool:
+    return not prefix or module == prefix or module.startswith(prefix + ".")
+
+
+def _cycles(graph: dict[str, set[str]]) -> list[list[str]]:
+    """One representative cycle per strongly connected component, in a stable
+    order. Tarjan, iterative — a deep import graph would blow the stack."""
+    index: dict[str, int] = {}
+    low: dict[str, int] = {}
+    on_stack: set[str] = set()
+    stack: list[str] = []
+    counter = 0
+    found: list[list[str]] = []
+
+    for root in sorted(graph):
+        if root in index:
+            continue
+        work: list[tuple[str, list[str]]] = [(root, sorted(graph.get(root, ())))]
+        index[root] = low[root] = counter
+        counter += 1
+        stack.append(root)
+        on_stack.add(root)
+        while work:
+            node, pending = work[-1]
+            if pending:
+                nxt = pending.pop(0)
+                if nxt not in index:
+                    index[nxt] = low[nxt] = counter
+                    counter += 1
+                    stack.append(nxt)
+                    on_stack.add(nxt)
+                    work.append((nxt, sorted(graph.get(nxt, ()))))
+                elif nxt in on_stack:
+                    low[node] = min(low[node], index[nxt])
+                continue
+            work.pop()
+            if work:
+                parent = work[-1][0]
+                low[parent] = min(low[parent], low[node])
+            if low[node] == index[node]:
+                component = []
+                while True:
+                    w = stack.pop()
+                    on_stack.discard(w)
+                    component.append(w)
+                    if w == node:
+                        break
+                if len(component) > 1:
+                    found.append(sorted(component))
+    return sorted(found)
 
 
 _SCOPE_CACHE: dict[str, re.Pattern] = {}

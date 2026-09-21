@@ -107,6 +107,7 @@ class SymbolEdge(BaseModel):
 
 class Rule(BaseModel):
     # kind: forbid_import | forbid_pattern | require_import | forbid_layer_import
+    #     | forbid_cycle (graph-wide: needs the symbol map, not one file's source)
     kind: str
     target: str          # module prefix (forbid/require_import), or regex (forbid_pattern/forbid_layer_import)
     # Path-aware glob over the posix relpath (guard.scope_matches): `*` and `?`

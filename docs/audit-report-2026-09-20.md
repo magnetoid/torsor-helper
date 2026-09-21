@@ -460,7 +460,34 @@ Add `tests/bench/` (pytest-benchmark or a plain timing script) with generated fi
     defs with a dotted owner; keep ADR 0004's "two reliable cases" for *resolution*.
 12. **B17** Validate `importance_floors` keys (case-insensitive) in `IndexConfig`.
 
-### Phase 4 — Parity & CLI UX (≈3 days after Phase 1)
+### Phase 4 — Parity & CLI UX — **DONE (2026-09-21)**
+
+> Shipped on `feat/cli-parity`: E1, E2, E6, E7, E8, E9, I2, I3, I4, I5, I6, I11.
+> 731 tests pass with and without `--extra languages`; ruff and `torsor guard
+> --strict` clean.
+>
+> **The seven missing CLI commands exposed a worse bug than the gap itself.**
+> Writing a test for "recall finds nothing" showed a query of pure nonsense
+> returning the charter: FTS matched 0, the hashing vector leg returned 7, and
+> recall reported 7. The fallback hashes a bag of words into 384 buckets, so it
+> has some similarity to everything, and fused freely it *created* hits — recall
+> could never answer "nothing here". It now ranks what the lexical side already
+> found a basis for and adds nothing; a real embedder is untouched, because
+> introducing a hit with no lexical overlap is what semantic search is for.
+>
+> This is the sharp version of C11, which I struck earlier after measuring
+> precision@8 and finding it neutral. That experiment used queries that all had
+> lexical matches, so it measured ranking quality — and the failure was never
+> ranking. It was fabrication.
+>
+> `doctor` now checks the things that fail quietly (stale map, hashing fallback,
+> hooks never installed, an ADR rule that does not parse), and on this repo it
+> immediately found three true ones. The surfaces are held in parity by a test
+> that compares them directly, which is what was missing. `forbid_cycle` is the
+> first rule kind that needs more than one file's source, so the guard grew a
+> second evaluation path for graph-wide rules.
+
+### Phase 4 — the original plan (for the record)
 
 1. **E1** Add `torsor recall`, `remember`, `handoff`, `active` (update_active), `bootstrap`,
    `intent`, `decision` commands — thin wrappers over the same ops + renderers.

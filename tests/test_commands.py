@@ -54,7 +54,8 @@ def test_run_command_executes_and_missing(tmp_path):
 
 def test_cli_commands_add_and_list(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
-    r = runner.invoke(app, ["commands", "--root", str(tmp_path), "--add", "test=uv run pytest", "--note", "suite"])
+    r = runner.invoke(app, ["commands", "--root", str(tmp_path), "--add", "test", "uv run pytest",
+                            "--note", "suite"])
     assert r.exit_code == 0, r.output
     out = runner.invoke(app, ["commands", "--root", str(tmp_path)])
     assert "uv run pytest" in out.output and "test" in out.output

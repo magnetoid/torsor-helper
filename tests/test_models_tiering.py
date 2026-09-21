@@ -72,12 +72,17 @@ def test_cli_models_json_print(tmp_path):
     assert data["cheap"] == "ha" and "recall" in data["route"]["cheap"]
 
 
-def test_cli_models_write_json_by_extension(tmp_path):
+def test_cli_models_write_json_is_its_own_flag(tmp_path):
+    # Was inferred from the extension, so one flag merged a block into a .md
+    # and replaced the whole contents of a .json.
     import json
 
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["models", "--root", str(tmp_path), "--cheap", "ha"])
-    r = runner.invoke(app, ["models", "--root", str(tmp_path), "--write", "model-policy.json"])
+    assert runner.invoke(
+        app, ["models", "--root", str(tmp_path), "--write", "model-policy.json"]
+    ).exit_code == 2
+    r = runner.invoke(app, ["models", "--root", str(tmp_path), "--write-json", "model-policy.json"])
     assert r.exit_code == 0
     data = json.loads((tmp_path / "model-policy.json").read_text(encoding="utf-8"))
     assert data["cheap"] == "ha" and "smart" in data["route"]

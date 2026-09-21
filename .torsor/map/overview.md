@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T01:13:27'
-updated: '2026-09-21T01:13:27'
+created: '2026-09-21T02:06:04'
+updated: '2026-09-21T02:06:04'
 rules: []
 ---
 
@@ -13,6 +13,12 @@ rules: []
 
 Modules and their key symbols (ranked by references).
 
+- **cli.py** — 49 symbol(s)
+  - `stats(root: Path=typer.Option(Path('.'), '--root', '-r', envvar='TORSOR_ROOT', help='Project root containing .torsor/.'), as_json: bool=typer.Option(False, '--json', help='Emit the numbers as JSON.'))` (function)
+  - `_load(root: Path, *, config: bool=True)` (function)
+  - `_emit(payload, as_json: bool)` (function)
+  - `_resolve_block_target(root: Path, write: Optional[Path], client: Optional[str])` (function)
+  - `_doctor_report(checks, as_json)` (function)
 - **src/torsor_helper/baseline.py** — 4 symbol(s)
   - `_key(v: Violation)` (function)
   - `load(path: Path)` (function)
@@ -35,12 +41,6 @@ Modules and their key symbols (ranked by references).
   - `_size(path: Path)` (function)
   - `_map_note_name(module: str)` (function)
   - `_live_map_notes(store)` (function)
-- **src/torsor_helper/cli.py** — 36 symbol(s)
-  - `_load(root: Path, *, config: bool=True)` (function)
-  - `_resolve_block_target(root: Path, write: Optional[Path], client: Optional[str])` (function)
-  - `_emit(payload, as_json: bool)` (function)
-  - `_hook_payload()` (function)
-  - `_check_severity(value)` (function)
 - **src/torsor_helper/clients.py** — 5 symbol(s)
   - `config_snippet(client: str, root: str)` (function)
   - `write_mcp_json(project_root, server_root: str)` (function)
@@ -162,8 +162,4 @@ Modules and their key symbols (ranked by references).
   - `_params(node)` (function)
   - `extract_symbols(source: str, module: str)` (function)
   - `_owner(node)` (function)
-  - `_walk(node)` (function)
-  - `imports(source: str, module: str='')` (function)
-- **src/torsor_helper/languages/javascript.py** — 20 symbol(s)
-  - `_is_top_level(node)` (function)
-  - `_class_name(node)`…[truncated]
+  - `_walk(node)` (function)…[truncated]
