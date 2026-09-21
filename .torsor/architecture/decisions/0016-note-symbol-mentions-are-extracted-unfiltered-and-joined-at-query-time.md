@@ -12,7 +12,7 @@ rules: []
 # ADR 0016: Note→symbol mentions are extracted unfiltered and joined at query time
 
 ## Context
-torsor already keeps two graphs and never connected them. `edges` links a note to a note (`[[wikilinks]]`), and `symbol_edges` links code to code — so `impact` could say what calls `norm_path` and nothing could say what the team *decided* about it. That second question is the one this architecture is uniquely able to answer, because the decisions and the symbol table live in the same index, and it did not ship. An agent about to change a function could see every caller and none of the recorded intent.
+torsor already keeps two graphs and never connected them. `edges` links a note to a note (wiki links), and `symbol_edges` links code to code — so `impact` could say what calls `norm_path` and nothing could say what the team *decided* about it. That second question is the one this architecture is uniquely able to answer, because the decisions and the symbol table live in the same index, and it did not ship. An agent about to change a function could see every caller and none of the recorded intent.
 
 The obvious implementation is to extract backticked identifiers from each note while indexing and keep the ones that match a row in `symbols`. That filter is a trap. `reindex` screens on `(mtime, size)` and never re-reads an unchanged note, so a note written before the first `torsor map` would be scanned once, find no symbol table, record nothing, and never be looked at again. The feature would work for notes written after the map and silently not for notes written before it — which is most of them, since memory precedes the map on every project.
 

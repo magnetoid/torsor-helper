@@ -6,6 +6,33 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🧭 The Coach notices what you fixed — and when two decisions disagree
+It tracked `dismissed` and `times_shown` and nothing else, so a recommendation you *solved* just stopped
+appearing, indistinguishable from one that sank below the limit or one you were never shown. And an
+unaddressed problem had no age: "your charter is still the seed template" read identically on day one and day
+ninety.
+
+- **`Fixed since last time: …`** — one line, once, then forgotten. Three things it deliberately will not do:
+  resolution is computed against everything produced, before the page is truncated (otherwise raising
+  `--limit` would "fix" things); a recommendation you were never shown is never called fixed; and the session
+  digest never sweeps at all, because it runs three checks and a key it did not produce is one it did not
+  look for.
+- **Gentle escalation.** After three showings and seven days, an `important` recommendation carries `(open N
+  days)`. It is *not* re-ranked — rank is what the decay controls, and escalating by rank would quietly
+  reverse it.
+- **New `contradiction` check.** Two active `type: decision` notes whose titles are about the same thing and
+  state opposite decisions. This is how an ADR set rots: a decision is reversed in a new ADR, the old one is
+  never marked `status: superseded`, and `torsor guard` then enforces one rule while `get_intent` hands the
+  agent the other. Both notes are individually well-formed, so nothing else could see it. An explicit
+  `supersedes:` link exempts the pair — that is the correct workflow.
+
+The contradiction check is lexical, never embedding-based, and a guard rule keeps it that way. The spec called
+for near-duplicate vectors; Phase 2 measured what the default hashing embedder does under a similarity
+threshold — it *fabricates* matches, because every text is somewhat similar to every other. Thresholds are set
+so that torsor's own ADRs produce nothing, and a test asserts it: a check that fires on a set known to be
+consistent is wrong, not sensitive. It will miss most real contradictions, which is the deliberate direction
+to be wrong in for advisory output (ADR 0010, ADR 0017).
+
 ### 🔗 `impact` now tells you what was *decided* about a symbol, not just what calls it
 torsor kept two graphs and never connected them: `[[wikilinks]]` link notes to notes, `symbol_edges` links code
 to code, and nothing linked a decision to the function it was about. So an agent could see every caller of a

@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T17:33:16'
-updated: '2026-09-21T17:33:16'
+created: '2026-09-21T17:40:34'
+updated: '2026-09-21T17:40:34'
 rules: []
 ---
 
@@ -47,6 +47,12 @@ Modules and their key symbols (ranked by references).
   - `config_location(client: str)` (function)
   - `mcp_servers_block(root: str)` (function)
   - `instructions_file(client: str)` (function)
+- **src/torsor_helper/coach/contradiction.py** — 6 symbol(s)
+  - `polarity(text: str)` (function)
+  - `_topic_words(title: str)` (function)
+  - `_overlap(a: set[str], b: set[str])` (function)
+  - `_pair_key(a: str, b: str)` (function)
+  - `_active_decisions(store: Store)` (function)
 - **src/torsor_helper/coach/coupling.py** — 3 symbol(s)
   - `_commits(root: Path, history_days: int=365)` (function)
   - `find_coupling(root: Path, min_commits: int=3, max_files: int=40, threshold: float=0.6, history_days: int=365)` (function)
@@ -73,23 +79,24 @@ Modules and their key symbols (ranked by references).
   - `find_duplicate_entries(store: Store)` (function)
 - **src/torsor_helper/coach/recommender.py** — 1 symbol(s)
   - `best_practice_recs(store: Store, config, context, conn, embedder, limit: int=5)` (function)
-- **src/torsor_helper/coach/report.py** — 4 symbol(s)
+- **src/torsor_helper/coach/report.py** — 6 symbol(s)
   - `_coach_state_path(store)` (function)
   - `_phantom_dep_recs(store: Store)` (function)
+  - `_resolved_rec(keys: list[str])` (function)
+  - `_escalate(rec: Recommendation, state: CoachState)` (function)
   - `assemble(store: Store, config, context=None, limit: int=8, conn=None, embedder=None)` (function)
-  - `session_digest(store: Store, limit: int=3)` (function)
 - **src/torsor_helper/coach/staleness.py** — 5 symbol(s)
   - `_rel(store: Store, path)` (function)
   - `check_dangling_links(store: Store)` (function)
   - `check_path_refs(store: Store)` (function)
   - `check_ambiguous_links(store: Store)` (function)
   - `run_staleness(store: Store)` (function)
-- **src/torsor_helper/coach/state.py** — 8 symbol(s)
+- **src/torsor_helper/coach/state.py** — 13 symbol(s)
   - `CoachState` (class)
-  - `__init__(self, path: Path)` (method)
+  - `__init__(self, path: Path, clock: Callable[[], datetime]=datetime.now)` (method)
   - `_entry(self, key: str)` (method)
+  - `_today(self)` (method)
   - `is_dismissed(self, key: str)` (method)
-  - `dismiss(self, key: str)` (method)
 - **src/torsor_helper/coach/trend.py** — 2 symbol(s)
   - `current_complexity(root: Path)` (function)
   - `find_regressions(root: Path, conn, rel: float=0.25, abs_min: int=5, limit: int=5)` (function)
@@ -152,13 +159,4 @@ Modules and their key symbols (ranked by references).
   - `_embedder_identity(embedder)` (function)
   - `_breadcrumb(note)` (function)
   - `_is_fallback(stored: str | None, embedder)` (function)
-  - `_backfill_mentions(store: Store, conn, *, skip)` (function)
-- **src/torsor_helper/languages/__init__.py** — 9 symbol(s)
-  - `LanguageSpec` (class)
-  - `is_available(name: str)` (function)
-  - `spec_for(path)` (function)
-  - `complexity(path: Path)` (function)
-  - `available()` (function)
-- **src/torsor_helper/languages/go.py** — 9 symbol(s)
-  - `_params(node)` (function)
-  - `extract_symbols(source: str, module: str)`…[truncated]
+  - `_backfill_mentions(store: Store, conn, *, skip)`…[truncated]

@@ -128,13 +128,17 @@ Flags imports that resolve to neither stdlib, installed packages, declared depen
 ## The Coach + housekeeping
 
 ```bash
-torsor coach                       # health · reuse · hotspots · temporal coupling · regressions · phantom deps
+torsor coach                       # health · reuse · hotspots · coupling · regressions · phantom deps · contradictions
 torsor coach --dismiss <key>       # silence a recommendation for good
 torsor consolidate                 # mine journal → per-topic insight notes; reindex; snapshot complexity
 torsor index [--full]              # rebuild the derived index explicitly (recall does this incrementally anyway)
 ```
 
 Every recommendation comes with evidence and a concrete action, ranked by severity, and decays so it never nags. A 3-item digest is also pushed into `bootstrap_session()` output (silent when healthy).
+
+The Coach also tracks what you **fixed**. When a recommendation stops being produced, the next `torsor coach` says so once (`Fixed since last time: …`) and forgets it. An `important` recommendation you have left alone for a week starts carrying its age (`open 14 days`) — as information, not as a higher rank, because the decay that keeps the Coach quiet is deliberate.
+
+One check reads memory rather than code: **contradictions**. Two active `type: decision` notes whose titles are about the same thing and state opposite decisions get flagged, because that is how an ADR set rots — a decision gets reversed in a new ADR and the old one is never marked `status: superseded`, so the guard enforces one rule while the agent reads the other. It is deliberately conservative and will miss more than it catches: detection is term overlap plus polarity, never embeddings, since the default embedder is a hashing fallback that finds similarity between any two texts at all. An explicit `supersedes:` link or `status: superseded` exempts a pair — that is the correct workflow, not a contradiction.
 
 ## CLI reference
 

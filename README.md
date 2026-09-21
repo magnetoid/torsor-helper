@@ -207,7 +207,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 | `torsor deps` | Flags imports that match **no** stdlib / installed / declared / first-party package — a possible **hallucinated dependency** ("slopsquatting"). Python, JS/TS, Go. | **Before `pip install`-ing what the agent suggested.** ~5–20% of AI imports don't exist; some are malware bait. Fully offline. |
 
 ### 🧭 The Coach — *"tell me what to fix, don't make me hunt"*
-Run `torsor coach` (or it's pushed at session start). It's advisory, ranked, and **decays so it never nags**:
+Run `torsor coach` (or it's pushed at session start). It's advisory, ranked, and **decays so it never nags** — and it tells you what you fixed since last time:
 | Coach signal | What it tells you | Why it matters |
 |---|---|---|
 | `thin` / `stale` / `uncharted` | Your charter is still a template / active context is stale / modules aren't mapped. | Keeps the memory layer actually filled in and current. |
@@ -342,7 +342,7 @@ Everything below is **derived from your Markdown** and rebuildable. Delete `.tor
 | `torsor rules [--write <file>] [--scoped]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write` maintains a managed block in `AGENTS.md`/`CLAUDE.md`; `--scoped` writes one path-scoped Claude Code rule file per ADR under `.claude/rules/torsor/` — prompt-time rules at zero tool-call cost |
 | `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline; Python, JS/TS, Go) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
-| `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** recommendations |
+| `torsor coach [context] [--dismiss <key>]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** + **contradiction** recommendations, plus what you fixed since last time |
 | `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, snapshot complexity, report duplicates |
 | `torsor clean [--apply] [--deep]` | Garbage-collect derived artefacts: orphaned map notes, dead index rows (+VACUUM), expired journals; `--deep` drops the whole index. Dry run unless `--apply` |
 | `torsor commands [--add 'name=cmd'] [--run name]` | Record & replay project commands (test/build/lint) so agents don't re-derive them |

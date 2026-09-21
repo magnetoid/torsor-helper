@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from torsor_helper import cartographer, db, deps
-from torsor_helper.coach import coupling, health, hotspots, hubs, recommender, staleness, trend
+from torsor_helper.coach import (
+    contradiction, coupling, health, hotspots, hubs, recommender, staleness, trend,
+)
 from torsor_helper.coach.state import CoachState
 from torsor_helper.models import Recommendation
 from torsor_helper.store import Store, state_file
@@ -41,6 +43,7 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
     # only in the explicit `torsor stale` command, not the always-on Coach.
     recs += staleness.check_dangling_links(store)
     recs += staleness.check_ambiguous_links(store)
+    recs += contradiction.find_contradictions(store)
     if conn is not None:  # indexed path; these self-skip outside a git repo / on a clean project
         days = config.coach.history_days if config is not None else 365
         recs += hotspots.find_hotspots(store.paths.root, history_days=days)
@@ -51,12 +54,26 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
     if context:
         recs += recommender.best_practice_recs(store, config, context, conn=conn, embedder=embedder, limit=limit)
 
-    state = CoachState(_coach_state_path(store))
+    state = CoachState(_coach_state_path(store), clock=store.clock)
     recs = [r for r in recs if not state.is_dismissed(r.key)]
+
+    # Resolution is computed against EVERYTHING produced this run, before the
+    # page is truncated — otherwise raising `limit` would "fix" things and
+    # lowering it would un-fix them.
+    resolved = state.resolve_missing({r.key for r in recs} | {_RESOLVED_KEY})
+
+    recs = [_escalate(r, state) for r in recs]
     # Rank by severity, then decay (recs shown many times sink within their band
     # so the Coach never nags), then score, then key for a stable total order.
     recs.sort(key=lambda r: (_SEVERITY_RANK.get(r.severity, 1), state.times_shown(r.key), -r.score, r.key))
     recs = recs[:limit]
+
+    # Prepended AFTER the cut, and not counted against it. Ranked with the rest
+    # it sorts into the info band and falls off any page with eight suggestions
+    # on it — while resolve_missing has already dropped the state, so the good
+    # news would be reported into a void and never come back. It is one line.
+    if resolved:
+        recs.insert(0, _resolved_rec(resolved))
 
     for rec in recs:
         state.seen(rec.key)
@@ -64,13 +81,57 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
     return recs
 
 
+_RESOLVED_KEY = "resolved"
+# Long enough that a recommendation has genuinely been ignored rather than just
+# seen twice in one afternoon, and paired with a day count so the escalation is
+# information rather than pressure.
+_ESCALATE_AFTER_SHOWS = 3
+_ESCALATE_AFTER_DAYS = 7
+
+
+def _resolved_rec(keys: list[str]) -> Recommendation:
+    """What got fixed since last time, as one line.
+
+    Its own key is excluded from resolution sweeps, or the regress is infinite:
+    this rec is shown, is absent next run, and reports that the report was
+    fixed — forever."""
+    shown, tail = keys[:5], len(keys) - 5
+    listed = ", ".join(shown) + (f" (+{tail} more)" if tail > 0 else "")
+    return Recommendation(
+        kind="resolved", severity="info",
+        message=f"Fixed since last time: {listed}.",
+        action="", source="", key=_RESOLVED_KEY,
+        # Top of the info band: good news is cheap to read and stops the user
+        # wondering where a recommendation went.
+        score=1.0,
+    )
+
+
+def _escalate(rec: Recommendation, state: CoachState) -> Recommendation:
+    """Say how long an important recommendation has been open.
+
+    Deliberately adds information and NOT position. The decay above — recs shown
+    many times sink within their band — is what keeps the Coach from nagging,
+    and escalating by rank would quietly reverse it."""
+    if rec.severity != "important" or rec.kind == _RESOLVED_KEY:
+        return rec
+    days = state.days_open(rec.key)
+    if state.times_shown(rec.key) < _ESCALATE_AFTER_SHOWS or days < _ESCALATE_AFTER_DAYS:
+        return rec
+    return rec.model_copy(update={"message": f"{rec.message} (open {days} days)"})
+
+
 def session_digest(store: Store, limit: int = 3) -> list[Recommendation]:
     """Read-only hygiene digest for session start: the index-free checks
     (thin/stale/unruled), dismissal-filtered and severity-ranked. Does NOT
     record `seen` — a persistent unaddressed issue keeps surfacing every
     session until it's fixed or explicitly dismissed (no decay here)."""
+    # No resolution sweep here, deliberately: this runs three index-free checks,
+    # so a key it does not produce is absent because it was not looked for, not
+    # because it was solved. Claiming otherwise would mark every hotspot "fixed"
+    # at the start of every session.
     recs = health.check_thin(store) + health.check_stale(store) + health.check_unruled(store)
-    state = CoachState(_coach_state_path(store))
+    state = CoachState(_coach_state_path(store), clock=store.clock)
     recs = [r for r in recs if not state.is_dismissed(r.key)]
     recs.sort(key=lambda r: (_SEVERITY_RANK.get(r.severity, 1), r.key))
     return recs[:limit]
