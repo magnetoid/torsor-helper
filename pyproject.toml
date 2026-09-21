@@ -34,7 +34,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "anyio>=4.0"]
+dev = [
+    "pytest>=8.0",
+    "anyio>=4.0",
+    # Pinned, not floated: CI used `uv run --with ruff`, which resolves whatever
+    # is newest, and ruff's default rule selection has changed under this repo
+    # before. Local and CI must lint identically.
+    "ruff==0.14.2",
+    "pytest-cov>=5.0",
+    # The suite has no chdir, no env-var config and no wall-clock dependency, so
+    # it parallelizes; -n auto roughly halves it.
+    "pytest-xdist>=3.5",
+    "hypothesis>=6.100",
+]
 embeddings = ["fastembed>=0.3"]
 languages = [
     "tree-sitter>=0.25",
@@ -57,6 +69,9 @@ path = "src/torsor_helper/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/torsor_helper"]
+# py.typed ships the annotations: without it a consumer importing torsor_helper
+# gets Any for everything, despite the package being fully annotated.
+artifacts = ["src/torsor_helper/py.typed"]
 
 [tool.hatch.build.targets.sdist]
 # Keep the sdist lean: ship src + README/LICENSE/CHANGELOG/pyproject (+ tests),
@@ -66,6 +81,20 @@ exclude = [".torsor", "docs", ".github", ".gitignore"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
+markers = [
+    "slow: spawns a subprocess or binds a port (the end-to-end transports)",
+]
+
+[tool.coverage.run]
+source = ["src/torsor_helper"]
+omit = ["*/__main__.py"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
 
 [tool.ruff]
 line-length = 110
