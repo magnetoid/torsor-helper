@@ -655,6 +655,52 @@ Docs (G):
     not started) or move shipped plans to `docs/superpowers/archive/`. Add a `Status:` line
     to the 2026-07-18 audit report pointing at this plan.
 
+### Phase 7 — Product bets — **DONE (2026-09-21)**
+
+> All three shipped on `feat/team-memory`: I8, I10, I9. 888 tests pass serially
+> and under `-n auto`, with and without `--extra languages`; ruff, mypy and
+> `torsor guard --strict $(git ls-files '*.py')` clean. ADRs 0015, 0016, 0017 —
+> the two that carry rules were each fed a deliberate violation to confirm the
+> rule fires.
+>
+> **I8 (team memory).** Git can distribute exactly one half of the fix: a
+> committed `.torsor/.gitattributes` reaches every clone but may only name
+> built-in drivers, so journals get `merge=union` and are solved for everyone;
+> the `map/**` driver has to live in `.git/config`, which is per-clone. Git does
+> not warn when an attributes file names a driver the clone never registered —
+> it silently falls back to the normal text merge, confirmed by experiment
+> before any code was written — so `torsor merge status` and a `doctor` check
+> exist for exactly that silence. Writing the union-merge test found the bug
+> that would have made it useless: a journal header stamped from the wall clock
+> differs between branches, so union unions the frontmatter too and leaves a
+> duplicate `created:`/`updated:` pair per merge. The header now carries the
+> journal's own date, which was always the truer value.
+>
+> **I10 (memory ↔ symbol graph).** The plan said to index mentions that match a
+> row in `symbols`. That filter is a trap: `reindex` screens on `(mtime, size)`,
+> so a note written before the first `torsor map` would be scanned once, find no
+> symbol table, and never be read again — working for notes written after the
+> map and silently not for the ones before it, which is most of them. Extraction
+> is therefore unfiltered and the join happens at query time. Map notes
+> contribute nothing, which the first test run showed rather than reasoning
+> finding it: the answer came back with `mod.py` and `Repository Map` beside the
+> decision.
+>
+> **I9 (lifecycle + contradiction).** The spec's "near-duplicate vectors" was
+> rejected on Phase 2's own evidence — the default hashing embedder fabricates
+> similarity under a threshold — so contradiction detection is lexical, and a
+> guard rule keeps the embedder out of the module. Thresholds are set so this
+> repo's 17 ADRs produce nothing, asserted by a test. Running `torsor coach` on
+> this repo found the resolution bug: the "fixed since last time" line ranks
+> into the info band and sorted off any page with eight suggestions on it, while
+> the state that produced it had already been dropped — good news reported into
+> a void. It is now prepended after the cut and costs no slot.
+>
+> **Deliberately not built.** A `torsor merge` helper for `active/*.md`: it is
+> hand-written prose and a three-way text merge handles it as well as anything
+> could. `memory/insights/` is left on the normal merge too — both sides append
+> bullets to a list with a common ancestor, and `consolidate` regenerates it.
+
 ### Phase 7 — Product bets (each is its own spec + ADR; order by user demand)
 
 1. **I8 Team memory**: `torsor init` writes `.gitattributes` with `merge=union` for
