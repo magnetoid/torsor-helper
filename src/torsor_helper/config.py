@@ -141,10 +141,12 @@ class MemoryConfig(_Strict):
 class CleanConfig(_Strict):
     # `torsor clean` retention. Journals are the only episodic tier that grows
     # unboundedly (one file per active day) and the only category clean can
-    # discard that isn't re-derivable, so the window is explicit and tunable;
-    # 0 disables journal expiry entirely. Everything else clean reclaims is
-    # either orphaned (its source file is gone) or rebuildable from Markdown.
-    journal_retention_days: int = 90
+    # discard that isn't re-derivable: `remember()` writes learnings, decisions
+    # and blockers to the journal and nowhere else, and nothing distils them
+    # into a durable note first. So expiry is OFF by default (0); set a window
+    # only once you have read what an expiring day holds. Everything else
+    # clean reclaims is either orphaned or rebuildable from Markdown.
+    journal_retention_days: int = 0
 
 
 class TorsorConfig(_Strict):

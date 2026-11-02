@@ -28,6 +28,11 @@ Claude Code, Cursor, Codex, VS Code, Gemini and a generic `other`.
 **Config keys that no longer exist** — `torsor.toml` is strict, so remove them if present:
 `[models]`, `budgets.practices_tokens`, `automation.auto_snapshot_on_commit`.
 
+**`clean.journal_retention_days` now defaults to `0` (journal expiry off).** Journal mining used to
+copy an expiring day's learnings, decisions and blockers into `memory/insights/` before `clean --apply`
+deleted the file; with mining gone, a journal entry is the only copy of what `remember()` wrote, so the
+default must not delete it. Set a window explicitly if you want expiry back.
+
 Also: this repo's own `.torsor/active/*` had described June's state since June; refreshed. The old
 phase plans and audit reports under `docs/` were being indexed as project docs (ADR 0018) and
 competing with current docs in `recall`; removed.

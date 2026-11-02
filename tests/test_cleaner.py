@@ -65,20 +65,23 @@ def test_plan_expires_journals_older_than_the_retention_window(tmp_path):
     store = _store(tmp_path)
     old = _journal(store, "2026-01-01")   # 151 days before the fixed clock
     recent = _journal(store, "2026-05-20")  # 12 days before
+    config = TorsorConfig()
+    config.clean.journal_retention_days = 90
 
-    plan = cleaner.plan(store, TorsorConfig())
+    plan = cleaner.plan(store, config)
 
     assert old in plan.journal_expired
     assert recent not in plan.journal_expired
 
 
-def test_retention_of_zero_days_disables_journal_expiry(tmp_path):
+def test_journal_expiry_is_off_by_default(tmp_path):
+    # A journal entry is the only copy of what `remember()` wrote; nothing
+    # distils it elsewhere, so the default must never delete one.
     store = _store(tmp_path)
     _journal(store, "2020-01-01")
-    config = TorsorConfig()
-    config.clean.journal_retention_days = 0
 
-    assert cleaner.plan(store, config).journal_expired == []
+    assert TorsorConfig().clean.journal_retention_days == 0
+    assert cleaner.plan(store, TorsorConfig()).journal_expired == []
 
 
 def test_planning_alone_deletes_nothing(tmp_path):
@@ -86,8 +89,10 @@ def test_planning_alone_deletes_nothing(tmp_path):
     (tmp_path / "gone.py").unlink()
     orphan = store.paths.map_dir / "modules" / "gone.py.md"
     _journal(store, "2020-01-01")
+    config = TorsorConfig()
+    config.clean.journal_retention_days = 90
 
-    plan = cleaner.plan(store, TorsorConfig())
+    plan = cleaner.plan(store, config)
 
     assert plan.map_orphans and plan.journal_expired  # there was something to reclaim
     assert orphan.exists()
@@ -103,6 +108,7 @@ def test_apply_removes_orphaned_map_notes_and_expired_journals(tmp_path):
     _journal(store, "2020-01-01")
 
     config = TorsorConfig()
+    config.clean.journal_retention_days = 90
     cleaner.apply(store, config, cleaner.plan(store, config))
 
     assert not (store.paths.map_dir / "modules" / "gone.py.md").exists()

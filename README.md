@@ -162,7 +162,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 | `recall(query)` | Hybrid semantic + keyword search over all your memory, your own docs, and notes. | The agent asks *"have we decided X?"* / *"how does auth work here?"* before writing code. |
 | `remember(content)` · `update_active(...)` | The agent writes down what it learns / the current focus. | After a decision, a gotcha, or finishing a chunk — so the next session inherits it. |
 | `handoff()` | A structured end-of-session summary that seeds the next session. | **End of a work session**, before you close the chat. |
-| `torsor clean` | Reclaims what torsor stopped needing: orphaned map notes, dead index rows, journals past retention. **Dry run by default.** | **Whenever `.torsor/` feels cluttered** — especially after renaming or deleting source files. |
+| `torsor clean` | Reclaims what torsor stopped needing: orphaned map notes, dead index rows, journals past retention (off unless you set `clean.journal_retention_days`). **Dry run by default.** | **Whenever `.torsor/` feels cluttered** — especially after renaming or deleting source files. |
 
 ### 🗺️ Understanding the codebase — *"the agent doesn't see how files connect"*
 | Feature | What it does | Reach for it when… |

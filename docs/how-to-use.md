@@ -172,7 +172,7 @@ The Coach also tracks what you **fixed**. When a recommendation stops being prod
 | `torsor stats [--json]` | Notes per tier, map size, index size, what gets recalled most, which embedder is really in use |
 | `torsor verify [files…] [--strict] [--severity <lvl>] [--run-tests] [--json]` | One pass/fail gate: guard + deps + staleness, optionally your recorded `test` command. Exits non-zero — use it as a CI or loop completion check |
 | `torsor stale [--mark\|--unmark] [--strict] [--json]` | Memory that contradicts the code: dangling `[[wikilinks]]` and dead file paths |
-| `torsor clean [--apply] [--deep] [--yes]` | Reclaim orphaned map notes, dead index rows and expired journals. Dry run by default |
+| `torsor clean [--apply] [--deep] [--yes]` | Reclaim orphaned map notes, dead index rows and — only if `clean.journal_retention_days` is set — expired journals. Dry run by default |
 | `torsor connect <from> <to> [--max-hops N]` | Shortest call-graph path between two symbols — "how does X reach Y?" |
 | `torsor hooks install [--local] [--on-stop] [--no-git] [--no-claude]` | Wire auto-capture into git and Claude Code |
 | `torsor hooks uninstall` | Remove only torsor's entries, from both settings files |
