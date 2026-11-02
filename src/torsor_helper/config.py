@@ -41,9 +41,6 @@ class BudgetConfig(_Strict):
     # get_intent assembles architecture + decisions + symbols; it grows with the
     # ADR count, so it carries its own ceiling rather than borrowing bootstrap's.
     intent_tokens: int = 1200
-    # A best-practice pack is static prose; with no language argument every
-    # detected pack is concatenated, which is the largest single MCP response.
-    practices_tokens: int = 1200
     # Default ceiling on list-shaped output (impact callers, decision titles,
     # verify reasons, drift/dep/staleness findings). What is hidden is always
     # counted in the response, so the agent knows the list is partial.
@@ -90,14 +87,6 @@ class IndexConfig(_Strict):
     connect_max_hops: int = 12
 
 
-class ModelsConfig(_Strict):
-    # Model-tier policy (token thrift). torsor never calls models — it publishes
-    # this routing policy for the orchestrating agent/harness to follow.
-    cheap: str = ""   # basic, deterministic work (torsor lookups, command replays)
-    smart: str = ""   # thinking & construction (design, code, decisions)
-    fast: str = ""    # optional middle tier
-
-
 class AutomationConfig(_Strict):
     # Event-driven auto-capture (see `torsor hooks install`). Capture behaviors
     # default ON: installing the hooks is itself the explicit opt-in, and each
@@ -110,7 +99,6 @@ class AutomationConfig(_Strict):
     auto_bootstrap: bool = True        # inject a project digest at SessionStart (and after compaction)
     auto_handoff: bool = True          # deterministic digest handoff on session end
     auto_map_on_commit: bool = True    # partial-map the just-committed files
-    auto_snapshot_on_commit: bool = True  # refresh the complexity regression baseline
     guard_on_push: bool = False        # advisory pre-push guard — never surprise-blocks
     # PreToolUse edit gate: check the *proposed* Edit/Write against ADR rules
     # before it lands. "advise" (default) only adds context — the guard stays
@@ -164,7 +152,6 @@ class TorsorConfig(_Strict):
     budgets: BudgetConfig = Field(default_factory=BudgetConfig)
     embeddings: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     index: IndexConfig = Field(default_factory=IndexConfig)
-    models: ModelsConfig = Field(default_factory=ModelsConfig)
     automation: AutomationConfig = Field(default_factory=AutomationConfig)
     coach: CoachConfig = Field(default_factory=CoachConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)

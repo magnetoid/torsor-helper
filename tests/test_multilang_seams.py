@@ -3,7 +3,7 @@ it — compute_refs across three languages at once, `connect`, `export`, and the
 partial-remap merge (which round-trips edges through SQLite)."""
 import pytest
 
-from torsor_helper import cartographer, db, export
+from torsor_helper import cartographer, db
 from torsor_helper.languages.modules import norm_path
 from torsor_helper import languages
 from torsor_helper import operations as ops
@@ -71,18 +71,6 @@ def test_connect_walks_a_typescript_call_graph_end_to_end(tmp_path):
     assert [hop["symbol"] for hop in res["path"]] == ["run", "helper"]
     # Canonical dotted keys, not file relpaths ("src/" stripped, ".ts" stripped).
     assert [hop["module"] for hop in res["path"]] == ["app", "utils"]
-
-
-@needs_ts
-def test_export_mermaid_draws_a_typescript_module_edge(tmp_path):
-    store = _ts_repo(tmp_path)
-    ops.map_repo(store, TorsorConfig())
-    conn = db.connect(store.paths.index_db)
-    try:
-        mermaid = export.render_module_mermaid(conn)
-    finally:
-        conn.close()
-    assert "n_app --> n_utils" in mermaid
 
 
 @needs_go

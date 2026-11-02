@@ -1,8 +1,7 @@
 """The two adapters expose the same features with the same controls.
 
-Nothing tied them together, so they drifted: `find` could restrict to files or
-symbols from the CLI but not over MCP, `stale` could unmark from the CLI but
-not over MCP, `guard` had --update-baseline on one side and new_only on the
+Nothing tied them together, so they drifted: `stale` could unmark from the CLI
+but not over MCP, `guard` had --update-baseline on one side and new_only on the
 other, and `deps` returned prose over MCP with no way to tell pass from fail.
 """
 from __future__ import annotations
@@ -55,7 +54,6 @@ def test_the_option_reader_can_actually_see_options():
 
 
 @pytest.mark.parametrize("tool, cli, shared", [
-    ("find_files", "find", {"limit", "mode"}),
     ("stale", "stale", {"mark", "unmark"}),
     ("recall", "recall", {"limit", "kind"}),
     ("map_repo", "map", {"force"}),
@@ -65,10 +63,6 @@ def test_the_option_reader_can_actually_see_options():
 def test_a_feature_offers_the_same_controls_on_both_surfaces(tools, tool, cli, shared):
     assert shared <= tools[tool], f"{tool} is missing {shared - tools[tool]}"
     assert shared <= _cli_options(cli), f"torsor {cli} is missing {shared - _cli_options(cli)}"
-
-
-def test_find_can_be_restricted_to_files_or_symbols_over_mcp(tools):
-    assert {"include_files", "include_symbols"} <= tools["find_files"]
 
 
 def test_map_can_be_scoped_to_paths_from_the_cli():

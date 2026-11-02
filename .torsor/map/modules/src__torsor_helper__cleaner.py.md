@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T17:33:16'
-updated: '2026-09-21T17:33:16'
+created: '2026-11-02T02:18:30'
+updated: '2026-11-02T02:18:30'
 rules: []
 ---
 
@@ -20,9 +20,9 @@ Symbols in `src/torsor_helper/cleaner.py`.
 - L41 `_map_note_name(module: str)` (function) — The map-note filename cartographer.render_map writes for `module` —
 - L48 `_live_map_notes(store)` (function) — Map-note filenames for indexed modules whose source file still exists.
 - L58 `_plan_map_orphans(store, out: CleanPlan)` (function)
-- L80 `_dead_rows(store, conn)` (function)
-- L93 `_plan_journal_expiry(store, config, out: CleanPlan)` (function)
-- L116 `plan(store, config, *, deep: bool=False)` (function) — Compute what a clean pass would reclaim. Strictly read-only: this is the
-- L136 `_purge_dead_rows(store, conn)` (function)
-- L148 `apply(store, config, plan: CleanPlan)` (function) — Execute `plan`. Only ever removes derived or expired artefacts — never a
-- L188 `_vacuum(conn, db_path: Path)` (function) — VACUUM the index and report the bytes it actually gave back.
+- L79 `_dead_rows(store, conn)` (function)
+- L92 `_plan_journal_expiry(store, config, out: CleanPlan)` (function)
+- L115 `plan(store, config, *, deep: bool=False)` (function) — Compute what a clean pass would reclaim. Strictly read-only: this is the
+- L135 `_purge_dead_rows(store, conn)` (function)
+- L147 `apply(store, config, plan: CleanPlan)` (function) — Execute `plan`. Only ever removes derived or expired artefacts — never a
+- L179 `_vacuum(conn, db_path: Path)` (function) — VACUUM the index and report the bytes it actually gave back.

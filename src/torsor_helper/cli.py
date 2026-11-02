@@ -19,7 +19,7 @@ app = typer.Typer(help="torsor-helper: persistent memory + architectural intent 
 
 
 def _resolve_block_target(root: Path, write: Optional[Path], client: Optional[str]) -> Optional[Path]:
-    """Resolve where a managed block (rules/primer/model policy) should be written:
+    """Resolve where a managed block (rules/primer) should be written:
     an explicit --write path wins; else --client's conventional instructions file
     (AGENTS.md by default). Returns None when neither was given. Exits on bad client."""
     if write is not None:
@@ -132,64 +132,14 @@ def init(
         typer.echo(config_snippet(client, root=str(root.resolve())))
 
 
-_LOOPBACK = ("127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1")
-
-
 @app.command()
 def mcp(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-    http: bool = typer.Option(False, "--http", help="Serve over HTTP (streamable-http) instead of stdio — for shared/remote/team use."),
-    host: str = typer.Option("127.0.0.1", help="Host to bind when --http."),
-    port: int = typer.Option(8000, help="Port to bind when --http."),
-    allow_remote: bool = typer.Option(False, "--allow-remote", help="Required to bind --http to a non-loopback host; the transport has no authentication."),
 ) -> None:
-    """Run the torsor-helper MCP server (stdio by default; --http for a shared service)."""
+    """Run the torsor-helper MCP server over stdio for a local agent."""
     from torsor_helper.server import run
 
-    if http and host not in _LOOPBACK and not allow_remote:
-        # A warning the user could ignore was not a gate: this serves read AND
-        # write access to the project's memory, unauthenticated, to anyone who
-        # can reach the port.
-        typer.echo(
-            f"Refusing to bind the HTTP transport to {host}: it has no authentication, so this "
-            "would expose read/write access to this project's memory to anyone who can reach "
-            "the port. Put it behind a reverse proxy or an SSH tunnel, or pass --allow-remote "
-            "if you accept that.",
-            err=True,
-        )
-        raise typer.Exit(code=2)
-    run(root, transport="streamable-http" if http else "stdio", host=host, port=port)
-
-
-@app.command()
-def update(
-    print_only: bool = typer.Option(False, "--print-only", help="Show the upgrade command without running it."),
-    yes: bool = typer.Option(False, "--yes", help="Skip the confirmation prompt."),
-) -> None:
-    """Update the torsor CLI itself (detects uv tool / pipx / pip installs)."""
-    import subprocess
-
-    from torsor_helper import updater
-
-    method = updater.detect_install_method()
-    cmd = updater.update_command(method)
-    if cmd is None:
-        typer.echo(updater.manual_hint(method))
-        return
-    typer.echo(f"Detected install method: {method}")
-    typer.echo("$ " + " ".join(cmd))
-    if print_only:
-        return
-    # This replaces the running binary with whatever the package index — or a git
-    # branch HEAD — currently serves, with no signature check. Confirm it.
-    if not yes and not typer.confirm("Run it?", default=True):
-        typer.echo("Cancelled.")
-        return
-    result = subprocess.run(cmd)
-    if result.returncode != 0:
-        typer.echo("Update failed — run the command above manually.", err=True)
-        raise typer.Exit(code=result.returncode)
-    typer.echo("Updated. Check with: torsor --version")
+    run(root)
 
 
 @app.command()
@@ -283,39 +233,13 @@ def _doctor_git_and_hooks(store, config, check) -> None:
 
     repo = gitinfo.is_repo(store.paths.root)
     check("git", repo, "repository detected" if repo
-          else "not a git repository — churn, coupling and auto-capture are off", warn=True)
+          else "not a git repository — churn and auto-capture are off", warn=True)
     status = ops.hooks_status(store, config)
     on = [n for n, enabled in status["git_hooks"].items() if enabled]
     events = status["claude_events"]
     check("hooks", bool(on or events),
           f"git: {', '.join(on) or 'none'}; claude: {', '.join(events) or 'none'}"
           if (on or events) else "none installed — run `torsor hooks install`", warn=True)
-    _doctor_merge(store, repo, check)
-
-
-def _doctor_merge(store, repo, check) -> None:
-    """The one failure git is completely silent about: `.torsor/.gitattributes`
-    is committed and names the `torsor-map` driver, but this clone never
-    registered it, so git falls back to the normal text merge — which looks
-    exactly like having no merge configuration at all."""
-    from torsor_helper import merge
-
-    status = merge.status(store.paths.root, store.paths)
-    if not status["attributes"]:
-        check("merge", True, "no .torsor/.gitattributes — run `torsor merge install` for team use", warn=True)
-        return
-    if not repo:
-        return
-    if not status["driver_registered"]:
-        check("merge", False,
-              f"{merge.DRIVER_NAME} driver not registered in this clone — map/ notes will "
-              "conflict on every merge, silently (git does not warn). Fix: `torsor merge install`",
-              warn=True)
-        return
-    pending = status["pending_regeneration"]
-    check("merge", not pending,
-          f"{len(pending)} map note(s) resolved by taking ours — run `torsor map --force`"
-          if pending else "journals union-merge; map notes regenerate", warn=True)
 
 
 def _doctor_rules(store, check) -> None:
@@ -474,8 +398,6 @@ def stats(
         typer.echo("recalled most:")
         for path, count in data["top_recalled"]:
             typer.echo(f"  {count}x  {path}")
-    if data["op_totals"]:
-        typer.echo("operations: " + ", ".join(f"{op} {n}" for op, n in sorted(data["op_totals"].items())))
 
 
 @app.command()
@@ -571,42 +493,6 @@ def connect(
 
 
 @app.command()
-def find(
-    query: str = typer.Argument(..., help="Fuzzy query for files and mapped symbols."),
-    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-    mode: str = typer.Option("fuzzy", help="Match mode: fuzzy | literal | regex."),
-    limit: int = typer.Option(20, help="Max results."),
-    files_only: bool = typer.Option(False, "--files-only", help="Only repo files."),
-    symbols_only: bool = typer.Option(False, "--symbols-only", help="Only mapped symbols."),
-) -> None:
-    """Fuzzy, frecency-ranked search over the repo's files and mapped symbols."""
-    paths, config, store = _load(root)
-    res = ops.find_targets(
-        store, config, query, mode=mode, limit=limit,
-        include_files=not symbols_only, include_symbols=not files_only,
-    )
-    if not res:
-        typer.echo(f"No matches for {query!r}.")
-        return
-    for r in res:
-        if r["type"] == "file":
-            typer.echo(f"  {render.find_hit(r)}")
-        else:
-            typer.echo(f"  {render.find_hit(r)}")
-
-
-@app.command()
-def export(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/.")) -> None:
-    """Export the pyramid to a portable llms.txt + a Mermaid module diagram."""
-    paths, config, store = _load(root)
-    result = ops.export_project(store, config)
-    msg = f"Wrote {result['llms_txt']}"
-    if result["diagram"]:
-        msg += " + module dependency diagram in the repo map"
-    typer.echo(msg)
-
-
-@app.command()
 def rules(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
     write: Optional[Path] = typer.Option(None, "--write", help="Write/refresh a managed rules block in this file (e.g. AGENTS.md or CLAUDE.md). Idempotent."),
@@ -640,26 +526,6 @@ def rules(
         typer.echo("No rules to export yet — fill the charter's principles or record ADRs with rules.")
         return
     typer.echo(digest)
-
-
-@app.command()
-def practices(
-    language: Optional[str] = typer.Argument(None, help="python · javascript · typescript · go · rust · agent (default: auto-detect from the repo)."),
-    apply: bool = typer.Option(False, "--apply", help="Adopt the pack: record an ADR whose rules `torsor guard` enforces."),
-    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-) -> None:
-    """List or adopt curated, research-backed best-practice packs (consensus style-guide + linter rules, weighted toward documented AI-coding failure modes)."""
-    tp, config, store = _load(root)
-    if apply:
-        if not language:
-            typer.echo("Pass a language to adopt, e.g. `torsor practices python --apply`.", err=True)
-            raise typer.Exit(code=1)
-        result = ops.adopt_practices(store, config, language)
-        typer.echo(result["message"])
-        if not result["adopted"]:
-            raise typer.Exit(code=1)
-        return
-    typer.echo(ops.list_practices(store, config, language))
 
 
 @app.command()
@@ -879,8 +745,6 @@ def clean(
             typer.echo("Nothing was deleted. Re-run with --apply to act on this plan.")
         else:
             typer.echo("Nothing to reclaim. (Re-run with --apply once there is.)")
-    elif stats["insights_mined"]:
-        typer.echo(f"Mined {stats['insights_mined']} insight file(s) before expiring journals.")
 
 
 def _human_bytes(n: int) -> str:
@@ -890,40 +754,6 @@ def _human_bytes(n: int) -> str:
             return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
         size /= 1024
     raise AssertionError("unreachable")  # the loop always returns at GB
-
-
-@app.command()
-def consolidate(root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/.")) -> None:
-    """Self-improving maintenance: mine journal insights, reindex, report duplicates."""
-    tp, config, store = _load(root)
-    stats = ops.consolidate(store, config)
-    typer.echo(
-        f"Mined {stats['insights']} insight file(s); reindexed {stats['indexed']} note(s); "
-        f"found {stats['duplicates']} duplicate entr(y/ies)."
-    )
-    for text, n in stats["duplicate_entries"][:5]:
-        # "found 7 duplicates" with no way to see them was a dead end.
-        typer.echo(f"  {n}x  {text[:80]}")
-    if stats["top_accessed"]:
-        hot = ", ".join(f"{path} ({n}x)" for path, n in stats["top_accessed"])
-        typer.echo(f"Most-recalled: {hot}")
-
-
-@app.command()
-def recipes(
-    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-    limit: int = typer.Option(10, help="Max recipes to show."),
-) -> None:
-    """Show the deterministic torsor lookups you run most — prime candidates to route to the cheap model."""
-    tp, _, store = _load(root, config=False)
-    recs = ops.recipes(store, limit)
-    if not recs:
-        typer.echo("No recorded operations yet — use torsor for a while, then check back.")
-        return
-    typer.echo("Most-repeated torsor lookups (route these to the cheap model — see `torsor models`):")
-    for r in recs:
-        arg = f" {r['args']!r}" if r["args"] else ""
-        typer.echo(f"  {r['hits']}×  {r['op']}{arg}")
 
 
 @app.command()
@@ -957,59 +787,6 @@ def commands(
         return
     for c in cmds:
         typer.echo(f"  {render.command(c)}")
-
-
-@app.command()
-def models(
-    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-    cheap: Optional[str] = typer.Option(None, help="Model id for basic, deterministic work (torsor lookups, command replays)."),
-    smart: Optional[str] = typer.Option(None, help="Model id for thinking & construction (design, code, decisions)."),
-    fast: Optional[str] = typer.Option(None, help="Optional mid-tier model id."),
-    write: Optional[Path] = typer.Option(None, "--write", help="Merge the Markdown policy block into an instructions file (AGENTS.md, CLAUDE.md, …). Existing content is preserved."),
-    write_json: Optional[Path] = typer.Option(None, "--write-json", help="Write the machine-readable policy to a JSON file. Replaces the file."),
-    client: Optional[str] = typer.Option(None, "--client", help="Write the Markdown policy to a client's conventional instructions file instead of --write."),
-    json_out: bool = typer.Option(False, "--json", help="Print the machine-readable policy (for piping into any harness's router)."),
-) -> None:
-    """Set cheap/smart model tiers and publish the routing policy (token thrift). App-agnostic: any MCP client, any agent rules file, or any programmatic router can consume it."""
-    import json as _json
-
-    tp, config, store = _load(root)
-    if cheap is not None or smart is not None or fast is not None:
-        if cheap is not None:
-            config.models.cheap = cheap
-        if smart is not None:
-            config.models.smart = smart
-        if fast is not None:
-            config.models.fast = fast
-        save_config(tp, config)
-        typer.echo("Updated [models] in torsor.toml.")
-    if write is not None and str(write).endswith(".json"):
-        # One flag used to mean two things: a .md target got a merged block, a
-        # .json target had its whole content replaced. Silent data loss if you
-        # aimed it at a config file you already had.
-        typer.echo("--write merges a Markdown block; use --write-json for a JSON policy file.", err=True)
-        raise typer.Exit(code=2)
-    if write_json is not None:
-        # Relative to the project root, like --write — not the shell's cwd.
-        target = write_json if write_json.is_absolute() else root / write_json
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(_json.dumps(ops.model_policy_json(store, config), indent=2) + "\n",
-                          encoding="utf-8")
-        typer.echo(f"Wrote machine-readable model policy to {target} (for programmatic routers).")
-        return
-    dest = _resolve_block_target(root, write, client)
-    if dest is not None:
-        ops.write_model_policy(store, config, dest)
-        typer.echo(f"Wrote Model-routing block to {dest} (any agent that reads this file follows it).")
-        return
-    if json_out:
-        typer.echo(_json.dumps(ops.model_policy_json(store, config), indent=2))
-        return
-    typer.echo(f"cheap: {config.models.cheap or '(unset)'}")
-    typer.echo(f"smart: {config.models.smart or '(unset)'}")
-    if config.models.fast:
-        typer.echo(f"fast:  {config.models.fast}")
-    typer.echo("\n" + ops.model_policy(store, config))
 
 
 hooks_app = typer.Typer(help="Auto-capture: wire memory to the git / Claude Code lifecycle.")
@@ -1137,74 +914,6 @@ def _hook_payload() -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
-merge_app = typer.Typer(help="Team memory: let two branches write .torsor/ at once.")
-app.add_typer(merge_app, name="merge")
-
-
-@merge_app.command("install")
-def merge_install(
-    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-) -> None:
-    """Write .torsor/.gitattributes and register the map merge driver in this clone.
-
-    The attributes file is committed and covers everyone; the driver lives in
-    .git/config and has to be registered once per clone — including yours."""
-    from torsor_helper import merge as merge_mod
-
-    tp, _, _ = _load(root, config=False)
-    target = merge_mod.write_attributes(tp)
-    typer.echo(f"wrote {target} (commit it — it is how a clone learns the merge rules)")
-    if merge_mod.register_driver(root):
-        typer.echo(f"registered {merge_mod.DRIVER_KEY} = {merge_mod.driver_command(root)}")
-    else:
-        typer.echo("not a git repo here — nothing to register the driver into.", err=True)
-
-
-@merge_app.command("status")
-def merge_status(
-    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-    as_json: bool = typer.Option(False, "--json", help="Emit JSON."),
-) -> None:
-    """Show whether both halves of the merge setup are in place in this clone."""
-    from torsor_helper import merge as merge_mod
-
-    tp, _, _ = _load(root, config=False)
-    status = merge_mod.status(root, tp)
-    if _emit(status, as_json):
-        return
-    typer.echo(f"attributes: {'present' if status['attributes'] else 'missing'} ({status['attributes_path']})")
-    if not status["git_repo"]:
-        typer.echo("git: not a repo here")
-        return
-    if status["driver_registered"]:
-        typer.echo(f"map driver: registered ({status['driver_command']})")
-    else:
-        # Git says nothing at all in this case — it silently falls back to the
-        # normal text merge, so the only way to learn about it is to be told.
-        typer.echo("map driver: NOT registered in this clone — map/ notes will conflict")
-        typer.echo("  fix: torsor merge install")
-    pending = status["pending_regeneration"]
-    if pending:
-        typer.echo(f"awaiting regeneration: {len(pending)} map note(s) — run `torsor map --force`")
-
-
-@merge_app.command("driver", hidden=True)
-def merge_driver(
-    ours: Path = typer.Argument(..., help="git's %A — the file holding our version, and the result."),
-    merged_path: str = typer.Argument(..., help="git's %P — where the result will be stored."),
-    root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-) -> None:
-    """The `torsor-map` merge driver. Not for humans — git invokes it.
-
-    Exit 0 means resolved. Anything else (including this project not existing)
-    means conflict, which is the safe way to fail: the user sees markers instead
-    of a silently discarded change."""
-    from torsor_helper import merge as merge_mod
-
-    tp = TorsorPaths(root)
-    if not tp.base.exists():
-        raise typer.Exit(code=1)
-    raise typer.Exit(code=merge_mod.resolve_map_note(tp, ours, merged_path))
 
 
 def main() -> None:

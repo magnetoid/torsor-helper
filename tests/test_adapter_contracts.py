@@ -1,13 +1,11 @@
 """What each adapter promises, where the two used to disagree.
 
 The MCP server served 28 tools on an uninitialized project, all returning
-empty strings; it read torsor.toml once at startup, so a long-lived server
-never saw a config change; and adopt_practices returned prose, so a caller
-could not tell success from "unknown pack".
+empty strings, and it read torsor.toml once at startup, so a long-lived server
+never saw a config change.
 """
 from __future__ import annotations
 
-import json
 
 import anyio
 from typer.testing import CliRunner
@@ -48,53 +46,28 @@ def test_a_malformed_config_is_reported_per_call_not_at_import(tmp_path):
     assert "torsor.toml" in str(result)
 
 
-def test_a_config_change_is_picked_up_without_a_restart(tmp_path):
-    root = _project(tmp_path)
-    server = build_server(root)
-    _call(server, "get_rules")
-
-    config = load_config(TorsorPaths(root))
-    config.models.cheap = "haiku-x"
-    save_config(TorsorPaths(root), config)
-
-    assert "haiku-x" in str(_call(server, "get_model_policy"))
-
-
-# --- a result a caller can branch on ---------------------------------------
-
 def _text(out):
     """The text a FastMCP tool returned."""
     content = out[0] if isinstance(out, tuple) else out
     return content[0].text
 
 
-def test_adopt_practices_reports_failure_distinguishably(tmp_path):
-    """It returned prose, so a caller could not tell "adopted" from "unknown
-    pack" from "already adopted" — all three were a success-shaped string."""
+def test_a_config_change_is_picked_up_without_a_restart(tmp_path):
     root = _project(tmp_path)
     server = build_server(root)
+    for i in range(3):
+        anyio.run(lambda: server.call_tool("record_command", {"name": f"cmd{i}", "command": f"echo {i}"}))
+    assert _text(_call(server, "list_commands")).count("\n- ") == 2
 
-    ok = json.loads(_text(_call(server, "adopt_practices", language="python")))
-    bad = json.loads(_text(_call(server, "adopt_practices", language="klingon")))
+    config = load_config(TorsorPaths(root))
+    config.budgets.max_items = 1
+    save_config(TorsorPaths(root), config)
 
-    assert ok["adopted"] is True and ok["path"]
-    assert bad["adopted"] is False and "klingon" in bad["message"]
-
-
-# --- flags with one name and two meanings ----------------------------------
-
-def test_models_write_json_is_its_own_flag(tmp_path):
-    root = _project(tmp_path)
-    target = tmp_path / "policy.json"
-    target.write_text('{"keep": "me"}\n', encoding="utf-8")
-
-    # --write on a .json used to silently overwrite the whole file
-    result = runner.invoke(app, ["models", "--root", str(root), "--write", str(target)])
-    assert result.exit_code == 2
-    assert json.loads(target.read_text())["keep"] == "me"
-
-    assert runner.invoke(app, ["models", "--root", str(root), "--write-json", str(target)]).exit_code == 0
-    assert "cheap" in json.loads(target.read_text())
+    # list_commands caps at budgets.max_items on every call: a server still
+    # holding the startup config would list all three with no tail line.
+    out = _text(_call(server, "list_commands"))
+    assert out.startswith("- ") and out.count("\n- ") == 0, out
+    assert "more" in out, out
 
 
 def test_rules_scoped_refuses_a_conflicting_target(tmp_path):

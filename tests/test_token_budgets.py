@@ -167,20 +167,6 @@ def test_impact_limit_defaults_to_the_configured_cap(tmp_path):
     assert res["count"] == 12
 
 
-# --- list_practices ---------------------------------------------------------
-
-def test_list_practices_respects_its_budget(tmp_path):
-    store = _store(tmp_path)
-    (tmp_path / "a.py").write_text("x = 1\n")
-    (tmp_path / "b.ts").write_text("export const x = 1\n")
-    (tmp_path / "c.go").write_text("package main\n")
-    config = TorsorConfig()
-
-    out = ops.list_practices(store, config, None)
-
-    assert _tokens(out, config) <= config.budgets.practices_tokens
-
-
 # --- verify -----------------------------------------------------------------
 
 def test_verify_caps_reasons_per_check_but_keeps_the_true_count(tmp_path):

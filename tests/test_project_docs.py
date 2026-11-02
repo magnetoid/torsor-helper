@@ -191,7 +191,6 @@ def test_torsor_never_writes_a_project_doc(tmp_path):
     ops.recall(store, config, "project")
     ops.check_staleness(store, config, mark=True)
     ops.clean(store, config, apply=True)
-    ops.consolidate(store, config)
     ops.map_repo(store, config)
     ops.recall(store, config, "nonexistent")
 
@@ -416,13 +415,6 @@ def test_an_auto_handoff_does_not_copy_placeholders_into_the_journal(tmp_path):
     journal = "".join(p.read_text() for p in store.paths.journal_dir.glob("*.md"))
     assert "_Unresolved decisions._" not in journal
     assert "Describe" not in journal
-
-
-def test_llms_txt_does_not_summarise_the_project_with_a_placeholder(tmp_path):
-    store = _fresh(tmp_path)
-    ops.export_project(store, TorsorConfig())
-    text = store.paths.llms_txt.read_text()
-    assert "Describe the product" not in text
 
 
 def test_mcp_resources_say_a_note_is_unfilled_instead_of_serving_the_seed(tmp_path):

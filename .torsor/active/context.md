@@ -7,11 +7,14 @@ tags: [active]
 # Active Context
 
 ## Current focus
-Phase 4 (Guard) complete; stabilising the codebase and dogfooding torsor-helper
-on its own source.
+Trimming torsor-helper down to a small helper for one developer (ADR 0019): the
+team/platform features and the Coach checks that were inert on a solo repo are
+removed, and the docs are being rewritten for the smaller surface.
 
 ## Recent changes
-Phases 1-4 shipped: foundation, index, map, guard. 109 tests green; lint clean.
+Removed merge drivers, HTTP transport, `update`, `export`, `find`, `practices`,
+`consolidate`, `recipes`, model routing, and five Coach modules. Client registry
+cut to six entries.
 
 ## Open questions
-Pull the Coach (Phase 6) forward, or build Phase 5 (consolidation) next?
+Migrate to `mcp>=2` (`MCPServer`) next, or make the CLI's heavy imports lazy first?

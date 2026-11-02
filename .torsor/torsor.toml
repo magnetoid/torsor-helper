@@ -6,7 +6,8 @@ recall_tokens = 1500
 chars_per_token = 4
 
 [embeddings]
-provider = "fastembed"
+# "fastembed" when the [embeddings] extra is installed; this repo's own index runs on the hashing fallback.
+provider = "hashing"
 model = "BAAI/bge-small-en-v1.5"
 dim = 384
 

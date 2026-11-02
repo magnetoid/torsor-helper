@@ -20,14 +20,6 @@ def test_recommend_surfaces_hygiene_on_fresh_project(tmp_path):
     assert any(r.kind == "thin" for r in recs)
 
 
-def test_recommend_with_context_includes_reuse(tmp_path):
-    store = _store(tmp_path)
-    (tmp_path / "app.py").write_text("def format_date(d):\n    return d\n")
-    ops.map_repo(store, TorsorConfig())
-    recs = ops.recommend(store, TorsorConfig(), context="format date")
-    assert any(r.kind == "reuse" and "format_date" in r.message for r in recs)
-
-
 def test_dismiss_recommendation_persists(tmp_path):
     store = _store(tmp_path)
     ops.dismiss_recommendation(store, "thin:charter")

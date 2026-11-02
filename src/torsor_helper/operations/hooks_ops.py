@@ -10,14 +10,14 @@ import json
 
 from torsor_helper import gitinfo
 from torsor_helper import hooks as _hooks
-from torsor_helper.operations.capture import _capture_state_path, _op_totals, _save_capture_state
+from torsor_helper.operations.capture import _capture_state_path, _save_capture_state
 from torsor_helper.operations.decisions import _next_adr_number
 
 
 def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=False) -> dict:
     """Wire git hooks + Claude Code hook entries so capture fires on the lifecycle.
-    Idempotent, foreign-content-preserving, and CLI-only (footgun parity with the
-    self-updater — an agent should not rewrite its own hooks; ADR 0009)."""
+    Idempotent, foreign-content-preserving, and CLI-only (an agent should not
+    rewrite its own hooks; ADR 0009)."""
     root = str(store.paths.root)
     result: dict = {"git_hooks": [], "claude_settings": None, "warnings": [], "skipped": []}
 
@@ -71,7 +71,6 @@ def install_hooks(store, config, *, git=True, claude=True, local=False, on_stop=
     if not _capture_state_path(store).exists():
         _save_capture_state(store, {
             "last_head": gitinfo.head(root),
-            "op_snapshot": _op_totals(store),
             "adr_max": _next_adr_number(store) - 1,
         })
     return result

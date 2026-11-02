@@ -2,14 +2,13 @@
 
 # 🧭 torsor-helper
 
-### Memory · guardrails · coaching — for AI coding agents.
+### Project memory · guardrails · a coach — for one developer and an AI coding agent.
 
 **Stop re-explaining your project every session. Stop the silent architectural drift.**
-One small Python **MCP** server — works with *every* AI coding tool (Claude Code, Codex, Cursor, …).
+One small, local-first Python **MCP** server — works with Claude Code, Codex, Cursor, VS Code, Gemini CLI and any other MCP client.
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
-![status](https://img.shields.io/badge/release-v0.8%20team%20memory-success)
-![tests](https://img.shields.io/badge/tests-794%20passing-brightgreen)
+![release](https://img.shields.io/badge/release-v0.8.0-success)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)
@@ -19,13 +18,13 @@ One small Python **MCP** server — works with *every* AI coding tool (Claude Co
 
 ---
 
-> **Your AI agent has amnesia.** Every new session starts from zero. Mid-session it forgets the rules you set an hour ago. It rebuilds the helper you already wrote, re-introduces the pattern you explicitly rejected, quietly drifts from your architecture — and sometimes imports a package that doesn't even exist. **torsor-helper** is the persistent **brain** that fixes the forgetting, a **guardrail** that catches the drift, and a **coach** that keeps nudging your project back toward health — all local-first, no API key.
+> **Your AI agent has amnesia.** Every new session starts from zero. Mid-session it forgets the rules you set an hour ago. It rebuilds the helper you already wrote, re-introduces the pattern you explicitly rejected, quietly drifts from your architecture — and sometimes imports a package that doesn't even exist. **torsor-helper** is a small helper for solo vibe coding that owns the four things the agents don't do natively: **committed, in-repo project memory** that follows `git clone` and works across Claude Code / Codex / Cursor (their built-in memories are machine-local); a **guard** that enforces your ADR rules as a hook, not just a prompt; a small **code map** with `impact` blast radius; and an offline **hallucinated-dependency check**. Plus a **Coach** for health nudges and a **command book** so the agent stops re-deriving how to run your tests. All local-first, no API key.
 
-**Contents:** [Install](#-install) · [Quick start](#-quick-start) · [Connect your agent](#-connect-your-agent-claude-code-codex-cursor-) · [Why](#-why) · [Every feature](#-every-feature--what-it-solves--when-to-use-it) · [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens) · [How it works](#️-how-it-works) · [Usage](#️-usage) · [Status](#-status--roadmap) · [Contributing](#-contributing--releasing)
+**Contents:** [Install](#-install) · [Quick start](#-quick-start) · [Connect your agent](#-connect-your-agent) · [Why](#-why) · [Every feature](#-every-feature--what-it-solves--when-to-use-it) · [How it works](#️-how-it-works) · [Usage](#️-usage) · [Status](#-status--roadmap) · [Contributing](#-contributing--releasing)
 
 > **New here / vibe-coding a startup?** Jump to [**Every feature — what it solves & when to use it**](#-every-feature--what-it-solves--when-to-use-it) for a plain-language guide to which tool helps with what.
 >
-> 📚 **Step-by-step guides:** [**Vibe-coding guide**](docs/vibe-coding-guide.md) — how to use torsor while building fast with an AI agent (start here) · [**How to install**](docs/how-to-install.md) — every install path + setup for all 20 supported clients · [**How to use**](docs/how-to-use.md) — the day-to-day workflow, ADR rules, CI, and the full CLI/MCP reference.
+> 📚 **Step-by-step guides:** [**Vibe-coding guide**](docs/vibe-coding-guide.md) — how to use torsor while building fast with an AI agent (start here) · [**How to install**](docs/how-to-install.md) — every install path + client setup · [**How to use**](docs/how-to-use.md) — the day-to-day workflow, ADR rules, CI, and the full CLI/MCP reference.
 
 ## 📦 Install
 
@@ -52,6 +51,8 @@ git clone https://github.com/magnetoid/torsor-helper && cd torsor-helper
 uv run torsor --help              # uv resolves the env from pyproject automatically
 ```
 
+**Upgrade:** `uv tool upgrade torsor-helper` (or `pipx upgrade torsor-helper`).
+
 > Without the `[embeddings]` extra, recall uses a deterministic offline hashing fallback — everything works with no model download and no API key.
 
 ## 🚀 Quick start
@@ -72,9 +73,9 @@ torsor rules --write AGENTS.md     # or CLAUDE.md — refresh any time you recor
 
 `torsor rules` distills your charter's non-negotiable principles plus every machine-readable ADR rule into a compact (~600-token, budget-capped) digest, written into a managed block in your agent's prompt file. The agent sees the constraints **at prompt time — no tool calls, no rediscovery, no burned context** — and `torsor guard` still enforces the same rules deterministically in CI. Re-running replaces the block, never duplicates it.
 
-## 🔌 Connect your agent (Claude Code, Codex, Cursor, …)
+## 🔌 Connect your agent
 
-torsor-helper is a standard **MCP stdio server** — the command is `torsor mcp`. Point any MCP client at it. `torsor init --client <name>` prints exact, copy-paste config for your tool.
+torsor-helper is a standard **MCP stdio server** — the command is `torsor mcp`. Point any MCP client at it. `torsor init --client <name>` prints exact, copy-paste config for your tool and says where it goes.
 
 ### Claude Code — *one command*
 Paste this into the Claude Code terminal — it installs `torsor` and wires up the current project, then reload MCP servers:
@@ -108,33 +109,16 @@ VS Code uses its own `servers` shape in **`.vscode/mcp.json`** (or Command Palet
 { "servers": { "torsor-helper": { "type": "stdio", "command": "torsor", "args": ["mcp"] } } }
 ```
 
-### Google Antigravity
-Agent panel → settings → **MCP Servers** → *Manage* opens `mcp_config.json` — paste the standard block (`torsor init --client antigravity`):
-```json
-{ "mcpServers": { "torsor-helper": { "command": "torsor", "args": ["mcp"] } } }
-```
-
-### Everything else — one command prints your client's exact config + where it goes
-```bash
-torsor init --client <name>
-```
+### Supported clients
 
 | Client | `--client` | Config goes in |
 |---|---|---|
-| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` (Settings → Cascade → MCP) |
-| Trae | `trae` | AI chat → Settings → MCP → Add manually |
-| Cline / Roo Code | `cline` / `roo` | extension → MCP Servers → Configure |
-| Claude Desktop | `claude-desktop` | `claude_desktop_config.json` (Settings → Developer) |
-| Gemini CLI | `gemini` | `~/.gemini/settings.json` or project `.gemini/settings.json` |
-| GitHub Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` (or `/mcp add` in the CLI) |
-| Zed | `zed` | `settings.json` (`context_servers` shape — snippet handles it) |
-| JetBrains AI / Junie | `jetbrains` | Settings → Tools → AI Assistant → MCP → Add |
-| Continue | `continue` | `.continue/config.yaml` (YAML shape — snippet handles it) |
-| OpenCode | `opencode` | `opencode.json` (its own `mcp` shape — snippet handles it) |
-| Amp | `amp` | VS Code `settings.json` under `amp.mcpServers` |
-| Goose | `goose` | `~/.config/goose/config.yaml` (or `goose configure`) |
-| Kiro | `kiro` | `.kiro/settings/mcp.json` |
-| Warp | `warp` | Settings → AI → Manage MCP servers |
+| Claude Code | `claude-code` | project `.mcp.json` (via `torsor init --write`) or `claude mcp add` |
+| Cursor | `cursor` | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) |
+| Codex CLI | `codex` | `~/.codex/config.toml` |
+| VS Code / Copilot | `vscode` | `.vscode/mcp.json` (`servers` shape — the snippet handles it) |
+| Gemini CLI | `gemini` | `~/.gemini/settings.json` (global) or `.gemini/settings.json` (project) |
+| Any other MCP client | `other` | prints the standard `mcpServers` JSON block — most clients accept it as-is |
 
 > **Note:** the config uses `command: "torsor"`, which requires the `torsor` command on your PATH (`uv tool install` / `pipx install`). Running ephemerally instead? Use `"command": "uvx", "args": ["torsor-helper", "mcp"]`.
 
@@ -148,39 +132,36 @@ torsor init --client <name>
 | **While coding** | agent calls `recall()` / `get_intent()` / `impact()` before changing things | Finds prior decisions and existing code instead of re-inventing or breaking it |
 | **Every edit** (with hooks installed) | nothing — the `PreToolUse` edit gate checks the *proposed* Edit/Write against your ADRs | Drift is flagged with the ADR cited **before** it lands; advisory by default, `guard_on_edit = "block"` to enforce |
 | **Before commit / in CI** | `torsor guard --strict` · `torsor deps` | Catches architectural drift and hallucinated packages the moment they appear |
-| **Weekly-ish** | `torsor coach` · `torsor consolidate` · `torsor clean` | Hotspot/coupling nudges; journal noise distilled into clean insights; dead artefacts reclaimed |
+| **Weekly-ish** | `torsor coach` · `torsor clean` | Health and hotspot nudges; dead artefacts reclaimed |
 
 
 ## 💡 Why
 
-AI coding agents are brilliant in the moment and forgetful over time:
+AI coding agents are brilliant in the moment and forgetful over time. Claude Code, Codex and Cursor each have a memory of sorts — but it lives on one machine, in one tool, and does not follow the repo. torsor-helper puts the memory **in the repo**, where `git clone` carries it and every agent reads the same thing:
 
 | Failure mode | What it feels like | torsor-helper's answer |
 |---|---|---|
-| 🧠 **Context Collapse** | New chat = blank slate; long chats drift; the agent loses how files connect. | Pyramidal wiki + `bootstrap_session` + `handoff`; **contextual breadcrumbs** so situating terms are findable |
+| 🧠 **Context Collapse** | New chat = blank slate; long chats drift; the agent loses how files connect. | Committed pyramid of charter → ADRs → progress + `bootstrap_session` + `handoff`; **contextual breadcrumbs** so situating terms are findable |
 | 🔭 **Context Myopia** | Optimizes for what's *recent*, not *important*. | Stability-ordered tiers + hybrid recall; **importance decay** + **MMR diversity** so durable, distinct memory floats up |
-| 🏛️ **Lost Architectural Intent** | Layering/naming rules stop being followed; rejected patterns return. | ADRs-as-rules + `check_drift`; **layering/seam rules**, a **CI baseline**, and **ADR supersedes** |
-| ♻️ **Duplication & drift** | Rebuilds code that already exists ([~8× more duplication](https://www.builder.io/m/explainers/vibe-coding-limitations)). | Symbol map with **real reference edges** + the Coach's `reuse` & **hotspot** recs |
-| 📦 **Phantom deps & blind edits** | Imports packages that don't exist ([slopsquatting](https://www.usenix.org/conference/usenixsecurity25/presentation/spracklen)); one regenerated symbol silently breaks far-off callers. | Offline `deps` check + `impact` blast-radius (who-calls-what edges) |
-
-Most tools fix *one* of these. **torsor-helper combines four ideas no one else puts together** — a pyramidal wiki, an external semantic memory, a symbol-level repo map, and a drift guard — plus a **Coach** that proactively recommends fixes over time. See [What's new](#-whats-new).
+| 🏛️ **Lost Architectural Intent** | Layering/naming rules stop being followed; rejected patterns return. | ADRs-as-rules + `check_drift`, enforced as a **hook on every edit**, not just a line in a prompt; **layering/seam rules**, a **CI baseline**, and **ADR supersedes** |
+| ♻️ **Blind edits** | One regenerated symbol silently breaks far-off callers ([~8× more duplication](https://www.builder.io/m/explainers/vibe-coding-limitations) too). | Symbol map with **real reference edges** + `impact` blast-radius; `get_intent` shows what already exists before building |
+| 📦 **Phantom deps** | Imports packages that don't exist ([slopsquatting](https://www.usenix.org/conference/usenixsecurity25/presentation/spracklen)). | Offline `deps` check |
 
 <sub>**Why "torsor"?** A *torsor* is a space that looks like a group but has **no fixed origin** — you can only measure *differences* between points. That's exactly drift detection: your architecture is the reference frame, drift is the measured delta.</sub>
 
 ## 🧰 Every feature — what it solves & when to use it
 
-New to torsor (or to vibe-coding in general)? This is the plain-language map: **what each feature is, the pain it kills, and when you'd reach for it.** Everything is an MCP tool your agent calls *and* a CLI command you can run yourself.
+New to torsor (or to vibe-coding in general)? This is the plain-language map: **what each feature is, the pain it kills, and when you'd reach for it.** Nearly everything is an MCP tool your agent calls *and* a CLI command you can run yourself.
 
 ### 🧠 Memory & continuity — *"my agent forgets everything"*
 | Feature | What it does | Reach for it when… |
 |---|---|---|
-| **Charter / pyramid** (`.torsor/`) | Plain-Markdown files holding your project's purpose, architecture, decisions, and current state. | **Set up once.** Fill `charter.md` + `architecture/` so every session starts from the same truth. |
+| **Charter / pyramid** (`.torsor/`) | Plain-Markdown files holding your project's purpose, architecture, decisions, and current state. Committed, so it follows the repo. | **Set up once.** Fill `charter.md` + `architecture/` so every session starts from the same truth. |
 | `bootstrap_session()` | A budgeted summary of the whole project, loaded at the start of a chat. | **Every new session** — the first thing the agent should call so it's not a blank slate. |
 | `torsor primer --write` | **Token saver:** writes a budgeted project primer + token-efficiency habits into AGENTS.md/CLAUDE.md, so orientation costs zero tool calls. | **Once, then after big changes** — the cheapest tokens are the ones never spent. |
-| `recall(query)` | Hybrid semantic + keyword search over all your memory and notes. | The agent asks *"have we decided X?"* / *"how does auth work here?"* before writing code. |
+| `recall(query)` | Hybrid semantic + keyword search over all your memory, your own docs, and notes. | The agent asks *"have we decided X?"* / *"how does auth work here?"* before writing code. |
 | `remember(content)` · `update_active(...)` | The agent writes down what it learns / the current focus. | After a decision, a gotcha, or finishing a chunk — so the next session inherits it. |
 | `handoff()` | A structured end-of-session summary that seeds the next session. | **End of a work session**, before you close the chat. |
-| `torsor consolidate` | Distills scattered journal notes into clean per-topic insight files. | **Weekly-ish housekeeping** — keeps memory from turning into noise. |
 | `torsor clean` | Reclaims what torsor stopped needing: orphaned map notes, dead index rows, journals past retention. **Dry run by default.** | **Whenever `.torsor/` feels cluttered** — especially after renaming or deleting source files. |
 
 ### 🗺️ Understanding the codebase — *"the agent doesn't see how files connect"*
@@ -189,17 +170,17 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 | `torsor map` | Builds a symbol map (functions/classes) **+ real reference edges** ("who calls what") — Python via stdlib `ast`; JavaScript/TypeScript/TSX and Go via the optional `[languages]` extra. | **After big changes** (it auto-skips when nothing changed). Powers everything below. |
 | `get_intent(topic)` | Surfaces the architecture + relevant existing symbols for a topic. | Before building a feature — *"what already exists around payments?"* |
 | `torsor impact <symbol>` | Every caller of a symbol **and** every decision or learning that mentions it — the **blast radius**, in code and in intent. | **Before you let the agent change/rename a function** — see what breaks, and why it was written that way. |
-| `torsor find <query>` | **Fuzzy, frecency-ranked** search over files **and** mapped symbols (literal/regex too). | *"jump me to the file/function that does X"* — fast navigation without exact names. |
-| `torsor export` | Writes a portable `llms.txt` + a GitHub-rendered **Mermaid** module diagram. | Onboarding a teammate/another tool, or you want an at-a-glance architecture picture. |
+| `torsor connect <from> <to>` | Shortest call-graph path between two symbols. | *"How does the request handler reach the database?"* before a refactor. |
 
 ### 🛡️ Keeping your architecture — *"it quietly drifts from the plan"*
 | Feature | What it does | Reach for it when… |
 |---|---|---|
 | `record_decision(...)` (ADRs) | Records an Architecture Decision — optionally with machine-readable **rules**. | You make a load-bearing call (*"the domain layer may not import the web layer"*). |
-| `torsor practices --apply` | Adopts a **curated, research-backed best-practice pack** for your language (consensus linter/style rules, weighted toward documented AI failure modes) as one ADR the guard enforces. | **Project start**, or the first time you turn guardrails on — instant rules without writing them yourself. |
 | `torsor guard` | Flags code that violates your ADR rules (`forbid_import`, layering, required seams…). | **Before every commit / in CI** (`--strict`). Catches drift the moment it appears. |
+| `torsor hooks install` | Wires the same check into Claude Code's `PreToolUse` so every proposed edit is checked against your ADRs **before it lands** — plus session-start digest and auto-handoff. | **Once per project.** This is the difference between a rule in a prompt and a rule that holds. |
 | `guard --update-baseline` | Grandfathers existing violations so `--strict` fails only on **new** drift. | **Adopting torsor on an existing/messy repo** — turn on CI without a wall of red. |
 | `record_decision(..., supersedes=…)` | Marks an old ADR superseded so stale intent stops resurfacing in recall. | You change your mind — the new decision replaces the old cleanly. |
+| `torsor verify` | One pass/fail gate: guard + deps + staleness, optionally your recorded `test` command. | As a completion check in CI or an agent loop. |
 
 ### 📦 Supply-chain safety — *"the AI imported a package that doesn't exist"*
 | Feature | What it does | Reach for it when… |
@@ -211,77 +192,29 @@ Run `torsor coach` (or it's pushed at session start). It's advisory, ranked, and
 | Coach signal | What it tells you | Why it matters |
 |---|---|---|
 | `thin` / `stale` / `uncharted` | Your charter is still a template / active context is stale / modules aren't mapped. | Keeps the memory layer actually filled in and current. |
-| `reuse` | *"`format_date()` already exists — reuse it instead of rewriting."* | Kills AI's #1 habit: duplicating code that already exists. |
 | `hotspot` | The files with the most churn × complexity — **fix/test these first**. | Tells you *where* the risk concentrates, not just that risk exists. |
-| `coupling` | Two files always change together but nothing links them — a **hidden dependency**. | Surfaces architecture the import graph can't see. |
-| `regression` | A file's complexity **rose since your last `consolidate`** — review before it ossifies. | "New findings only" — alerts on what got *worse*, not absolute badness. |
 | `phantom_dep` | An import resolves to no known package (see `torsor deps`). | Early warning on hallucinated dependencies. |
+| `dangling_link` | A `[[wikilink]]` or file path in memory that no longer exists (see `torsor stale`). | Memory that contradicts the code is worse than no memory. |
 
-### 💸 Spending fewer (and cheaper) tokens — *"my agent keeps re-deriving the same things on the most expensive model"*
+### 💸 Spending fewer tokens — *"my agent keeps re-deriving the same things"*
 | Feature | What it does | Reach for it when… |
 |---|---|---|
 | `torsor commands` | A **learned command book** — record `test`/`build`/`lint`/`run` once; persisted in committed Markdown and shown in the primer. | The agent rediscovers *"how do I run the tests here?"* every session. Record it once, replay forever. |
-| `torsor recipes` | Shows the **deterministic lookups you run most** (`recall`/`impact`/`get_intent`/…) with hit counts. | You want to see what recurs — the exact-answer work worth pushing to a cheap model. |
-| `torsor models` | Sets a **cheap/smart model policy** and writes it into your agent's prompt file. | You want a cheap model doing the basic deterministic work and the frontier model only thinking/building. |
+| `torsor primer` / `torsor rules` | Budgeted managed blocks in your prompt file: orientation and standing rules at **zero tool-call cost**. | Once, then after big changes or new ADRs. |
 
-> **Rule of thumb:** start a session → `bootstrap_session`; before building → `recall` / `get_intent`; before changing a symbol → `impact`; before installing a suggested package → `deps`; before committing → `guard`; end of session → `handoff`; weekly → `consolidate` + skim `coach`.
-
-## 💸 Token thrift — spend fewer, cheaper tokens
-
-The most expensive tokens in agentic coding are **re-derivation**: the agent re-discovers how to run your tests, re-greps for callers, and re-reads files to answer questions that have an *exact, deterministic* answer — every session, usually on the most expensive model. torsor attacks this three ways. (torsor itself never calls an LLM — it makes the exact answers cheap to fetch and tells your harness how to route models.)
-
-### 1. Learn the project's commands once — `torsor commands`
-Stop the agent rediscovering *"how do I run the tests here?"* every session. Record it once; it lives in committed Markdown (`.torsor/commands.md`) and is shown in the primer, so every future session already knows it.
 ```bash
-torsor commands --add 'test=uv run pytest' --note 'run the suite'
-torsor commands --add 'lint=uv run ruff check src tests'
-torsor commands --add 'build=uv build'
+torsor commands --add test 'uv run pytest' --note 'run the suite'
+torsor commands --add lint 'uv run ruff check src tests'
 torsor commands              # list them
 torsor commands --run test   # replay one from the repo root
 ```
 Your agent calls `list_commands()` (or just reads the primer) and runs the exact command — no trial and error. The MCP server **records and lists** commands but never executes them; the agent runs them with its own shell.
 
-### 2. See what recurs — `torsor recipes`
-torsor records every deterministic lookup the agent makes (`recall`, `get_intent`, `find_files`, `impact`, `check_drift`, `check_dependencies`, `get_rules`) and how often:
-```bash
-torsor recipes
-#  12×  recall 'auth flow'
-#   8×  impact 'login'
-#   5×  get_intent 'payments'
-```
-These are exact, deterministic answers the agent asks for over and over — prime candidates to run on a cheap model (next). It's *frequency tracking*, not a stale answer cache: the lookups stay exact-by-construction; torsor just learns which ones recur.
-
-### 3. Route cheap vs smart models — `torsor models`
-Declare which model does the basic deterministic work and which one thinks.
-```bash
-torsor models --cheap claude-haiku-4-5 --smart claude-opus-4-8
-torsor models                      # show current tiers + the policy
-```
-The published policy, in plain terms:
-- **Cheap model** → deterministic torsor lookups + command replays (`recall` · `get_intent` · `find_files` · `impact` · `get_rules` · `check_drift` · `check_dependencies` · `map_repo` · `consolidate` · `list_commands`). They return exact answers — no reasoning, no frontier model needed.
-- **Smart model** → judgement & creation: designing architecture, writing/refactoring code, making decisions.
-
-**App-agnostic — torsor only *declares* the policy; your tool *routes* by it, three universal ways:**
-
-| Your app/harness | How it consumes the policy |
-|---|---|
-| **Any MCP client** (Claude Code, Cursor, Codex, Windsurf, Cline, …) | Calls the `get_model_policy()` tool (`as_json` for a parseable form) |
-| **Any agent that reads a rules file** (AGENTS.md / CLAUDE.md / .cursorrules / …) | `torsor models --write AGENTS.md` injects a managed "Model routing" block the agent follows |
-| **Any programmatic router / custom orchestrator** | `torsor models --json` (or `--write policy.json`) emits machine-readable JSON your code routes on |
-
-```bash
-torsor models --write AGENTS.md        # Markdown block — any prompt-reading agent
-torsor models --json                   # machine-readable — pipe into any router
-torsor models --write model-policy.json # …or write the JSON to a file
-```
-
-> **What torsor can and can't do:** it makes the exact answers cheap to fetch and *publishes* the routing policy in these portable forms. Whether a cheap model is actually used depends on your app supporting more than one model — a custom router or Claude Code subagents can route automatically; a single-model chat just gets the policy as guidance. Either way, the **command book + memory** already cut re-derivation regardless of model.
-
-> **Put together:** the cheap model handles the dozens of recurring exact-answer lookups; the frontier model is reserved for genuine reasoning; and the command book + memory mean *neither* model re-derives what torsor already knows. That's the token — and dollar — saving.
+> **Rule of thumb:** start a session → `bootstrap_session`; before building → `recall` / `get_intent`; before changing a symbol → `impact`; before installing a suggested package → `deps`; before committing → `guard`; end of session → `handoff`; weekly → skim `coach`.
 
 ## ✨ What's new
 
-See **[CHANGELOG.md](CHANGELOG.md)** — the one that is kept current. This section used to duplicate it and was two releases behind.
+See **[CHANGELOG.md](CHANGELOG.md)** — the one that is kept current.
 
 ## ⚙️ How it works
 
@@ -291,11 +224,11 @@ Your project's memory lives as **plain Markdown you own** — git-versioned, Obs
 
 ### 🔺 The pyramid
 
-Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, stable base loads first; the volatile tip changes every session.
+Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, stable base loads first; the volatile tip changes every session. Your project's own `README.md` and `docs/` are indexed in place as a sixth, read-only tier.
 
 ```
                  ╱╲
-                ╱T4╲            EPISODIC      memory/       observations · learnings · handoffs · mined insights
+                ╱T4╲            EPISODIC      memory/       observations · learnings · handoffs
                ╱────╲
               ╱  T3  ╲          ACTIVE        active/       current focus · progress · open questions
              ╱────────╲
@@ -312,12 +245,12 @@ Five Markdown tiers under `.torsor/`, ordered by **stability** — the broad, st
 Everything below is **derived from your Markdown** and rebuildable. Delete `.torsor/.index/` any time; the next command rebuilds it.
 
 - **Recall (`recall`)** — every note is indexed three ways: **FTS5** keyword search, **vector** embeddings (a local `fastembed` model, or a deterministic offline hash fallback), and a **wiki-link graph**. A query fuses them with **Reciprocal Rank Fusion**, then re-weights by tier (stable tiers rank higher), recency, an **importance multiplier** (notes you recall often float up; charter/architecture never decay), and a 1-hop link-graph boost. **MMR** drops near-duplicate hits so scarce context isn't wasted, and results are packed to a token budget. Indexing is incremental (content-hash diff) and self-heals when the embedder changes.
-- **The map (`map` / `get_intent` / `impact`)** — a cartographer over a per-language registry (Python via stdlib `ast`, always on; JavaScript/TypeScript/TSX and Go via the official tree-sitter grammar wheels behind the optional `[languages]` extra) extracts every function/class/method and, crucially, **real reference edges** ("who calls what") by resolving names — not substring matching, so comments and strings never inflate counts. `impact` walks those edges to show a symbol's blast radius; `connect` finds the shortest path between two symbols; `find` fuzzy-searches files + symbols, ranked by match quality and frecency — all of it language-agnostic since it's built on the same edge shape. A repo fingerprint lets `map` skip entirely when nothing changed; without `[languages]` installed, everything above quietly stays Python-only (ADR 0013).
-- **The guard (`guard` / `check_drift`)** — ADRs carry machine-readable `rules:` in their frontmatter (`forbid_import`, `forbid_layer_import`, `require_import`, `forbid_pattern`). The guard checks changed files against them deterministically (AST + regex), citing the ADR. It's **advisory by default**; `--strict` fails CI, and a committed **baseline** grandfathers existing debt so only *new* drift fails.
-- **The Coach (`coach` / `recommend`)** — surfaces ranked, evidence-backed nudges: stale/thin files, `reuse` (a symbol already exists), `hotspot` (churn × complexity), `coupling` (files that always change together but aren't linked), `regression` (complexity rose since the last snapshot), `phantom_dep` (a hallucinated import). Each **decays** so it never nags; a 3-item digest rides along in `bootstrap_session`.
-- **Token thrift (`commands` / `recipes` / `models`)** — the learned command book and the rules/primer blocks live in your prompt file (zero tool-call cost); `recipes` learns which deterministic lookups recur; `models` publishes a cheap-vs-smart routing policy your harness follows. torsor never calls an LLM — it makes the exact answers cheap to fetch. See [Token thrift](#-token-thrift--spend-fewer-cheaper-tokens).
+- **The map (`map` / `get_intent` / `impact` / `connect`)** — a cartographer over a per-language registry (Python via stdlib `ast`, always on; JavaScript/TypeScript/TSX and Go via the official tree-sitter grammar wheels behind the optional `[languages]` extra) extracts every function/class/method and, crucially, **real reference edges** ("who calls what") by resolving names — not substring matching, so comments and strings never inflate counts. `impact` walks those edges to show a symbol's blast radius; `connect` finds the shortest path between two symbols — language-agnostic since it's built on the same edge shape. A repo fingerprint lets `map` skip entirely when nothing changed; without `[languages]` installed, everything above quietly stays Python-only (ADR 0013).
+- **The guard (`guard` / `check_drift` / hooks)** — ADRs carry machine-readable `rules:` in their frontmatter (`forbid_import`, `forbid_layer_import`, `require_import`, `forbid_pattern`, `forbid_cycle`). The guard checks changed files against them deterministically (AST + regex), citing the ADR. It's **advisory by default**; `--strict` fails CI, a committed **baseline** grandfathers existing debt so only *new* drift fails, and `torsor hooks install` runs the same check on every proposed edit inside Claude Code.
+- **The Coach (`coach` / `recommend`)** — surfaces ranked, evidence-backed nudges: thin/stale/uncharted memory, `hotspot` (churn × complexity), `phantom_dep` (a hallucinated import), `dangling_link` (memory pointing at code that is gone). Each **decays** so it never nags; a 3-item digest rides along in `bootstrap_session`.
+- **The command book (`commands`)** — the learned commands and the rules/primer blocks live in your prompt file (zero tool-call cost). torsor never calls an LLM — it makes the exact answers cheap to fetch.
 
-> **The one rule:** Markdown is always the source of truth. The SQLite index, the symbol map, the frecency counters — all derived, all disposable, never something to fear losing.
+> **The one rule:** Markdown is always the source of truth. The SQLite index, the symbol map — all derived, all disposable, never something to fear losing.
 
 ## 🛠️ Usage
 
@@ -329,63 +262,52 @@ Everything below is **derived from your Markdown** and rebuildable. Delete `.tor
 |---|---|
 | `torsor init [--write] [--client <name>]` | Scaffold `.torsor/`; `--write` emits `.mcp.json`; `--client` prints that client's config |
 | `torsor --version` | Print the installed torsor-helper version |
-| `torsor mcp [--http --host --port]` | Run the MCP server (stdio by default; `--http` for a shared service) |
+| `torsor mcp` | Run the MCP server over stdio |
 | `torsor doctor` | Verify the project is healthy |
 | `torsor index [--full]` | Build/refresh the derived search index |
 | `torsor map [--force]` | Generate the repository symbol map + reference edges (skips when unchanged; `--force` to re-scan) |
 | `torsor impact <symbol>` | Blast radius of a symbol — who references it across files, and what was decided about it |
-| `torsor find <query> [--mode] [--files-only/--symbols-only]` | Fuzzy + frecency search over files and mapped symbols (fuzzy/literal/regex) |
-| `torsor export` | Write a portable `llms.txt` + a Mermaid module-dependency diagram into the map |
-| `torsor practices [<lang>] [--apply]` | List/adopt curated best-practice packs (python · javascript · typescript · go · rust · agent) — `--apply` records an ADR the guard enforces |
-| `torsor primer [--write <file>] [--tokens N]` | **Token saver:** budgeted prompt-time project primer (charter + architecture + map + token-efficiency habits) — zero discovery tool-calls per session |
-| `torsor update [--print-only]` | Update the torsor CLI itself (detects uv tool / pipx / pip installs) |
-| `torsor rules [--write <file>] [--scoped]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write` maintains a managed block in `AGENTS.md`/`CLAUDE.md`; `--scoped` writes one path-scoped Claude Code rule file per ADR under `.claude/rules/torsor/` — prompt-time rules at zero tool-call cost |
+| `torsor connect <from> <to> [--max-hops N]` | Shortest call-graph path between two symbols |
+| `torsor primer [--write <file>] [--client <name>] [--tokens N]` | **Token saver:** budgeted prompt-time project primer (charter + architecture + map + token-efficiency habits) — zero discovery tool-calls per session |
+| `torsor rules [--write <file>] [--client <name>] [--scoped]` | Print a compact agent-rules digest (charter principles + ADR rules); `--write`/`--client` maintains a managed block in `AGENTS.md`/`CLAUDE.md`; `--scoped` writes one path-scoped Claude Code rule file per ADR under `.claude/rules/torsor/` |
 | `torsor deps [files…] [--strict]` | Flag imports resolving to no known package — possible hallucinated dependencies (offline; Python, JS/TS, Go) |
 | `torsor guard [files…] [--strict] [--severity <lvl>] [--json] [--update-baseline]` | Flag ADR-rule violations; `--strict` fails CI on **new** drift; `--json` for machine-readable findings |
-| `torsor coach [context] [--dismiss <key>] [--limit N]` | Health + reuse + **hotspot** + **coupling** + **regression** + **phantom-dep** + **contradiction** recommendations, plus what you fixed since last time |
-| `torsor consolidate` | Self-improving pass: mine journal → insight notes, reindex, snapshot complexity, report duplicates |
+| `torsor verify [files…] [--strict] [--run-tests] [--json]` | One pass/fail gate: guard + deps + staleness, optionally your recorded `test` command |
+| `torsor stale [--mark\|--unmark]` | Memory that contradicts the code: dangling `[[wikilinks]]` and dead file paths |
+| `torsor coach [--dismiss <key>] [--limit N]` | Health + **hotspot** + **phantom-dep** + **dangling-link** recommendations, plus what you fixed since last time |
 | `torsor clean [--apply] [--deep]` | Garbage-collect derived artefacts: orphaned map notes, dead index rows (+VACUUM), expired journals; `--deep` drops the whole index. Dry run unless `--apply` |
-| `torsor commands [--add 'name=cmd'] [--run name]` | Record & replay project commands (test/build/lint) so agents don't re-derive them |
-| `torsor recipes` | The deterministic lookups you run most — candidates to route to the cheap model |
-| `torsor models [--cheap … --smart …] [--write AGENTS.md\|policy.json] [--json]` | Set the cheap/smart model policy; publish it as a prompt block, JSON, or via MCP — app-agnostic |
+| `torsor commands [--add NAME COMMAND] [--run name]` | Record & replay project commands (test/build/lint) so agents don't re-derive them |
+| `torsor stats [--json]` | Notes per tier, map size, index size, what gets recalled most |
+| `torsor hooks install\|uninstall\|status` | Wire auto-capture (session-start digest, edit gate, auto-handoff) into git and Claude Code |
+| `torsor recall` · `remember` · `active` · `handoff` · `bootstrap` · `intent` · `decision` | The memory operations from the shell — same as the MCP tools, for scripting and debugging |
 
 ### MCP tools (what the agent calls)
 
 | Tool | What it does |
 |---|---|
-| `bootstrap_session()` | Budgeted summary of the whole pyramid at session start (+ a hygiene digest) |
-| `recall(query)` | Hybrid search over memory + wiki (vector + FTS5, fused via RRF) |
+| `bootstrap_session()` | Budgeted summary of the whole pyramid at session start (+ a Coach digest) |
+| `recall(query)` | Hybrid search over memory + wiki + your docs (vector + FTS5, fused via RRF) |
 | `remember(content)` · `update_active(...)` | Self-editing memory the agent maintains as it works |
 | `handoff()` | Structured end-of-session summary → seeds the next session |
-| `get_intent(topic?)` · `map_repo(force?)` · `impact(symbol)` | Surface architecture + symbols relevant to a change; show a symbol's caller blast radius |
-| `find_files(query, mode?)` | Fuzzy, frecency-ranked search over repo files + mapped symbols (fuzzy/literal/regex) |
+| `get_intent(topic?)` · `map_repo(force?)` · `impact(symbol)` · `connect(source, target)` | Surface architecture + symbols relevant to a change; a symbol's caller blast radius; the path between two symbols |
 | `record_decision(..., supersedes?)` · `check_drift(..., as_json?, new_only?)` | Record ADRs (that become rules); flag changes that violate intent |
-| `get_rules()` | The standing constraints (principles + ADR rules) as one compact digest — load once per session |
-| `get_primer(max_tokens?)` · `list_practices(lang?)` · `adopt_practices(lang)` | Token-saving project primer; list/adopt curated best-practice packs as guard-enforced ADRs |
-| `check_dependencies(files?)` · `export()` | Flag hallucinated imports (slopsquatting; Python, JS/TS, Go); portable `llms.txt` + Mermaid diagram |
-| `record_command(...)` · `list_commands()` · `recipes()` | The learned command book + the most-repeated deterministic lookups (token thrift) |
-| `get_model_policy(as_json?)` | The cheap/smart model-routing policy to follow — do basic lookups on the cheap model (`as_json` for a parseable form) |
-| `recommend(context?)` · `consolidate()` | The Coach (health · reuse · hotspots · coupling · regressions · phantom-deps); self-improving maintenance |
-| `clean(apply?, deep?)` | Reclaim orphaned map notes, dead index rows and expired journals — dry run unless `apply` |
+| `get_rules()` · `get_primer(max_tokens?)` | The standing constraints and the project primer — load once per session if not already in the prompt file |
+| `check_dependencies(files?)` | Flag hallucinated imports (slopsquatting; Python, JS/TS, Go) |
+| `verify(files?, severity?)` · `stale(mark?, unmark?)` | One JSON verdict over guard + deps + staleness; memory that has drifted from the code |
+| `record_command(...)` · `list_commands()` | The learned command book |
+| `recommend()` · `dismiss_recommendation(key)` | The Coach (health · hotspots · phantom-deps · dangling links) |
+| `clean(apply?, deep?)` · `stats()` · `hooks_status()` | Housekeeping (dry run unless `apply`); memory size; which hooks are installed |
 
 ### A typical loop
-1. **Once:** `torsor init --write`, fill in `charter.md` + `architecture/`, commit `.torsor/`; `torsor rules --write AGENTS.md` so the rules live in the prompt.
-2. **Each session:** the agent calls `bootstrap_session()` → gets your charter, architecture, active state, recent memory, and a hygiene nudge or two.
-3. **While working:** it `recall()`s prior decisions, `get_intent()` before changes, and `remember()`s what it learns.
-4. **Before a commit:** `check_drift()` flags anything that violates your ADR rules.
+1. **Once:** `torsor init --write`, fill in `charter.md` + `architecture/`, commit `.torsor/`; `torsor rules --write AGENTS.md` so the rules live in the prompt; `torsor hooks install` so the loop below runs itself.
+2. **Each session:** the agent calls `bootstrap_session()` → gets your charter, architecture, active state, recent memory, and a Coach nudge or two.
+3. **While working:** it `recall()`s prior decisions, `get_intent()` before changes, `impact()` before touching a shared symbol, and `remember()`s what it learns.
+4. **Before a commit:** `check_drift()` flags anything that violates your ADR rules; `check_dependencies()` flags imports that don't exist.
 5. **End of session:** `handoff()` writes a summary the next session resumes from.
-6. **Periodically:** `torsor coach` for health + reuse nudges; `torsor consolidate` to distill journal into insights; `torsor clean` to see what's become dead weight (then `--apply`).
+6. **Periodically:** `torsor coach` for health nudges; `torsor clean` to see what's become dead weight (then `--apply`).
 
 ### 🩺 The Coach
-An **independent advisor that sits beside your coding, never in it.** It watches project health and nudges — *"your `architecture/` is still the template", "12 decisions but 0 rules", "♻️ `format_date()` already exists in `utils/dates.py` — reuse it"* — each with **evidence + a concrete action**, ranked by severity, and **decaying** so it never nags. Pull it (`torsor coach` / `recommend()`), or get it **pushed** as a short digest at session start (silent when healthy). → [Coach design](docs/superpowers/specs/2026-06-01-torsor-coach-design.md)
-
-## 🌐 Team / HTTP mode
-
-Run torsor-helper as a shared service over HTTP (streamable-http) instead of stdio:
-```bash
-torsor mcp --http --host 0.0.0.0 --port 8000
-```
-Point HTTP-capable MCP clients at `http://<host>:<port>/mcp`. (stdio remains the default and is best for a single local agent.)
+An **independent advisor that sits beside your coding, never in it.** It watches project health and nudges — *"your `architecture/` is still the template", "12 decisions but 0 rules", "`billing/charge.py` is your top hotspot"* — each with **evidence + a concrete action**, ranked by severity, and **decaying** so it never nags. Pull it (`torsor coach` / `recommend()`), or get it **pushed** as a short digest at session start (silent when healthy).
 
 ## 🧩 What's inside
 
@@ -402,37 +324,33 @@ src/torsor_helper/
 ├─ snippets.py      # section-aware snippets      cartographer.py  # symbols + reference edges (dispatches to languages/)
 ├─ languages/       # python.py (ast) · treesitter.py + javascript.py/go.py (optional `[languages]` extra)
 ├─ guard.py         # ADR rules → drift detection baseline.py  # committed drift baseline (ratchet)
-├─ export.py        # llms.txt + Mermaid diagram  deps.py      # offline slopsquatting guard
-├─ coach/           # health · recommender · report · state · mining · hotspots · coupling · trend
-├─ operations.py    # orchestration incl. impact() (the tested core)
+├─ deps.py          # offline slopsquatting guard hooks.py     # git + Claude Code hook installers
+├─ coach/           # health · hotspots · staleness · report · state
+├─ operations/      # orchestration incl. impact() (the tested core)
 ├─ server.py        # FastMCP adapter            cli.py       # Typer CLI
 ```
 
-Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` / `torsor deps` run. **888 tests, lint-clean and type-checked**, every feature offline-testable.
+Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` / `torsor deps` run. Lint-clean and type-checked, every feature offline-testable.
 
 ## 📍 Status & roadmap
 
-**v0.8 — 888 tests, lint-clean, type-checked, dogfooded.** What shipped when is in
-**[CHANGELOG.md](CHANGELOG.md)**; this section is what is true now and what is next.
+What shipped when is in **[CHANGELOG.md](CHANGELOG.md)**; this section is what is true now and what is next.
 
 Everything is dogfooded: this repo has its own `.torsor/`, its ADRs carry the
 machine-readable rules that `torsor guard` enforces against this codebase in
 CI, and `torsor map` covers its own symbols and reference edges.
 
-**Recently hardened** (see [docs/audit-report-2026-09-20.md](docs/audit-report-2026-09-20.md)
-for the full inventory, including the findings that turned out not to be real):
+**Recently hardened:**
 
-- **Safety** · installing hooks can no longer damage a `.claude/settings.json` it cannot parse, or remove a hook it did not write; every caller-supplied path is contained to the project root; command execution is CLI-only; the HTTP transport refuses a routable interface without an explicit opt-in.
+- **Safety** · installing hooks can no longer damage a `.claude/settings.json` it cannot parse, or remove a hook it did not write; every caller-supplied path is contained to the project root; command execution is CLI-only.
 - **Performance** · recall went from 7.6s to ~0.5s and a cold map from 164s to 25s on a generated 5 000-note corpus (`tests/bench/`).
 - **Correctness** · guard scopes are path-aware (`*` no longer crosses `/`, `**` spans directories), wikilink aliases resolve, a partial map can no longer shrink a committed file, and the hashing fallback no longer invents search results for queries with no lexical basis.
-- **Surface** · the memory half of the product has a command line, the MCP server has prompts, and a test now holds the two adapters in parity.
+- **Scope** · trimmed to what one developer with an agent actually uses: memory, guard, map + impact, deps, Coach, command book. Everything else was removed rather than left half-maintained.
 
 **Next:**
 
-- **Team memory** · a merge strategy for `.torsor/` across branches — journals and map notes currently conflict on concurrent edits.
-- **Memory ↔ symbol graph** · "before you change `charge_card`, here are the 3 decisions and 2 learnings that mention it". The two indexes exist and do not talk to each other.
-- **Memory lifecycle** · contradiction detection between decisions, and a Coach that can show what you have fixed rather than only what is left.
 - **Sampling-based semantic drift** · the guard is deterministic by design; a sampling check is the long-standing open idea.
+- **Better `get_intent`** · a tighter link between the memory index and the symbol graph so "what exists around X" gets sharper.
 
 ## 🧪 Built with
 
@@ -440,7 +358,7 @@ FastMCP · Typer · Pydantic · PyYAML · SQLite (FTS5) · NumPy · stdlib `ast`
 
 ## 📚 Design & prior art
 
-Full design + every phase plan live in [`docs/superpowers/`](docs/superpowers/) (including the [v0.2 design spec](docs/superpowers/specs/2026-06-02-torsor-v0.2-intelligence-design.md)). torsor-helper stands on the shoulders of [Cline Memory Bank](https://docs.cline.bot/prompting/cline-memory-bank), [mem0/OpenMemory](https://mem0.ai/openmemory), [Letta/MemGPT](https://docs.letta.com/), [Zep/Graphiti](https://github.com/getzep/graphiti), [basic-memory](https://github.com/basicmachines-co/basic-memory), [cognee](https://github.com/topoteretes/cognee), [Aider's repo map](https://aider.chat/docs/repomap.html), [Serena](https://github.com/oraios/serena), [CodeScene](https://codescene.com/), [ArchUnit](https://www.archunit.org/) / [dependency-cruiser](https://github.com/sverweij/dependency-cruiser), [Anthropic Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval), [llms.txt](https://llmstxt.org/), and [GitHub spec-kit](https://github.com/github/spec-kit).
+Architectural decisions live as ADRs in [`.torsor/architecture/decisions/`](.torsor/architecture/decisions/) — the same ones the guard enforces. torsor-helper stands on the shoulders of [Cline Memory Bank](https://docs.cline.bot/prompting/cline-memory-bank), [mem0/OpenMemory](https://mem0.ai/openmemory), [Letta/MemGPT](https://docs.letta.com/), [Zep/Graphiti](https://github.com/getzep/graphiti), [basic-memory](https://github.com/basicmachines-co/basic-memory), [cognee](https://github.com/topoteretes/cognee), [Aider's repo map](https://aider.chat/docs/repomap.html), [Serena](https://github.com/oraios/serena), [CodeScene](https://codescene.com/), [ArchUnit](https://www.archunit.org/) / [dependency-cruiser](https://github.com/sverweij/dependency-cruiser), [Anthropic Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval), and [GitHub spec-kit](https://github.com/github/spec-kit).
 
 ## 🩺 Troubleshooting
 
@@ -462,7 +380,7 @@ More: [how to install](docs/how-to-install.md) · [how to use](docs/how-to-use.m
 
 ## 🤝 Contributing & releasing
 
-`uv run --extra dev --extra languages pytest` (888 tests) · `uv run --with ruff ruff check src tests`. Releasing: see [PUBLISHING.md](PUBLISHING.md).
+`uv run --extra dev --extra languages pytest` · `uv run --with ruff ruff check src tests`. Releasing: see [PUBLISHING.md](PUBLISHING.md).
 
 ## License
 

@@ -6,6 +6,32 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### ✂️ A small helper for one developer (ADR 0019)
+By v0.8 the server exposed 29 MCP tools and 38 CLI commands. About 40 % of that was a team/platform
+bet, or something Claude Code, Codex and Cursor now do natively (session memory, `AGENTS.md`,
+compaction re-injection, lifecycle hooks, LSP navigation). torsor-helper is now explicitly a small,
+local-first helper for a solo developer, and owns only what the agents do not: committed in-repo
+memory, a guard that enforces ADR rules as a hook, a small code map with `impact`, the offline
+hallucinated-dependency check, the command book, and a Coach limited to health, staleness, hotspots
+and phantom deps.
+
+**Removed** (with their tests): team-memory merge (`torsor merge *`, `.torsor/.gitattributes`, the
+`torsor-map` driver — supersedes ADR 0015); the HTTP transport (`torsor mcp` is stdio only);
+`torsor update` (use `uv tool upgrade torsor-helper`); `torsor export` / `llms.txt`; `torsor find` /
+`find_files`; best-practice packs (`torsor practices`, `list_practices`, `adopt_practices`);
+`torsor consolidate` and journal mining; `torsor recipes` and the op-frequency log; the cheap/smart
+model-routing policy (`torsor models`, `get_model_policy`, `model-policy.json`, `[models]` in
+`torsor.toml`); the Coach checks `coupling`, `regression`/`trend` (and `automation.auto_snapshot_on_commit`),
+`hub`, `contradiction`, and the context-based `reuse` recommendation. The client registry is now
+Claude Code, Cursor, Codex, VS Code, Gemini and a generic `other`.
+
+**Config keys that no longer exist** — `torsor.toml` is strict, so remove them if present:
+`[models]`, `budgets.practices_tokens`, `automation.auto_snapshot_on_commit`.
+
+Also: this repo's own `.torsor/active/*` had described June's state since June; refreshed. The old
+phase plans and audit reports under `docs/` were being indexed as project docs (ADR 0018) and
+competing with current docs in `recall`; removed.
+
 ### 📚 Day one on a real project: its own docs are memory, and templates stop costing tokens
 On a real project a fresh `torsor init` left memory empty — five seed templates and 2 952 map notes — while
 the project's knowledge sat in README.md, CONTRIBUTING.md and 24 design docs under `docs/`, none of which

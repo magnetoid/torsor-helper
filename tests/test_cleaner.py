@@ -44,7 +44,6 @@ def test_plan_counts_index_rows_pointing_at_deleted_files(tmp_path):
         "gone.py": "def dropped():\n    return 2\n",
     })
     conn = db.connect(store.paths.index_db)
-    db.save_complexity_snapshot(conn, {"keep.py": 3, "gone.py": 4})
     db.bump_path_access(conn, ["keep.py", "gone.py"])
     conn.close()
     (tmp_path / "gone.py").unlink()
@@ -52,7 +51,6 @@ def test_plan_counts_index_rows_pointing_at_deleted_files(tmp_path):
     plan = cleaner.plan(store, TorsorConfig())
 
     assert plan.dead_rows["symbols"] == 1
-    assert plan.dead_rows["complexity_snapshot"] == 1
     assert plan.dead_rows["path_access"] == 1
 
 
@@ -110,17 +108,6 @@ def test_apply_removes_orphaned_map_notes_and_expired_journals(tmp_path):
     assert not (store.paths.map_dir / "modules" / "gone.py.md").exists()
     assert (store.paths.map_dir / "modules" / "keep.py.md").exists()
     assert not store.paths.journal_file("2020-01-01").exists()
-
-
-def test_apply_mines_insights_before_discarding_a_journal(tmp_path):
-    store = _store(tmp_path)
-    _journal(store, "2020-01-01", "## 09:00 · learning\n\nprefer uv run\n")
-
-    config = TorsorConfig()
-    cleaner.apply(store, config, cleaner.plan(store, config))
-
-    assert not store.paths.journal_file("2020-01-01").exists()
-    assert "prefer uv run" in (store.paths.insights_dir / "learning.md").read_text()
 
 
 def test_apply_never_touches_source_of_truth_or_code(tmp_path):

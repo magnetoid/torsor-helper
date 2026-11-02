@@ -68,11 +68,10 @@ def _plan_map_orphans(store, out: CleanPlan) -> None:
 
 # Index tables keyed by a repo-relative source path. A row whose file no longer
 # exists is dead weight: `map` replaces symbols/edges wholesale only when it is
-# re-run, and nothing ever prunes path_access or complexity_snapshot.
+# re-run, and nothing ever prunes path_access.
 _PATH_COLUMNS = {
     "symbols": "module",
     "symbol_edges": "module",
-    "complexity_snapshot": "file",
     "path_access": "path",
 }
 
@@ -148,15 +147,8 @@ def _purge_dead_rows(store, conn) -> int:
 def apply(store, config, plan: CleanPlan) -> dict:
     """Execute `plan`. Only ever removes derived or expired artefacts — never a
     stable tier (charter/architecture/active/insights), never source code."""
-    from torsor_helper.coach import mining
-
     reclaimed = plan.reclaimed_bytes
 
-    # Mine BEFORE discarding: every learning/decision/rejection/blocker in an
-    # expiring journal must already be durable in memory/insights/.
-    mined = 0
-    if plan.journal_expired:
-        mined = len(mining.mine_insights(store))
     for path in plan.journal_expired:
         path.unlink(missing_ok=True)
 
@@ -178,7 +170,6 @@ def apply(store, config, plan: CleanPlan) -> dict:
     return {
         "map_orphans": len(plan.map_orphans),
         "journals_expired": len(plan.journal_expired),
-        "insights_mined": mined,
         "dead_rows": rows,
         "deep": bool(plan.deep_paths),
         "reclaimed_bytes": reclaimed,

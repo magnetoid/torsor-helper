@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T17:33:16'
-updated: '2026-09-21T17:33:16'
+created: '2026-11-02T02:18:30'
+updated: '2026-11-02T02:18:30'
 rules: []
 ---
 
@@ -14,4 +14,4 @@ rules: []
 Symbols in `src/torsor_helper/server.py`.
 
 - L16 `build_server(root: Path | str)` (function)
-- L426 `run(root: Path | str, transport: str='stdio', host: str='127.0.0.1', port: int=8000)` (function) — Run the MCP server. transport "stdio" (default) for a local agent, or
+- L374 `run(root: Path | str)` (function) — Run the MCP server over stdio — the transport for a local, single-user agent.

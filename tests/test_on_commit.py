@@ -36,7 +36,6 @@ def test_on_commit_maps_changed_and_preserves_other_modules(tmp_path):
 
     result = ops.on_commit(store, TorsorConfig())
     assert "a.py" in result["mapped"]
-    assert result["snapshot"] is True
 
     conn = db.connect(store.paths.index_db)
     try:
@@ -57,14 +56,12 @@ def test_on_commit_respects_flags(tmp_path):
 
     cfg = TorsorConfig()
     cfg.automation.auto_map_on_commit = False
-    cfg.automation.auto_snapshot_on_commit = False
     (tmp_path / "a.py").write_text("def alpha():\n    return 9\n")
     _git(tmp_path, "add", "a.py")
     _git(tmp_path, "commit", "-m", "a2")
 
     result = ops.on_commit(store, cfg)
     assert result["mapped"] == []
-    assert result["snapshot"] is False
 
 
 def test_on_commit_noop_when_no_source_files(tmp_path):
@@ -74,4 +71,3 @@ def test_on_commit_noop_when_no_source_files(tmp_path):
     _git(tmp_path, "commit", "-m", "docs")
     result = ops.on_commit(store, TorsorConfig())
     assert result["mapped"] == []
-    assert result["snapshot"] is False

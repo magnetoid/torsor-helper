@@ -109,10 +109,6 @@ class TorsorPaths:
         return self.memory_dir / "insights"
 
     @property
-    def llms_txt(self) -> Path:
-        return self.base / "llms.txt"
-
-    @property
     def commands_file(self) -> Path:
         # The learned command book — committed Markdown so it travels with the repo.
         return self.base / "commands.md"
@@ -134,12 +130,6 @@ class TorsorPaths:
         # diagram vanished on the next commit, since the post-commit hook
         # remaps every time.
         return self.map_dir / "dependencies.md"
-
-    @property
-    def gitattributes(self) -> Path:
-        # Committed, unlike .torsor/.gitignore's subjects: it is how a clone
-        # learns that journals union-merge and map notes are regenerated.
-        return self.base / ".gitattributes"
 
     @property
     def state_dir(self) -> Path:

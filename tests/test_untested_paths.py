@@ -152,7 +152,7 @@ def test_check_dependencies_is_quiet_about_the_standard_library(tmp_path):
     assert ops.check_dependencies(store, TorsorConfig(), ["x.py"]) == []
 
 
-def test_deps_export_find_and_impact_have_a_working_cli(tmp_path):
+def test_deps_and_impact_have_a_working_cli(tmp_path):
     root = ["--root", str(tmp_path)]
     runner.invoke(app, ["init", *root])
     (tmp_path / "pkg").mkdir()
@@ -161,8 +161,7 @@ def test_deps_export_find_and_impact_have_a_working_cli(tmp_path):
     (tmp_path / "app.py").write_text("from pkg.core import engine\n\ndef run():\n    return engine()\n")
     runner.invoke(app, ["map", *root])
 
-    for argv in (["deps", *root], ["export", *root], ["find", "engine", *root],
-                 ["impact", "engine", *root]):
+    for argv in (["deps", *root], ["impact", "engine", *root]):
         result = runner.invoke(app, argv)
         assert result.exit_code == 0, f"torsor {argv[0]}: {result.output}"
 
@@ -190,17 +189,3 @@ def test_commands_add_needs_both_halves(tmp_path):
 
     assert runner.invoke(app, ["commands", *root]).exit_code == 0
 
-
-def test_mined_insights_are_deduplicated(tmp_path):
-    """The dedupe read `not (it in seen or seen.add(it))`, which is correct only
-    because set.add returns None. Rewritten as what it is."""
-    from torsor_helper.coach import mining
-
-    store = _store(tmp_path)
-    for _ in range(3):
-        store.append_journal("the same learning twice over", kind="learning", links=[])
-
-    written = mining.mine_insights(store)
-
-    body = "\n".join(p.read_text(encoding="utf-8") for p in written)
-    assert body.count("the same learning twice over") == 1

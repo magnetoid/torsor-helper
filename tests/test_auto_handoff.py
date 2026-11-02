@@ -28,7 +28,6 @@ def _seed_marker(store, root):
     # starter ADR isn't mistaken for new-this-session work.
     ops._save_capture_state(store, {
         "last_head": ops._git_head(root),
-        "op_snapshot": ops._op_totals(store),
         "adr_max": ops._next_adr_number(store) - 1,
     })
 

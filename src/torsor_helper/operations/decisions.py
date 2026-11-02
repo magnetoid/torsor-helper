@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import re as _re
 
-from torsor_helper import practices as _practices
-from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.models import Frontmatter
 
 
@@ -60,49 +58,3 @@ def record_decision(store, title, context, decision, consequences="", rules=None
     target = store.paths.decisions_dir / f"{new_stem}.md"
     store.write_note(target, Frontmatter.model_validate(fm_data), f"ADR {number:04d}: {title}", body)
     return str(target)
-
-def list_practices(store, config, language=None) -> str:
-    """Render the curated best-practice pack(s): one language, or every pack
-    detected in the repo when language is None."""
-    cpt = config.budgets.chars_per_token
-    budget = config.budgets.practices_tokens
-    if language is None:
-        detected = _practices.detect_languages(store.paths.root)
-        if not detected:
-            return "No supported languages detected. Available packs: " + ", ".join(
-                _practices.available_languages()
-            )
-        # Every detected pack at once is the largest response the server can
-        # return; ask for one language to get it whole.
-        return truncate_to_tokens("\n\n".join(_practices.render(lang) for lang in detected), budget, cpt)
-    try:
-        return truncate_to_tokens(_practices.render(language), budget, cpt)
-    except KeyError:
-        return f"Unknown pack {language!r}. Available: " + ", ".join(_practices.available_languages())
-
-def adopt_practices(store, config, language) -> dict:
-    """Adopt a best-practice pack: records ONE ADR carrying the pack's
-    machine-readable rules (guard enforces them) + prose principles."""
-    try:
-        payload = _practices.adr_payload(language)
-    except KeyError:
-        return {
-            "adopted": False,
-            "message": f"Unknown pack {language!r}. Available: "
-                       + ", ".join(_practices.available_languages()),
-        }
-    slug = _slug(payload["title"])
-    if store.paths.decisions_dir.exists():
-        for existing in store.paths.decisions_dir.glob("*.md"):
-            if slug in existing.stem:
-                return {"adopted": False, "message": f"Already adopted: {existing} (edit or supersede it instead)."}
-    path = record_decision(store, **payload)
-    return {
-        "adopted": True,
-        "path": path,
-        "message": (
-            f"Adopted the {language} pack → {path}\n"
-            "Next: `torsor guard --update-baseline` to grandfather existing code, "
-            "then `torsor rules --write AGENTS.md` to refresh the prompt block."
-        ),
-    }

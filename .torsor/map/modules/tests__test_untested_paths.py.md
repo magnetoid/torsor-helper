@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T17:33:16'
-updated: '2026-09-21T17:33:16'
+created: '2026-11-02T02:18:31'
+updated: '2026-11-02T02:18:31'
 rules: []
 ---
 
@@ -27,7 +27,6 @@ Symbols in `tests/test_untested_paths.py`.
 - L134 `test_an_empty_scope_falls_back_to_python()` (function)
 - L140 `test_check_dependencies_flags_a_phantom_import(tmp_path)` (function)
 - L149 `test_check_dependencies_is_quiet_about_the_standard_library(tmp_path)` (function)
-- L155 `test_deps_export_find_and_impact_have_a_working_cli(tmp_path)` (function)
-- L174 `test_human_bytes_scales_without_rebinding_its_parameter()` (function) — `n /= 1024` turned an int parameter into a float, and because the loop
-- L185 `test_commands_add_needs_both_halves(tmp_path)` (function) — Typer hands back (None, None) when --add is absent, and only the name
-- L194 `test_mined_insights_are_deduplicated(tmp_path)` (function) — The dedupe read `not (it in seen or seen.add(it))`, which is correct only
+- L155 `test_deps_and_impact_have_a_working_cli(tmp_path)` (function)
+- L173 `test_human_bytes_scales_without_rebinding_its_parameter()` (function) — `n /= 1024` turned an int parameter into a float, and because the loop
+- L184 `test_commands_add_needs_both_halves(tmp_path)` (function) — Typer hands back (None, None) when --add is absent, and only the name

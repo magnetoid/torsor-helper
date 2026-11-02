@@ -9,7 +9,6 @@ from __future__ import annotations
 from torsor_helper import db
 from torsor_helper.embeddings import get_embedder
 from torsor_helper.indexer import reindex
-from torsor_helper.store import Store
 
 
 _EMBEDDER_CACHE: dict = {}
@@ -40,17 +39,3 @@ def _open_index(store, config):
         raise
     return conn
 
-
-def _log_op(store: Store, op: str, args: str = "") -> None:
-    """Best-effort: record a deterministic-tool call for the 'recipes' view. Never
-    creates the index just to log, and never raises (logging must not break a tool)."""
-    try:
-        if not store.paths.index_db.exists():
-            return
-        conn = db.connect(store.paths.index_db)
-        try:
-            db.log_op(conn, op, str(args)[:200])
-        finally:
-            conn.close()
-    except Exception:
-        pass

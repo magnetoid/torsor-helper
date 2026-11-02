@@ -12,13 +12,11 @@ from torsor_helper import baseline as _baseline
 from torsor_helper import deps as _deps
 from torsor_helper import gitinfo, guard
 from torsor_helper.budget import cap_items
-from torsor_helper.operations._shared import _log_op
 from torsor_helper.operations.commands import list_commands, run_command
 from torsor_helper.operations.maintenance import check_staleness
 
 
 def check_drift(store, config, files=None) -> list:
-    _log_op(store, "check_drift", "")
     if files is None:
         files = gitinfo.changed_source_files(store.paths.root)
     return guard.check_drift(store, files)
@@ -57,7 +55,6 @@ def dependency_targets(store, files=None) -> list[str]:
 def check_dependencies(store, config, files=None) -> list:
     """Flag imports that resolve to no known package (possible slopsquatting).
     Defaults to git-changed files; fully offline."""
-    _log_op(store, "check_dependencies", "")
     return _deps.unknown_imports(store.paths.root, dependency_targets(store, files))
 
 def _verify_check(name, ok, status, reasons, *, cap: int = 0) -> dict:
@@ -89,7 +86,6 @@ def verify(store, config, files=None, *, severity=None, run_tests=False) -> dict
     `files` defaults to git-changed so guard/deps judge the same change set (fast,
     offline). `ok` is the single boolean a gate reads; per-check `reasons` give the
     agent a fix list without re-running each tool."""
-    _log_op(store, "verify", "")
     if files is None:
         files = gitinfo.changed_source_files(store.paths.root)
 

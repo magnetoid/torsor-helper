@@ -6,14 +6,11 @@ torsor's own derived artefacts or to a note's frontmatter `status`."""
 from __future__ import annotations
 
 from torsor_helper import cartographer, cleaner, db
-from torsor_helper.coach import mining as coach_mining
 from torsor_helper.coach import report as coach_report
 from torsor_helper.coach import staleness as _staleness
-from torsor_helper.coach import trend as coach_trend
 from torsor_helper.coach.state import CoachState
-from torsor_helper.indexer import reindex
 from torsor_helper.models import Tier, Frontmatter
-from torsor_helper.operations._shared import _embedder_for, _log_op, _open_index
+from torsor_helper.operations._shared import _embedder_for, _open_index
 from torsor_helper.operations._state import _coach_state_path
 from torsor_helper.paths import contained
 
@@ -37,7 +34,6 @@ def check_staleness(store, config, *, mark=False, unmark=False) -> dict:
     dead file-path references (deterministic, index-free, high-precision). Read-only
     by default; `--mark` sets `status: stale` on the offending notes (opt-in,
     reversible via `--unmark`), never touching the note body (ADR 0010)."""
-    _log_op(store, "check_staleness", "")
     findings = _staleness.run_staleness(store)
     counts: dict[str, int] = {}
     for r in findings:
@@ -110,7 +106,6 @@ def stats(store, config) -> dict:
         "map_current": None,
         "embedder": _embedder_identity(get_embedder(config)),
         "top_recalled": [],
-        "op_totals": {},
     }
     if not store.paths.index_db.exists():
         return out
@@ -122,7 +117,6 @@ def stats(store, config) -> dict:
         out["edges"] = conn.execute("SELECT COUNT(*) FROM symbol_edges").fetchone()[0]
         out["modules"] = len(db.modules(conn))
         out["top_recalled"] = [list(row) for row in db.top_accessed(conn, 5)]
-        out["op_totals"] = dict(db.op_totals(conn))
         stored = db.meta_get(conn, "map_fingerprint")
         if stored is not None:
             out["map_current"] = stored == cartographer.repo_fingerprint(store.paths.root)
@@ -137,7 +131,6 @@ def clean(store, config, *, apply: bool = False, deep: bool = False) -> dict:
     Never removes a stable tier (charter/architecture/active/insights) or any
     source file — `cleaner` only ever targets orphaned map notes, dead index
     rows, journals past the retention window, and (with `deep`) the whole index."""
-    _log_op(store, "clean", f"apply={apply} deep={deep}")
     proposed = cleaner.plan(store, config, deep=deep)
     stats = {
         "dry_run": not apply,
@@ -146,7 +139,6 @@ def clean(store, config, *, apply: bool = False, deep: bool = False) -> dict:
         "dead_rows": sum(proposed.dead_rows.values()),
         "deep": bool(proposed.deep_paths),
         "reclaimed_bytes": proposed.reclaimed_bytes,
-        "insights_mined": 0,
         "notes": list(proposed.notes),
         "files": [str(p.relative_to(store.paths.root)) for p in proposed.files],
     }
@@ -154,42 +146,3 @@ def clean(store, config, *, apply: bool = False, deep: bool = False) -> dict:
         stats.update(cleaner.apply(store, config, proposed))
         stats["dry_run"] = False
     return stats
-
-def consolidate(store, config) -> dict:
-    written = coach_mining.mine_insights(store)
-    duplicates = coach_mining.find_duplicate_entries(store)
-
-    # consolidate is a maintenance pass: index once, directly, so the `indexed`
-    # count reflects the freshly-mined insights. (Using _open_index here would
-    # reindex internally first, leaving this explicit call to report 0.)
-    conn = db.connect(store.paths.index_db)
-    try:
-        indexed = reindex(store, conn, _embedder_for(config))["indexed"]
-        top_accessed = db.top_accessed(conn, limit=3)
-    finally:
-        conn.close()
-
-    # Snapshot complexity so the Coach can report regressions *since this pass*.
-    _snapshot_complexity(store)
-
-    return {
-        "insights": len(written),
-        "duplicates": len(duplicates),
-        # The list was computed and thrown away, so "found 7 duplicate entries"
-        # was a dead end: no way to see or act on which ones.
-        "duplicate_entries": [list(d) for d in duplicates[:10]],
-        "indexed": indexed,
-        "top_accessed": top_accessed,
-    }
-
-def _snapshot_complexity(store) -> None:
-    """Refresh the per-file complexity baseline `coach/trend.find_regressions`
-    diffs against. Shared by `consolidate` and the post-commit auto-capture hook,
-    so a regression baseline stays fresh with zero manual maintenance calls."""
-    if not store.paths.index_db.exists():
-        return
-    conn = db.connect(store.paths.index_db)
-    try:
-        db.save_complexity_snapshot(conn, coach_trend.current_complexity(store.paths.root))
-    finally:
-        conn.close()

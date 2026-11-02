@@ -24,10 +24,10 @@ def build_server(root: Path | str) -> FastMCP:
         """Re-resolve the project before each call; None when it is usable.
 
         The server used to read torsor.toml once, at construction. A long-lived
-        one therefore never saw a config change (`torsor models --cheap` had no
+        one therefore never saw a config change (a budget change had no
         effect until restart), a malformed config raised a pydantic traceback
-        before a single tool existed, and an uninitialized directory produced 29
-        tools that all returned empty strings — which reads as "this project has
+        before a single tool existed, and an uninitialized directory produced a
+        full set of tools that all returned empty strings — which reads as "this project has
         no memory" rather than "you are in the wrong directory"."""
         nonlocal store, config
         if not paths.base.exists():
@@ -142,23 +142,6 @@ def build_server(root: Path | str) -> FastMCP:
         return f"{res['hops']} hop(s) from {source!r} to {target!r}:\n{chain}"
 
     @tool
-    def find_files(query: str, mode: str = "fuzzy", limit: int = 20,
-                   include_files: bool = True, include_symbols: bool = True) -> str:
-        """Fuzzy, frecency-ranked search over the repo's files and mapped symbols — jump to the right file/symbol fast. mode: fuzzy|literal|regex. Run map_repo first for symbol results."""
-        res = ops.find_targets(store, config, query, mode=mode, limit=limit,
-                               include_files=include_files, include_symbols=include_symbols)
-        if not res:
-            return f"No matches for {query!r}."
-        return "\n".join(f"- {render.find_hit(r)}" for r in res)
-
-    @tool
-    def export() -> str:
-        """Export the pyramid to a portable .torsor/llms.txt and a Mermaid module diagram in the map."""
-        result = ops.export_project(store, config)
-        tail = " + module dependency diagram" if result["diagram"] else ""
-        return f"Wrote {result['llms_txt']}{tail}"
-
-    @tool
     def get_intent(topic: str = "") -> str:
         """Surface the architecture (patterns, tech, ADRs) and symbols relevant to a topic."""
         return ops.get_intent(store, config, topic or None)
@@ -168,14 +151,6 @@ def build_server(root: Path | str) -> FastMCP:
         """Compact digest of the project's standing constraints (charter principles + ADR rules). Load once per session — cheaper than rediscovering the rules by trial and error."""
         digest = ops.agent_rules(store, config)
         return digest or "No rules declared yet — fill the charter's principles or record ADRs with rules."
-
-    @tool
-    def recipes(limit: int = 10) -> str:
-        """The deterministic torsor lookups called most often — the recurring work to run on the cheap model (see get_model_policy)."""
-        recs = ops.recipes(store, limit)
-        if not recs:
-            return "No recorded operations yet."
-        return "\n".join(f"- {render.recipe(r)}" for r in recs)
 
     @tool
     def record_command(name: str, command: str, note: str = "") -> str:
@@ -194,32 +169,9 @@ def build_server(root: Path | str) -> FastMCP:
         return "\n".join([*lines, tail] if tail else lines)
 
     @tool
-    def get_model_policy(as_json: bool = False) -> str:
-        """The project's model-routing policy (token thrift): which work belongs on the cheap model vs the smart one. Follow it. as_json returns a form a router can parse."""
-        if as_json:
-            import json
-
-            return json.dumps(ops.model_policy_json(store, config))
-        return ops.model_policy(store, config)
-
-    @tool
     def get_primer(max_tokens: int = config.budgets.primer_tokens) -> str:
         """Token-saver: a budgeted project primer (charter + architecture + repo map + token-efficient tool habits). Load once instead of exploring; `torsor primer --write AGENTS.md` makes it free."""
         return ops.project_primer(store, config, max_tokens=max_tokens)
-
-    @tool
-    def list_practices(language: str = "") -> str:
-        """List the curated best-practice pack for a language (python · javascript · typescript · go · rust · agent). Empty language auto-detects from the repo."""
-        return ops.list_practices(store, config, language or None)
-
-    @tool
-    def adopt_practices(language: str) -> str:
-        """Adopt a curated best-practice pack: records an ADR whose machine-readable rules `torsor guard` then enforces. Refresh the prompt block after with `torsor rules --write`."""
-        # JSON, not prose: "adopted", "unknown pack" and "already adopted" were
-        # all a success-shaped string, so a caller could not branch on the outcome.
-        import json
-
-        return json.dumps(ops.adopt_practices(store, config, language))
 
     @tool
     def record_decision(title: str, context: str, decision: str, consequences: str = "", rules: list[dict] | None = None, supersedes: str | None = None) -> str:
@@ -296,23 +248,6 @@ def build_server(root: Path | str) -> FastMCP:
         return out
 
     @tool
-    def consolidate() -> str:
-        """Self-improving maintenance: mine journal entries into insight notes, reindex, report duplicates."""
-        stats = ops.consolidate(store, config)
-        msg = (
-            f"Mined {stats['insights']} insight file(s); reindexed {stats['indexed']} note(s); "
-            f"found {stats['duplicates']} duplicate entr(y/ies)."
-        )
-        if stats["duplicate_entries"]:
-            msg += "\nDuplicated: " + "; ".join(
-                f"{text[:60]}… ({n}x)" for text, n in stats["duplicate_entries"][:3]
-            )
-        if stats["top_accessed"]:
-            hot = ", ".join(f"{path} ({n}x)" for path, n in stats["top_accessed"])
-            msg += f"\nMost-recalled: {hot}"
-        return msg
-
-    @tool
     def stats() -> str:
         """How big this project's memory is, what gets recalled most, and whether the symbol map is current. Read-only."""
         import json
@@ -346,8 +281,7 @@ def build_server(root: Path | str) -> FastMCP:
 
     # Prompts: the cheapest surface an MCP client has. Claude Code and Cursor
     # render these as slash-commands, so the loop steps stop depending on the
-    # agent remembering which tool to call in which order. Designed in the
-    # foundation spec and never built.
+    # agent remembering which tool to call in which order.
 
     @mcp.prompt()
     def onboard() -> str:
@@ -437,11 +371,6 @@ def build_server(root: Path | str) -> FastMCP:
     return mcp
 
 
-def run(root: Path | str, transport: str = "stdio", host: str = "127.0.0.1", port: int = 8000) -> None:
-    """Run the MCP server. transport "stdio" (default) for a local agent, or
-    "streamable-http" to serve over HTTP (shared/team/remote use)."""
-    mcp = build_server(root)
-    if transport != "stdio":
-        mcp.settings.host = host
-        mcp.settings.port = port
-    mcp.run(transport=transport)  # type: ignore[arg-type]  # validated by the CLI's choices
+def run(root: Path | str) -> None:
+    """Run the MCP server over stdio — the transport for a local, single-user agent."""
+    build_server(root).run(transport="stdio")

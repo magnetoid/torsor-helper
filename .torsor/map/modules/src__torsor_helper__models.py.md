@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T17:33:16'
-updated: '2026-09-21T17:33:16'
+created: '2026-11-02T02:18:30'
+updated: '2026-11-02T02:18:30'
 rules: []
 ---
 
@@ -14,13 +14,14 @@ rules: []
 Symbols in `src/torsor_helper/models.py`.
 
 - L9 `Tier` (class)
-- L31 `MemoryKind` (class)
-- L39 `Frontmatter` (class)
-- L55 `Note` (class)
-- L66 `RecallHit` (class)
-- L74 `RecallResult` (class)
-- L80 `Symbol` (class)
-- L90 `SymbolEdge` (class)
-- L108 `Rule` (class)
-- L128 `Violation` (class)
-- L139 `Recommendation` (class)
+- L44 `recall_weight(tier: Tier, title: str)` (function) — The tier weight, adjusted for a map note that documents test code.
+- L54 `MemoryKind` (class)
+- L62 `Frontmatter` (class)
+- L78 `Note` (class)
+- L89 `RecallHit` (class)
+- L97 `RecallResult` (class)
+- L103 `Symbol` (class)
+- L113 `SymbolEdge` (class)
+- L131 `Rule` (class)
+- L151 `Violation` (class)
+- L162 `Recommendation` (class)

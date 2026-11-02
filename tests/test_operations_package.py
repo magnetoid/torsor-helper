@@ -37,7 +37,7 @@ def test_the_facade_still_exposes_the_whole_surface():
     # A sample across every concern — the adapters and 34 test modules reach
     # these through the façade and must keep doing so.
     for name in ("bootstrap_session", "recall", "remember", "map_repo", "impact", "connect",
-                 "verify", "check_drift", "recommend", "clean", "consolidate", "install_hooks",
+                 "verify", "check_drift", "recommend", "clean", "install_hooks",
                  "record_decision", "agent_rules", "project_primer", "list_commands",
                  "auto_handoff", "pre_edit", "session_start_context"):
         assert callable(getattr(ops, name)), name
