@@ -126,5 +126,5 @@ def test_the_mcp_surface_gained_stats_and_recall_filters(tmp_path):
     tools = {t.name: t for t in anyio.run(build_server(tmp_path).list_tools)}
 
     assert "stats" in tools
-    recall_args = set(tools["recall"].inputSchema.get("properties") or {})
+    recall_args = set(tools["recall"].input_schema.get("properties") or {})
     assert {"type", "kind", "include_superseded"} <= recall_args

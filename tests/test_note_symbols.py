@@ -275,7 +275,7 @@ def test_mcp_recall_accepts_a_symbol_filter(tmp_path):
 
     _store(tmp_path)
     tools = {t.name: t for t in anyio.run(build_server(tmp_path).list_tools)}
-    assert "symbol" in tools["recall"].inputSchema["properties"]
+    assert "symbol" in tools["recall"].input_schema["properties"]
 
 
 def test_an_index_built_before_mentions_gets_backfilled(tmp_path):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from torsor_helper import operations as ops
 from torsor_helper import render, templates
@@ -13,12 +13,12 @@ from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
 
 
-def build_server(root: Path | str) -> FastMCP:
+def build_server(root: Path | str) -> MCPServer:
     paths = TorsorPaths(Path(root))
     config = TorsorConfig()
     store = Store.for_config(paths, config)
 
-    mcp = FastMCP("torsor-helper")
+    mcp = MCPServer("torsor-helper")
 
     def _refresh() -> str | None:
         """Re-resolve the project before each call; None when it is usable.
@@ -42,13 +42,17 @@ def build_server(root: Path | str) -> FastMCP:
 
     def tool(fn):
         """mcp.tool(), plus the readiness check. functools.wraps keeps the
-        signature, so the generated schema is the one the tool declares."""
+        signature, so the generated schema is the one the tool declares.
+
+        structured_output is off: every tool here returns a string, and the SDK
+        would send it a second time as `{"result": <the same text>}` — doubling
+        what lands in context for nothing a client can use."""
         @functools.wraps(fn)
         def wrapper(*args, **kwargs):
             problem = _refresh()
             return problem if problem is not None else fn(*args, **kwargs)
 
-        return mcp.tool()(wrapper)
+        return mcp.tool(structured_output=False)(wrapper)
 
     @tool
     def bootstrap_session() -> str:

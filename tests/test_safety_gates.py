@@ -32,7 +32,7 @@ def test_the_mcp_verify_tool_cannot_run_recorded_shell_commands(tmp_path):
     tools = anyio.run(server.list_tools)
 
     verify = next(t for t in tools if t.name == "verify")
-    assert "run_tests" not in (verify.inputSchema.get("properties") or {})
+    assert "run_tests" not in (verify.input_schema.get("properties") or {})
 
 
 def test_the_cli_can_still_run_them(tmp_path):

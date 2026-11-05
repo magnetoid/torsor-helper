@@ -21,7 +21,7 @@ runner = CliRunner()
 @pytest.fixture
 def tools(tmp_path):
     Store(TorsorPaths(tmp_path)).scaffold()
-    return {t.name: set((t.inputSchema.get("properties") or {})) for t in
+    return {t.name: set((t.input_schema.get("properties") or {})) for t in
             anyio.run(build_server(tmp_path).list_tools)}
 
 
@@ -80,8 +80,7 @@ def test_check_dependencies_reports_a_failure_signal(tmp_path):
 
     out = anyio.run(lambda: server.call_tool("check_dependencies",
                                              {"files": ["bad.py"], "as_json": True}))
-    content = out[0] if isinstance(out, tuple) else out
-    payload = json.loads(content[0].text)
+    payload = json.loads(out.content[0].text)
 
     assert payload["ok"] is False
     assert payload["count"] >= 1

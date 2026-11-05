@@ -6,6 +6,16 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🔌 MCP Python SDK 2.x
+`mcp>=1.2,<2` → `mcp>=2.0,<3`. 1.x is in maintenance mode and 2.0 renamed `FastMCP` to `MCPServer`, so
+anything else in the same environment that pulled `mcp` 2.x could not be installed next to torsor. The
+port is one import in `server.py`; the tool, prompt and resource decorators are unchanged.
+
+- **A tool result now carries its text once.** Every torsor tool returns a string, and the SDK's
+  structured output sent it a second time as `{"result": <the same text>}` and advertised an output
+  schema per tool. That is off (`structured_output=False`): the same answer at half the size, and a
+  shorter tool list.
+
 ### ✂️ A small helper for one developer (ADR 0019)
 By v0.8 the server exposed 29 MCP tools and 38 CLI commands. About 40 % of that was a team/platform
 bet, or something Claude Code, Codex and Cursor now do natively (session memory, `AGENTS.md`,

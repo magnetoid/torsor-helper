@@ -375,9 +375,9 @@ def test_deps_over_mcp_on_a_clean_tree_says_it_checked_nothing(tmp_path):
     async def call(**kw):
         return await server.call_tool("check_dependencies", kw)
 
-    text = anyio.run(lambda: call())[0][0].text
+    text = anyio.run(lambda: call()).content[0].text
     assert "every import resolves" not in text and "No files to check" in text
-    payload = json.loads(anyio.run(lambda: call(as_json=True))[0][0].text)
+    payload = json.loads(anyio.run(lambda: call(as_json=True)).content[0].text)
     assert payload["checked"] == 0
 
 

@@ -270,7 +270,7 @@ def test_the_mcp_server_indexes_docs_from_torsor_toml(tmp_path):
     save_config(TorsorPaths(tmp_path), TorsorConfig())
     _write(tmp_path, "docs/gateway.md", "# Message routing\n\nThe gateway routes messages.\n")
     server = build_server(tmp_path)
-    text = anyio.run(lambda: server.call_tool("recall", {"query": "gateway routes"}))[0][0].text
+    text = anyio.run(lambda: server.call_tool("recall", {"query": "gateway routes"})).content[0].text
     assert "Message routing (DOCS)" in text
 
 
