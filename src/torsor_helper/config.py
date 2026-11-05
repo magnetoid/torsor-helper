@@ -143,9 +143,10 @@ class CleanConfig(_Strict):
     # unboundedly (one file per active day) and the only category clean can
     # discard that isn't re-derivable: `remember()` writes learnings, decisions
     # and blockers to the journal and nowhere else, and nothing distils them
-    # into a durable note first. So expiry is OFF by default (0); set a window
-    # only once you have read what an expiring day holds. Everything else
-    # clean reclaims is either orphaned or rebuildable from Markdown.
+    # into a durable note first. So expiry is OFF by default (0), and a window
+    # here only says how old "old" is: nothing is deleted without
+    # `torsor clean --expire-journals` on that run. Everything else clean
+    # reclaims is either orphaned or rebuildable from Markdown.
     journal_retention_days: int = 0
 
 

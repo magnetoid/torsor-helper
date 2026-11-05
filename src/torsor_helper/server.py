@@ -88,7 +88,7 @@ def build_server(root: Path | str) -> MCPServer:
 
     @tool
     def clean(apply: bool = False, deep: bool = False) -> str:
-        """Reclaim orphaned map notes, dead index rows and journals past retention. Dry run unless apply."""
+        """Reclaim orphaned map notes and dead index rows. Dry run unless apply. Never deletes journals — that is `torsor clean --expire-journals`, from the CLI only."""
         stats = ops.clean(store, config, apply=apply, deep=deep)
         verb = "Removed" if apply else "Would remove"
         summary = (

@@ -714,18 +714,19 @@ def clean(
     apply: bool = typer.Option(False, "--apply", help="Actually delete (default is a dry run)."),
     deep: bool = typer.Option(False, "--deep", help="Also drop the whole disposable index."),
     yes: bool = typer.Option(False, "--yes", help="Confirm a destructive --apply --deep."),
+    expire_journals: bool = typer.Option(False, "--expire-journals", help="Also delete journals older than clean.journal_retention_days. A journal is the only copy of what was remembered — read them first."),
 ) -> None:
-    """Reclaim orphaned map notes, dead index rows and expired journals. Dry run by default."""
+    """Reclaim orphaned map notes and dead index rows. Dry run by default."""
     if apply and deep and not yes:
         typer.echo(
             "--apply --deep removes the entire .torsor/.index/ directory. Most of it rebuilds "
-            "from Markdown, but the learned frecency and op-frequency data do not. Re-run with "
+            "from Markdown, but the learned frecency data does not. Re-run with "
             "--yes to confirm.",
             err=True,
         )
         raise typer.Exit(code=2)
     tp, config, store = _load(root)
-    stats = ops.clean(store, config, apply=apply, deep=deep)
+    stats = ops.clean(store, config, apply=apply, deep=deep, expire_journals=expire_journals)
 
     for note in stats["notes"]:
         typer.echo(note)
