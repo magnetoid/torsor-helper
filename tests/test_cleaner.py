@@ -68,7 +68,7 @@ def test_plan_expires_journals_older_than_the_retention_window(tmp_path):
     config = TorsorConfig()
     config.clean.journal_retention_days = 90
 
-    plan = cleaner.plan(store, config)
+    plan = cleaner.plan(store, config, expire_journals=True)
 
     assert old in plan.journal_expired
     assert recent not in plan.journal_expired
@@ -92,7 +92,7 @@ def test_planning_alone_deletes_nothing(tmp_path):
     config = TorsorConfig()
     config.clean.journal_retention_days = 90
 
-    plan = cleaner.plan(store, config)
+    plan = cleaner.plan(store, config, expire_journals=True)
 
     assert plan.map_orphans and plan.journal_expired  # there was something to reclaim
     assert orphan.exists()
@@ -109,7 +109,7 @@ def test_apply_removes_orphaned_map_notes_and_expired_journals(tmp_path):
 
     config = TorsorConfig()
     config.clean.journal_retention_days = 90
-    cleaner.apply(store, config, cleaner.plan(store, config))
+    cleaner.apply(store, config, cleaner.plan(store, config, expire_journals=True))
 
     assert not (store.paths.map_dir / "modules" / "gone.py.md").exists()
     assert (store.paths.map_dir / "modules" / "keep.py.md").exists()
@@ -151,3 +151,21 @@ def test_package_init_module_is_not_mistaken_for_an_orphan(tmp_path):
     store = _mapped(tmp_path, {"pkg/__init__.py": "def boot():\n    return 1\n"})
 
     assert cleaner.plan(store, TorsorConfig()).map_orphans == []
+
+
+def test_a_retention_window_alone_never_deletes_a_journal(tmp_path):
+    # `torsor init` used to serialize the old default (90) into torsor.toml, so
+    # a window in the config is not evidence anyone asked for expiry. A journal
+    # is the only copy of what `remember()` wrote: deleting one takes a per-run
+    # opt-in, and the plan says what is being held back and how to release it.
+    store = _store(tmp_path)
+    old = _journal(store, "2020-01-01")
+    config = TorsorConfig()
+    config.clean.journal_retention_days = 90
+
+    plan = cleaner.plan(store, config)
+    cleaner.apply(store, config, plan)
+
+    assert plan.journal_expired == [] and old not in plan.files
+    assert old.exists()
+    assert any("1 journal" in n and "--expire-journals" in n for n in plan.notes)

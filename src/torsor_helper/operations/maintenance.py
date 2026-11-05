@@ -125,13 +125,14 @@ def stats(store, config) -> dict:
     return out
 
 
-def clean(store, config, *, apply: bool = False, deep: bool = False) -> dict:
-    """Reclaim derived and expired torsor artefacts. Dry-run by default: without
-    `apply` nothing is touched and the returned stats describe what *would* go.
-    Never removes a stable tier (charter/architecture/active/insights) or any
-    source file — `cleaner` only ever targets orphaned map notes, dead index
-    rows, journals past the retention window, and (with `deep`) the whole index."""
-    proposed = cleaner.plan(store, config, deep=deep)
+def clean(store, config, *, apply: bool = False, deep: bool = False, expire_journals: bool = False) -> dict:
+    """Reclaim derived torsor artefacts. Dry-run by default: without `apply`
+    nothing is touched and the returned stats describe what *would* go. Never
+    removes a stable tier (charter/architecture/active/insights) or any source
+    file — `cleaner` targets orphaned map notes, dead index rows and (with
+    `deep`) the whole index. Journals past the retention window are the one
+    thing here that is not re-derivable, so they go only with `expire_journals`."""
+    proposed = cleaner.plan(store, config, deep=deep, expire_journals=expire_journals)
     stats = {
         "dry_run": not apply,
         "map_orphans": len(proposed.map_orphans),

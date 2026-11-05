@@ -89,7 +89,7 @@ def _dead_rows(store, conn) -> dict[str, int]:
     return counts
 
 
-def _plan_journal_expiry(store, config, out: CleanPlan) -> None:
+def _plan_journal_expiry(store, config, out: CleanPlan, *, expire: bool) -> None:
     days = config.clean.journal_retention_days
     if days <= 0:
         out.notes.append("journal: retention disabled (clean.journal_retention_days = 0)")
@@ -109,14 +109,28 @@ def _plan_journal_expiry(store, config, out: CleanPlan) -> None:
             continue  # not a dated journal file — never ours to expire
         if stamp < cutoff:
             expired.append(path)
-    out.journal_expired = expired
+    if expire:
+        out.journal_expired = expired
+    elif expired:
+        # A window in torsor.toml is not consent: `init` used to write the old
+        # default (90) into every project, and a journal is the only copy of
+        # what `remember()` recorded. Say what is held back, and how to release it.
+        out.notes.append(
+            f"journal: {len(expired)} journal(s) are older than {days} days and were kept — "
+            "a journal entry is the only copy of what was remembered. Read them first, then "
+            "pass --expire-journals to delete them."
+        )
 
 
-def plan(store, config, *, deep: bool = False) -> CleanPlan:
+def plan(store, config, *, deep: bool = False, expire_journals: bool = False) -> CleanPlan:
     """Compute what a clean pass would reclaim. Strictly read-only: this is the
-    dry run, and callers render it before anyone opts into `apply`."""
+    dry run, and callers render it before anyone opts into `apply`.
+
+    Journals past `clean.journal_retention_days` enter the plan only with
+    `expire_journals`: everything else here is derived or orphaned, and a
+    journal is neither."""
     out = CleanPlan()
-    _plan_journal_expiry(store, config, out)
+    _plan_journal_expiry(store, config, out, expire=expire_journals)
     _plan_map_orphans(store, out)
     if deep:
         # The whole index goes, so per-row accounting is moot.

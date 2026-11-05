@@ -162,7 +162,7 @@ New to torsor (or to vibe-coding in general)? This is the plain-language map: **
 | `recall(query)` | Hybrid semantic + keyword search over all your memory, your own docs, and notes. | The agent asks *"have we decided X?"* / *"how does auth work here?"* before writing code. |
 | `remember(content)` · `update_active(...)` | The agent writes down what it learns / the current focus. | After a decision, a gotcha, or finishing a chunk — so the next session inherits it. |
 | `handoff()` | A structured end-of-session summary that seeds the next session. | **End of a work session**, before you close the chat. |
-| `torsor clean` | Reclaims what torsor stopped needing: orphaned map notes, dead index rows, journals past retention (off unless you set `clean.journal_retention_days`). **Dry run by default.** | **Whenever `.torsor/` feels cluttered** — especially after renaming or deleting source files. |
+| `torsor clean` | Reclaims what torsor stopped needing: orphaned map notes, dead index rows, and — only with `--expire-journals` — journals past `clean.journal_retention_days`. **Dry run by default.** | **Whenever `.torsor/` feels cluttered** — especially after renaming or deleting source files. |
 
 ### 🗺️ Understanding the codebase — *"the agent doesn't see how files connect"*
 | Feature | What it does | Reach for it when… |
@@ -275,7 +275,7 @@ Everything below is **derived from your Markdown** and rebuildable. Delete `.tor
 | `torsor verify [files…] [--strict] [--run-tests] [--json]` | One pass/fail gate: guard + deps + staleness, optionally your recorded `test` command |
 | `torsor stale [--mark\|--unmark]` | Memory that contradicts the code: dangling `[[wikilinks]]` and dead file paths |
 | `torsor coach [--dismiss <key>] [--limit N]` | Health + **hotspot** + **phantom-dep** + **dangling-link** recommendations, plus what you fixed since last time |
-| `torsor clean [--apply] [--deep]` | Garbage-collect derived artefacts: orphaned map notes, dead index rows (+VACUUM), expired journals; `--deep` drops the whole index. Dry run unless `--apply` |
+| `torsor clean [--apply] [--deep] [--expire-journals]` | Garbage-collect derived artefacts: orphaned map notes, dead index rows (+VACUUM); `--deep` drops the whole index; `--expire-journals` also deletes journals past the retention window. Dry run unless `--apply` |
 | `torsor commands [--add NAME COMMAND] [--run name]` | Record & replay project commands (test/build/lint) so agents don't re-derive them |
 | `torsor stats [--json]` | Notes per tier, map size, index size, what gets recalled most |
 | `torsor hooks install\|uninstall\|status` | Wire auto-capture (session-start digest, edit gate, auto-handoff) into git and Claude Code |
