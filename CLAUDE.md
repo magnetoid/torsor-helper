@@ -24,7 +24,7 @@ This repo dogfoods itself: `.torsor/` contains real ADRs whose layering rules th
 
 ## Architecture
 
-**Layered: pure core under thin adapters.** `server.py` (FastMCP) and `cli.py` (Typer) are the only adapters, and they reach only into the `operations/` package — the tested orchestration core. Core modules never import adapters. This is ADR-enforced (`.torsor/architecture/decisions/0002-…`) and `torsor guard` will flag violations. Put new logic in the right `operations/` submodule (or a core module it calls) and expose it via thin wrappers in both `server.py` and `cli.py` — nearly every feature is both an MCP tool and a CLI command.
+**Layered: pure core under thin adapters.** `server.py` (the MCP SDK's `MCPServer`) and `cli.py` (Typer) are the only adapters, and they reach only into the `operations/` package — the tested orchestration core. Core modules never import adapters. This is ADR-enforced (`.torsor/architecture/decisions/0002-…`) and `torsor guard` will flag violations. Put new logic in the right `operations/` submodule (or a core module it calls) and expose it via thin wrappers in both `server.py` and `cli.py` — nearly every feature is both an MCP tool and a CLI command.
 
 **Everything lives under the project root — nothing in `$HOME`, XDG or `/tmp`** — so `.torsor/` travels with the repo and dies with it. Only `.torsor/.index/` is git-ignored; `map/` is committed (which is why orphaned map notes must be pruned, not left to accumulate in git).
 

@@ -47,9 +47,8 @@ def test_a_malformed_config_is_reported_per_call_not_at_import(tmp_path):
 
 
 def _text(out):
-    """The text a FastMCP tool returned."""
-    content = out[0] if isinstance(out, tuple) else out
-    return content[0].text
+    """The text an MCP tool returned."""
+    return out.content[0].text
 
 
 def test_a_config_change_is_picked_up_without_a_restart(tmp_path):

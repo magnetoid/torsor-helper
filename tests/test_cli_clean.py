@@ -86,4 +86,4 @@ def test_the_mcp_clean_tool_cannot_expire_journals(tmp_path):
     # like the hook installers (ADR 0009): the agent-facing tool has no way to ask.
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     tools = {t.name: t for t in anyio.run(build_server(tmp_path).list_tools)}
-    assert set(tools["clean"].inputSchema.get("properties") or {}) == {"apply", "deep"}
+    assert set(tools["clean"].input_schema.get("properties") or {}) == {"apply", "deep"}

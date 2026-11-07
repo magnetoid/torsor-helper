@@ -24,8 +24,9 @@ classifiers = [
     "Environment :: Console",
 ]
 dependencies = [
-    # <2: mcp 2.x removed mcp.server.fastmcp (renamed MCPServer) — migrate deliberately, not by resolve.
-    "mcp>=1.2.0,<2",
+    # <3: 2.0 renamed FastMCP to MCPServer and moved its module — a major is a
+    # migration to do deliberately, not one to pick up by resolve.
+    "mcp>=2.0,<3",
     "numpy>=1.26",
     "pydantic>=2.6",
     "pyyaml>=6.0",

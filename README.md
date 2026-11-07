@@ -327,7 +327,7 @@ src/torsor_helper/
 ├─ deps.py          # offline slopsquatting guard hooks.py     # git + Claude Code hook installers
 ├─ coach/           # health · hotspots · staleness · report · state
 ├─ operations/      # orchestration incl. impact() (the tested core)
-├─ server.py        # FastMCP adapter            cli.py       # Typer CLI
+├─ server.py        # MCPServer adapter           cli.py       # Typer CLI
 ```
 
 Everything is **dogfooded**: this repo has its own `.torsor/` with real ADRs whose layering rules `torsor guard` enforces, a `torsor map` of its own symbols **and reference edges**, and a clean `torsor coach` / `torsor deps` run. Lint-clean and type-checked, every feature offline-testable.
@@ -354,7 +354,7 @@ CI, and `torsor map` covers its own symbols and reference edges.
 
 ## 🧪 Built with
 
-FastMCP · Typer · Pydantic · PyYAML · SQLite (FTS5) · NumPy · stdlib `ast` — *local-first, no API key required.* Optional `fastembed` extra for semantic embeddings. The repo map covers Python via stdlib `ast`; JavaScript/TypeScript/TSX and Go via the `[languages]` extra (official tree-sitter grammar wheels, offline — never `tree-sitter-language-pack`, which downloads its grammars at runtime). The drift guard is deterministic (ADR rules → AST/regex, plus JS/TS/Go import-specifier checks when `[languages]` is installed).
+MCP Python SDK 2.x · Typer · Pydantic · PyYAML · SQLite (FTS5) · NumPy · stdlib `ast` — *local-first, no API key required.* Optional `fastembed` extra for semantic embeddings. The repo map covers Python via stdlib `ast`; JavaScript/TypeScript/TSX and Go via the `[languages]` extra (official tree-sitter grammar wheels, offline — never `tree-sitter-language-pack`, which downloads its grammars at runtime). The drift guard is deterministic (ADR rules → AST/regex, plus JS/TS/Go import-specifier checks when `[languages]` is installed).
 
 ## 📚 Design & prior art
 

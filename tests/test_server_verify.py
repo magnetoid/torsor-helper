@@ -22,7 +22,7 @@ def test_verify_tool_returns_json_verdict(tmp_path):
     tools = {t.name: t for t in anyio.run(server.list_tools)}
     result = anyio.run(lambda: server.call_tool("verify", {"files": ["ok.py"]}))
     # FastMCP returns (content, ...); the JSON verdict is in the text payload.
-    payload = result[0][0].text if isinstance(result, tuple) else result[0].text
+    payload = result.content[0].text
     verdict = json.loads(payload)
     assert verdict["ok"] is True
     assert "checks" in verdict
