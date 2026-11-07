@@ -21,15 +21,12 @@ def _ts_repo(tmp_path):
     return store
 
 
-def test_map_impact_and_find_work_on_typescript(tmp_path):
+def test_map_and_impact_work_on_typescript(tmp_path):
     store = _ts_repo(tmp_path)
     stats = ops.map_repo(store, TorsorConfig())
     assert stats["modules"] == 2 and stats["symbols"] == 2
     impact = ops.impact(store, TorsorConfig(), "formatDate")
     assert [c["caller"] for c in impact["callers"]] == ["run"]
-    hits = ops.find_targets(store, TorsorConfig(), "formatDate", mode="fuzzy", limit=5,
-                            include_files=False, include_symbols=True)
-    assert hits and hits[0]["name"] == "formatDate"
 
 
 def test_cross_module_refs_and_impact_with_nested_import_path(tmp_path):

@@ -80,21 +80,14 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             caller TEXT, referenced_name TEXT, role TEXT,
             module TEXT, resolved_module TEXT, hint TEXT
         );
-        CREATE TABLE IF NOT EXISTS complexity_snapshot (
-            file TEXT PRIMARY KEY, complexity INTEGER
-        );
         CREATE TABLE IF NOT EXISTS path_access (
             path TEXT PRIMARY KEY, count INTEGER NOT NULL DEFAULT 0, last_seen INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE IF NOT EXISTS op_log (
-            op TEXT, args TEXT, hits INTEGER NOT NULL DEFAULT 0, last_used INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY(op, args)
         );
 
         -- Secondary indexes. Every one of these backed a query that was a full
         -- table scan: who_references ran one per candidate module inside impact,
         -- neighbors runs on the recall hot path, and db.modules feeds the
-        -- cleaner, the exporter, hub detection and coupling.
+        -- cleaner.
         CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src);
         CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_path);
         CREATE INDEX IF NOT EXISTS idx_symbols_module ON symbols(module);
@@ -533,7 +526,7 @@ def modules(conn):
 
 
 def all_symbols(conn):
-    """Lightweight dicts for every mapped symbol — for fuzzy-scoring by the finder."""
+    """Lightweight dicts for every mapped symbol."""
     rows = conn.execute("SELECT name, kind, signature, module, line, refs FROM symbols").fetchall()
     return [dict(r) for r in rows]
 
@@ -583,48 +576,6 @@ def bump_path_access(conn, paths):
 
 def path_access_map(conn) -> dict:
     return {r["path"]: (r["count"], r["last_seen"]) for r in conn.execute("SELECT path, count, last_seen FROM path_access")}
-
-
-def log_op(conn, op, args):
-    """Record one deterministic-tool call — the frequency signal behind 'recipes'
-    (what the agent does repeatedly). Recency is a monotonic counter, not a clock."""
-    clock = int(meta_get(conn, "op_clock") or 0) + 1
-    meta_set(conn, "op_clock", str(clock))
-    conn.execute(
-        "INSERT INTO op_log(op, args, hits, last_used) VALUES(?,?,1,?) "
-        "ON CONFLICT(op, args) DO UPDATE SET hits=hits+1, last_used=?",
-        (op, args, clock, clock),
-    )
-    conn.commit()
-
-
-def top_ops(conn, limit=10):
-    rows = conn.execute(
-        "SELECT op, args, hits FROM op_log ORDER BY hits DESC, last_used DESC, op LIMIT ?",
-        (limit,),
-    ).fetchall()
-    return [{"op": r["op"], "args": r["args"], "hits": r["hits"]} for r in rows]
-
-
-def op_totals(conn) -> dict[str, int]:
-    """Total hits per op, aggregated across args — the per-session delta baseline
-    for the deterministic auto-handoff digest."""
-    rows = conn.execute("SELECT op, SUM(hits) AS n FROM op_log GROUP BY op").fetchall()
-    return {r["op"]: int(r["n"]) for r in rows}
-
-
-def save_complexity_snapshot(conn, mapping):
-    """Replace the stored per-file complexity baseline (for trend detection)."""
-    conn.execute("DELETE FROM complexity_snapshot")
-    conn.executemany(
-        "INSERT INTO complexity_snapshot(file, complexity) VALUES(?,?)",
-        [(f, int(c)) for f, c in mapping.items()],
-    )
-    conn.commit()
-
-
-def load_complexity_snapshot(conn) -> dict:
-    return {r["file"]: r["complexity"] for r in conn.execute("SELECT file, complexity FROM complexity_snapshot")}
 
 
 def top_accessed(conn, limit=5):

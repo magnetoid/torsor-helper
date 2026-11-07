@@ -81,29 +81,6 @@ def test_end_to_end_remember_then_bootstrap(tmp_path):
     assert "Picked FastMCP" in out
 
 
-def test_mcp_http_refuses_a_non_loopback_host_without_allow_remote(tmp_path, monkeypatch):
-    # Was a warning it then ignored; an unauthenticated read/write server does
-    # not go on a routable interface because a line of stderr scrolled past.
-    served = []
-    import torsor_helper.server as server_mod
-
-    monkeypatch.setattr(server_mod, "run", lambda *a, **k: served.append(k))
-    runner.invoke(app, ["init", "--root", str(tmp_path)])
-    result = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http", "--host", "0.0.0.0"])
-    assert result.exit_code == 2, result.output
-    assert "no authentication" in result.output
-    assert served == []
-
-
-def test_mcp_http_loopback_does_not_warn(tmp_path, monkeypatch):
-    import torsor_helper.server as server_mod
-
-    monkeypatch.setattr(server_mod, "run", lambda *a, **k: None)
-    runner.invoke(app, ["init", "--root", str(tmp_path)])
-    result = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http"])
-    assert "no authentication" not in result.output
-
-
 def test_rules_prints_digest_and_writes_managed_block(tmp_path):
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     # A principle the project actually wrote. The unfilled charter's placeholder
@@ -133,38 +110,6 @@ def test_init_client_snippet_includes_config_location(tmp_path):
     result = runner.invoke(app, ["init", "--root", str(tmp_path), "--client", "vscode"])
     assert result.exit_code == 0, result.output
     assert "goes in:" in result.output and ".vscode/mcp.json" in result.output
-
-
-def test_update_print_only(monkeypatch):
-    import torsor_helper.updater as updater_mod
-
-    monkeypatch.setattr(updater_mod, "detect_install_method", lambda: "uv-tool")
-    result = runner.invoke(app, ["update", "--print-only"])
-    assert result.exit_code == 0, result.output
-    assert "uv tool upgrade torsor-helper" in result.output
-
-
-def test_update_dev_checkout_prints_hint(monkeypatch):
-    import torsor_helper.updater as updater_mod
-
-    monkeypatch.setattr(updater_mod, "detect_install_method", lambda: "dev")
-    result = runner.invoke(app, ["update"])
-    assert result.exit_code == 0
-    assert "git pull" in result.output
-
-
-def test_practices_list_and_apply(tmp_path):
-    runner.invoke(app, ["init", "--root", str(tmp_path)])
-    result = runner.invoke(app, ["practices", "python", "--root", str(tmp_path)])
-    assert result.exit_code == 0, result.output
-    assert "Python best practices" in result.output
-
-    result = runner.invoke(app, ["practices", "python", "--apply", "--root", str(tmp_path)])
-    assert result.exit_code == 0, result.output
-    assert "Adopted the python pack" in result.output
-
-    result = runner.invoke(app, ["practices", "python", "--apply", "--root", str(tmp_path)])
-    assert result.exit_code == 1  # second adopt refused
 
 
 def test_primer_write(tmp_path):

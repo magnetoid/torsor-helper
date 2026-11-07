@@ -1,17 +1,13 @@
 ---
 type: decision
-status: accepted
+status: superseded
+superseded_by: 0019-torsor-is-a-small-helper-for-one-developer-not-a-team-platform
 tags:
 - adr
 links: []
 created: '2026-09-21T11:00:00'
 updated: '2026-09-21T11:00:00'
-rules:
-- kind: forbid_pattern
-  target: register_driver
-  scope: src/torsor_helper/server.py
-  severity: error
-  message: "registering a merge driver writes to .git/config — a local machine mutation, so it is CLI-only like the hook installers (ADR 0009, ADR 0015)"
+rules: []
 ---
 
 # ADR 0015: Team memory merges through committed attributes and a per-clone driver

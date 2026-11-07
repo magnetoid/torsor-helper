@@ -1,7 +1,7 @@
-"""The learned command book and the op-frequency log.
+"""The learned command book.
 
 Recording a project's commands once, so no session re-derives how to test or
-build it, and surfacing which deterministic lookups recur. Executing a recorded
+build it. Executing a recorded
 command is deliberately reachable only from the CLI (ADR 0009's footgun rule):
 the string comes out of a git-committed file and runs through a shell."""
 from __future__ import annotations
@@ -9,7 +9,6 @@ from __future__ import annotations
 import re as _re
 import subprocess
 
-from torsor_helper import db
 from torsor_helper.models import Frontmatter
 from torsor_helper.store import Store
 
@@ -54,14 +53,3 @@ def run_command(store: Store, name: str):
     if not found:
         return None
     return subprocess.run(found["command"], shell=True, cwd=str(store.paths.root))
-
-def recipes(store: Store, limit: int = 10) -> list:
-    """The most-repeated deterministic lookups — what the agent does over and over,
-    i.e. prime candidates to run on the cheap model."""
-    if not store.paths.index_db.exists():
-        return []
-    conn = db.connect(store.paths.index_db)
-    try:
-        return db.top_ops(conn, limit)
-    finally:
-        conn.close()

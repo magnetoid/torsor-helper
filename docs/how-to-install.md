@@ -59,7 +59,7 @@ torsor doctor                # sanity-check
 
 ## 3. Connect your coding agent
 
-torsor-helper is a standard **MCP stdio server** (`torsor mcp`). For any of the 20 supported clients, one command prints the exact snippet **and where to paste it**:
+torsor-helper is a standard **MCP stdio server** (`torsor mcp`). One command prints the exact snippet **and where to paste it**:
 
 ```bash
 torsor init --client <name>
@@ -68,25 +68,11 @@ torsor init --client <name>
 | Client | `--client` key | Config goes in |
 |---|---|---|
 | Claude Code | `claude-code` | project `.mcp.json` (auto via `torsor init --write`) or `claude mcp add torsor-helper -- torsor mcp` |
-| Claude Desktop | `claude-desktop` | `claude_desktop_config.json` (Settings → Developer → Edit Config) |
 | Cursor | `cursor` | `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global) |
-| Windsurf | `windsurf` | `~/.codeium/windsurf/mcp_config.json` (Settings → Cascade → MCP) |
-| VS Code / Copilot | `vscode` | `.vscode/mcp.json` — note: VS Code uses a `servers` key, the snippet handles it |
-| GitHub Copilot CLI | `copilot-cli` | `~/.copilot/mcp-config.json` (or `/mcp add` inside the CLI) |
 | Codex CLI | `codex` | `~/.codex/config.toml` (TOML — the snippet handles it) |
+| VS Code / Copilot | `vscode` | `.vscode/mcp.json` — note: VS Code uses a `servers` key, the snippet handles it |
 | Gemini CLI | `gemini` | `~/.gemini/settings.json` or project `.gemini/settings.json` |
-| Google Antigravity | `antigravity` | Agent panel → settings → MCP Servers → Manage (`mcp_config.json`) |
-| Cline | `cline` | `cline_mcp_settings.json` (Cline → MCP Servers → Configure) |
-| Roo Code | `roo` | `mcp_settings.json` (Roo → MCP Servers → Edit settings) |
-| Trae | `trae` | AI chat → Settings → MCP → Add manually |
-| Kiro | `kiro` | `.kiro/settings/mcp.json` (project) or `~/.kiro/settings/mcp.json` |
-| Warp | `warp` | Settings → AI → Manage MCP servers |
-| Zed | `zed` | `settings.json` (`context_servers` shape — the snippet handles it) |
-| JetBrains AI / Junie | `jetbrains` | Settings → Tools → AI Assistant → Model Context Protocol → Add |
-| Continue | `continue` | `.continue/config.yaml` (YAML — the snippet handles it) |
-| OpenCode | `opencode` | `opencode.json` (its own `mcp` shape — the snippet handles it) |
-| Amp | `amp` | VS Code `settings.json` under `amp.mcpServers` |
-| Goose | `goose` | `~/.config/goose/config.yaml` (or `goose configure`) |
+| Any other MCP client | `other` | prints the standard `mcpServers` JSON block; paste it into your client's MCP settings file — most accept it unchanged |
 
 > **PATH note:** the snippets use `command: "torsor"`, which requires `torsor` on your PATH (that's what `uv tool install` / `pipx install` do). To run ephemerally instead, use `"command": "uvx", "args": ["torsor-helper", "mcp"]`.
 
@@ -110,7 +96,6 @@ In your agent, ask it to call `bootstrap_session()` — you should get back your
 ## 6. Upgrade / uninstall
 
 ```bash
-torsor update                          # detects uv tool / pipx / pip and runs the right upgrade
 uv tool upgrade torsor-helper          # or: pipx upgrade torsor-helper
 uv tool uninstall torsor-helper        # or: pipx uninstall torsor-helper
 ```
@@ -123,4 +108,4 @@ Your memory lives in `.torsor/` in each project and is untouched by upgrades. Th
 - **Client doesn't see the server** — check the config went into the file listed in the table above, then fully restart/reload the client (most only read MCP config at startup).
 - **`torsor doctor` fails** — run `torsor init` first (it never overwrites existing files unless you pass `--force`).
 - **Recall feels keyword-only** — you're on the hashing fallback; install the `embeddings` extra for semantic recall.
-- **Two machines / teammates** — commit `.torsor/`, never `.torsor/.index/` (the scaffold's `.gitignore` already handles this). Each machine derives its own index.
+- **Two machines** — commit `.torsor/`, never `.torsor/.index/` (the scaffold's `.gitignore` already handles this). Each machine derives its own index; the memory itself travels with `git clone`.

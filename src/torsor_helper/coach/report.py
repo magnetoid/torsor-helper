@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from torsor_helper import cartographer, db, deps
-from torsor_helper.coach import (
-    contradiction, coupling, health, hotspots, hubs, recommender, staleness, trend,
-)
+from torsor_helper.coach import health, hotspots, staleness
 from torsor_helper.coach.state import CoachState
 from torsor_helper.models import Recommendation
 from torsor_helper.store import Store, state_file
@@ -51,16 +49,10 @@ def assemble(store: Store, config, context=None, limit: int = 8, conn=None, embe
     # only in the explicit `torsor stale` command, not the always-on Coach.
     recs += staleness.check_dangling_links(store)
     recs += staleness.check_ambiguous_links(store)
-    recs += contradiction.find_contradictions(store)
     if conn is not None:  # indexed path; these self-skip outside a git repo / on a clean project
         days = config.coach.history_days if config is not None else 365
         recs += hotspots.find_hotspots(store.paths.root, history_days=days)
         recs += _phantom_dep_recs(store)
-        recs += coupling.find_coupling_recs(store.paths.root, conn, history_days=days)
-        recs += hubs.find_hub_recs(conn)
-        recs += trend.find_regressions(store.paths.root, conn)
-    if context:
-        recs += recommender.best_practice_recs(store, config, context, conn=conn, embedder=embedder, limit=limit)
 
     state = CoachState(_coach_state_path(store), clock=store.clock)
     recs = [r for r in recs if not state.is_dismissed(r.key)]

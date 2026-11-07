@@ -4,8 +4,9 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-20T21:54:01'
-updated: '2026-09-20T21:54:01'
+created: '2026-11-02T02:18:30'
+updated: '2026-11-02T02:18:30'
+rules: []
 ---
 
 # tests/test_cli.py
@@ -20,14 +21,11 @@ Symbols in `tests/test_cli.py`.
 - L46 `test_connect_traces_call_path(tmp_path)` (function)
 - L61 `test_connect_reports_no_path(tmp_path)` (function)
 - L69 `test_end_to_end_remember_then_bootstrap(tmp_path)` (function)
-- L84 `test_mcp_http_refuses_a_non_loopback_host_without_allow_remote(tmp_path, monkeypatch)` (function)
-- L98 `test_mcp_http_loopback_does_not_warn(tmp_path, monkeypatch)` (function)
-- L107 `test_rules_prints_digest_and_writes_managed_block(tmp_path)` (function)
-- L119 `test_version_flag_prints_version()` (function)
-- L127 `test_init_client_snippet_includes_config_location(tmp_path)` (function)
-- L133 `test_update_print_only(monkeypatch)` (function)
-- L142 `test_update_dev_checkout_prints_hint(monkeypatch)` (function)
-- L151 `test_practices_list_and_apply(tmp_path)` (function)
-- L165 `test_primer_write(tmp_path)` (function)
-- L173 `test_root_falls_back_to_the_torsor_root_env_var(tmp_path, monkeypatch)` (function)
-- L180 `test_root_has_a_short_flag(tmp_path)` (function)
+- L84 `test_rules_prints_digest_and_writes_managed_block(tmp_path)` (function)
+- L101 `test_version_flag_prints_version()` (function)
+- L109 `test_init_client_snippet_includes_config_location(tmp_path)` (function)
+- L115 `test_primer_write(tmp_path)` (function)
+- L123 `test_root_falls_back_to_the_torsor_root_env_var(tmp_path, monkeypatch)` (function)
+- L130 `test_root_has_a_short_flag(tmp_path)` (function)
+- L136 `test_rules_write_on_a_fresh_project_writes_nothing(tmp_path)` (function)
+- L145 `test_rules_write_clears_a_stale_block(tmp_path)` (function) — An existing block is still rewritten when there is nothing left to say —

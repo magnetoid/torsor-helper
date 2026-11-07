@@ -68,11 +68,10 @@ def _plan_map_orphans(store, out: CleanPlan) -> None:
 
 # Index tables keyed by a repo-relative source path. A row whose file no longer
 # exists is dead weight: `map` replaces symbols/edges wholesale only when it is
-# re-run, and nothing ever prunes path_access or complexity_snapshot.
+# re-run, and nothing ever prunes path_access.
 _PATH_COLUMNS = {
     "symbols": "module",
     "symbol_edges": "module",
-    "complexity_snapshot": "file",
     "path_access": "path",
 }
 
@@ -90,7 +89,7 @@ def _dead_rows(store, conn) -> dict[str, int]:
     return counts
 
 
-def _plan_journal_expiry(store, config, out: CleanPlan) -> None:
+def _plan_journal_expiry(store, config, out: CleanPlan, *, expire: bool) -> None:
     days = config.clean.journal_retention_days
     if days <= 0:
         out.notes.append("journal: retention disabled (clean.journal_retention_days = 0)")
@@ -110,14 +109,28 @@ def _plan_journal_expiry(store, config, out: CleanPlan) -> None:
             continue  # not a dated journal file — never ours to expire
         if stamp < cutoff:
             expired.append(path)
-    out.journal_expired = expired
+    if expire:
+        out.journal_expired = expired
+    elif expired:
+        # A window in torsor.toml is not consent: `init` used to write the old
+        # default (90) into every project, and a journal is the only copy of
+        # what `remember()` recorded. Say what is held back, and how to release it.
+        out.notes.append(
+            f"journal: {len(expired)} journal(s) are older than {days} days and were kept — "
+            "a journal entry is the only copy of what was remembered. Read them first, then "
+            "pass --expire-journals to delete them."
+        )
 
 
-def plan(store, config, *, deep: bool = False) -> CleanPlan:
+def plan(store, config, *, deep: bool = False, expire_journals: bool = False) -> CleanPlan:
     """Compute what a clean pass would reclaim. Strictly read-only: this is the
-    dry run, and callers render it before anyone opts into `apply`."""
+    dry run, and callers render it before anyone opts into `apply`.
+
+    Journals past `clean.journal_retention_days` enter the plan only with
+    `expire_journals`: everything else here is derived or orphaned, and a
+    journal is neither."""
     out = CleanPlan()
-    _plan_journal_expiry(store, config, out)
+    _plan_journal_expiry(store, config, out, expire=expire_journals)
     _plan_map_orphans(store, out)
     if deep:
         # The whole index goes, so per-row accounting is moot.
@@ -148,15 +161,8 @@ def _purge_dead_rows(store, conn) -> int:
 def apply(store, config, plan: CleanPlan) -> dict:
     """Execute `plan`. Only ever removes derived or expired artefacts — never a
     stable tier (charter/architecture/active/insights), never source code."""
-    from torsor_helper.coach import mining
-
     reclaimed = plan.reclaimed_bytes
 
-    # Mine BEFORE discarding: every learning/decision/rejection/blocker in an
-    # expiring journal must already be durable in memory/insights/.
-    mined = 0
-    if plan.journal_expired:
-        mined = len(mining.mine_insights(store))
     for path in plan.journal_expired:
         path.unlink(missing_ok=True)
 
@@ -178,7 +184,6 @@ def apply(store, config, plan: CleanPlan) -> dict:
     return {
         "map_orphans": len(plan.map_orphans),
         "journals_expired": len(plan.journal_expired),
-        "insights_mined": mined,
         "dead_rows": rows,
         "deep": bool(plan.deep_paths),
         "reclaimed_bytes": reclaimed,

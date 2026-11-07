@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T17:33:16'
-updated: '2026-09-21T17:33:16'
+created: '2026-11-02T02:18:30'
+updated: '2026-11-02T02:18:30'
 rules: []
 ---
 
@@ -13,33 +13,32 @@ rules: []
 
 Symbols in `src/torsor_helper/paths.py`.
 
-- L6 `contained(root, candidate)` (function) — `candidate` resolved against `root`, or None when it lands outside it.
-- L28 `TorsorPaths` (class) — Resolves the .torsor/ directory layout relative to a project root.
-- L31 `__init__(self, root: Path | str)` (method)
-- L35 `base(self)` (method)
-- L39 `config_file(self)` (method)
-- L43 `charter(self)` (method)
-- L47 `architecture_dir(self)` (method)
-- L51 `system_patterns(self)` (method)
-- L55 `tech_context(self)` (method)
-- L59 `decisions_dir(self)` (method)
-- L63 `map_dir(self)` (method)
-- L67 `map_overview(self)` (method)
-- L71 `active_dir(self)` (method)
-- L75 `active_context(self)` (method)
-- L79 `progress(self)` (method)
-- L83 `memory_dir(self)` (method)
-- L87 `journal_dir(self)` (method)
-- L91 `insights_dir(self)` (method)
-- L95 `llms_txt(self)` (method)
-- L99 `commands_file(self)` (method)
-- L104 `baseline_file(self)` (method)
-- L110 `index_dir(self)` (method)
-- L114 `map_dependencies(self)` (method)
-- L122 `gitattributes(self)` (method)
-- L128 `state_dir(self)` (method)
-- L138 `index_db(self)` (method)
-- L142 `claude_settings(self)` (method)
-- L148 `claude_rules_dir(self)` (method)
-- L155 `claude_settings_local(self)` (method)
-- L159 `journal_file(self, date_str: str, author: str='')` (method) — `<date>.md`, or `<date>.<author>.md` when journals are partitioned.
+- L18 `is_test_path(relpath: str)` (function) — True for a file that is test code by its language's naming convention.
+- L23 `contained(root, candidate)` (function) — `candidate` resolved against `root`, or None when it lands outside it.
+- L45 `TorsorPaths` (class) — Resolves the .torsor/ directory layout relative to a project root.
+- L48 `__init__(self, root: Path | str)` (method)
+- L52 `base(self)` (method)
+- L56 `config_file(self)` (method)
+- L60 `charter(self)` (method)
+- L64 `architecture_dir(self)` (method)
+- L68 `system_patterns(self)` (method)
+- L72 `tech_context(self)` (method)
+- L76 `decisions_dir(self)` (method)
+- L80 `map_dir(self)` (method)
+- L84 `map_overview(self)` (method)
+- L88 `active_dir(self)` (method)
+- L92 `active_context(self)` (method)
+- L96 `progress(self)` (method)
+- L100 `memory_dir(self)` (method)
+- L104 `journal_dir(self)` (method)
+- L108 `insights_dir(self)` (method)
+- L112 `commands_file(self)` (method)
+- L117 `baseline_file(self)` (method)
+- L123 `index_dir(self)` (method)
+- L127 `map_dependencies(self)` (method)
+- L135 `state_dir(self)` (method)
+- L145 `index_db(self)` (method)
+- L149 `claude_settings(self)` (method)
+- L155 `claude_rules_dir(self)` (method)
+- L162 `claude_settings_local(self)` (method)
+- L166 `journal_file(self, date_str: str, author: str='')` (method) — `<date>.md`, or `<date>.<author>.md` when journals are partitioned.

@@ -1,21 +1,18 @@
-"""Recommendation lifecycle and contradiction detection.
+"""Recommendation lifecycle.
 
-Two gaps from the Coach spec §7: nothing ever noticed that a recommendation had
+A gap from the Coach spec §7: nothing ever noticed that a recommendation had
 been *fixed*, so a problem you solved left no trace and an old one just sank
-below the limit; and nothing checked whether two active decisions disagree with
-each other, which is the failure mode a growing ADR set has and a linter cannot
-see.
+below the limit.
 """
 from __future__ import annotations
 
 from datetime import datetime
 
-import pytest
 
-from torsor_helper.coach import contradiction, report
+from torsor_helper.coach import report
 from torsor_helper.coach.state import CoachState
 from torsor_helper.config import TorsorConfig
-from torsor_helper.models import Frontmatter, Recommendation
+from torsor_helper.models import Frontmatter
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
 
@@ -205,137 +202,3 @@ def test_escalation_does_not_reorder_anything(tmp_path, tmp_path_factory):
     old = keys_for(tmp_path_factory.mktemp("old"), CLOCK)
     fresh = keys_for(tmp_path_factory.mktemp("fresh"), LATER)
     assert old == fresh
-
-
-# ---- contradiction ----
-
-def test_two_decisions_that_disagree_are_flagged(tmp_path):
-    store = _store(tmp_path)
-    _decision(store, 1, "Use dependency injection for services", "Wire services through a container.")
-    _decision(store, 2, "Never use dependency injection for services", "Construct services directly.")
-    recs = contradiction.find_contradictions(store)
-    assert [r.kind for r in recs] == ["contradiction"]
-    assert "0001" in recs[0].message and "0002" in recs[0].message
-
-
-def test_two_decisions_about_different_things_are_not_flagged(tmp_path):
-    store = _store(tmp_path)
-    _decision(store, 1, "Use Postgres for the primary store", "It is the primary store.")
-    _decision(store, 2, "Never use Redis as the system of record", "Cache only.")
-    assert contradiction.find_contradictions(store) == []
-
-
-def test_two_decisions_that_agree_are_not_flagged(tmp_path):
-    store = _store(tmp_path)
-    _decision(store, 1, "Use dependency injection for services", "Wire through a container.")
-    _decision(store, 2, "Use dependency injection for handlers", "Wire through a container.")
-    assert contradiction.find_contradictions(store) == []
-
-
-def test_a_superseded_decision_is_not_a_contradiction(tmp_path):
-    """Supersession is how a decision is *meant* to be reversed."""
-    store = _store(tmp_path)
-    old = store.paths.decisions_dir / "0001-x.md"
-    store.write_note(old, Frontmatter(type="decision", status="superseded"),
-                     "Use dependency injection for services", "Wire through a container.")
-    _decision(store, 2, "Never use dependency injection for services", "Construct directly.")
-    assert contradiction.find_contradictions(store) == []
-
-
-def test_an_explicit_supersedes_link_is_not_a_contradiction(tmp_path):
-    store = _store(tmp_path)
-    _decision(store, 1, "Use dependency injection for services", "Wire through a container.")
-    store.write_note(
-        store.paths.decisions_dir / "0002-x.md",
-        Frontmatter(type="decision", supersedes=["0001-x"]),
-        "Never use dependency injection for services", "Construct directly.",
-    )
-    assert contradiction.find_contradictions(store) == []
-
-
-def test_non_decisions_are_never_compared(tmp_path):
-    store = _store(tmp_path)
-    store.write_note(store.paths.decisions_dir / "0001-x.md", Frontmatter(type="note"),
-                     "Use dependency injection for services", "Wire through a container.")
-    store.write_note(store.paths.decisions_dir / "0002-x.md", Frontmatter(type="note"),
-                     "Never use dependency injection for services", "Construct directly.")
-    assert contradiction.find_contradictions(store) == []
-
-
-def test_this_repos_own_adrs_contain_no_contradiction():
-    """The precision test that matters. torsor's own 16 ADRs do not contradict
-    each other, so a check that fires on them is wrong, not sensitive."""
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parents[1]
-    store = Store(TorsorPaths(root))
-    assert contradiction.find_contradictions(store) == []
-
-
-@pytest.mark.parametrize(
-    "title,expected",
-    [
-        ("Use dependency injection", 1),
-        ("Always prefer composition", 1),
-        ("Never use global state", -1),
-        ("Avoid global state", -1),
-        ("Do not use global state", -1),
-        ("Adapters depend on core, never the reverse", -1),
-        ("Cleanup is plan-then-apply", 0),
-    ],
-)
-def test_polarity(title, expected):
-    assert contradiction.polarity(title) == expected
-
-
-def test_contradiction_is_wired_into_the_coach(tmp_path):
-    store = _store(tmp_path)
-    _decision(store, 1, "Use dependency injection for services", "Wire through a container.")
-    _decision(store, 2, "Never use dependency injection for services", "Construct directly.")
-    kinds = {r.kind for r in report.assemble(store, TorsorConfig(), limit=20)}
-    assert "contradiction" in kinds
-
-
-def test_a_contradiction_can_be_dismissed(tmp_path):
-    store = _store(tmp_path)
-    _decision(store, 1, "Use dependency injection for services", "Wire through a container.")
-    _decision(store, 2, "Never use dependency injection for services", "Construct directly.")
-    rec = contradiction.find_contradictions(store)[0]
-
-    state = CoachState(report._coach_state_path(store), clock=CLOCK)
-    state.dismiss(rec.key)
-    state.save()
-    kinds = {r.kind for r in report.assemble(store, TorsorConfig(), limit=20)}
-    assert "contradiction" not in kinds
-
-
-def test_the_contradiction_key_is_order_independent(tmp_path):
-    """Or dismissing it once would not stick the next time the pair is compared
-    in the other order."""
-    store = _store(tmp_path)
-    _decision(store, 1, "Use dependency injection for services", "Wire through a container.")
-    _decision(store, 2, "Never use dependency injection for services", "Construct directly.")
-    key = contradiction.find_contradictions(store)[0].key
-    assert key == contradiction._pair_key("0002-x.md", "0001-x.md")
-
-
-def test_contradiction_is_advisory(tmp_path):
-    store = _store(tmp_path)
-    _decision(store, 1, "Use dependency injection for services", "Wire through a container.")
-    _decision(store, 2, "Never use dependency injection for services", "Construct directly.")
-    assert all(isinstance(r, Recommendation) and r.severity != "important"
-               for r in contradiction.find_contradictions(store))
-
-
-def test_the_fixed_line_survives_a_crowded_page(tmp_path):
-    """It ranks into the info band, so on a busy project it would sort off the
-    end of the page — while the state that produced it has already been dropped,
-    so the good news would be reported into a void and never come back."""
-    store = _store(tmp_path)
-    state = CoachState(report._coach_state_path(store), clock=CLOCK)
-    state.seen("hotspot:gone.py")
-    state.save()
-
-    recs = report.assemble(store, TorsorConfig(), limit=1)
-    assert recs[0].kind == "resolved"
-    assert len(recs) == 2, "the fixed line is extra, not one of the limit slots"

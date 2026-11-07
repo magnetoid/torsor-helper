@@ -4,8 +4,9 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-20T21:54:02'
-updated: '2026-09-20T21:54:02'
+created: '2026-11-02T02:18:31'
+updated: '2026-11-02T02:18:31'
+rules: []
 ---
 
 # tests/test_token_budgets.py
@@ -26,8 +27,7 @@ Symbols in `tests/test_token_budgets.py`.
 - L112 `test_get_intent_caps_the_decision_list_and_says_how_many_it_hid(tmp_path)` (function)
 - L131 `test_impact_caps_callers_but_still_reports_the_true_total(tmp_path)` (function)
 - L151 `test_impact_limit_defaults_to_the_configured_cap(tmp_path)` (function)
-- L172 `test_list_practices_respects_its_budget(tmp_path)` (function)
-- L186 `test_verify_caps_reasons_per_check_but_keeps_the_true_count(tmp_path)` (function)
-- L208 `_render_recall(result)` (function) — Exactly how server.py renders a RecallResult into the agent's context.
-- L213 `test_recall_budget_covers_what_actually_lands_in_context(tmp_path)` (function)
-- L231 `test_recall_reported_total_matches_what_it_charged(tmp_path)` (function)
+- L172 `test_verify_caps_reasons_per_check_but_keeps_the_true_count(tmp_path)` (function)
+- L194 `_render_recall(result)` (function) — Exactly how server.py renders a RecallResult into the agent's context.
+- L199 `test_recall_budget_covers_what_actually_lands_in_context(tmp_path)` (function)
+- L217 `test_recall_reported_total_matches_what_it_charged(tmp_path)` (function)

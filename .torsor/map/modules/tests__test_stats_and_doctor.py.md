@@ -4,8 +4,8 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-21T17:33:16'
-updated: '2026-09-21T17:33:16'
+created: '2026-11-02T02:18:31'
+updated: '2026-11-02T02:18:31'
 rules: []
 ---
 
@@ -22,5 +22,4 @@ Symbols in `tests/test_stats_and_doctor.py`.
 - L91 `test_doctor_says_when_semantic_recall_is_on_the_fallback(tmp_path)` (function)
 - L101 `test_doctor_reports_a_malformed_rules_block(tmp_path)` (function)
 - L115 `test_doctor_still_exits_one_on_a_broken_project(tmp_path)` (function)
-- L122 `test_consolidate_names_the_duplicates_it_counted(tmp_path)` (function)
-- L134 `test_the_mcp_surface_gained_stats_and_recall_filters(tmp_path)` (function)
+- L120 `test_the_mcp_surface_gained_stats_and_recall_filters(tmp_path)` (function)

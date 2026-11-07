@@ -10,7 +10,6 @@ def test_automation_defaults():
     # each only touches .torsor/ Markdown or the disposable index).
     assert cfg.automation.auto_handoff is True
     assert cfg.automation.auto_map_on_commit is True
-    assert cfg.automation.auto_snapshot_on_commit is True
     # The one behavior that could surprise-block a push defaults OFF.
     assert cfg.automation.guard_on_push is False
     # Transcript enrichment is opt-in.

@@ -13,7 +13,6 @@ from pathlib import Path
 from torsor_helper import guard, templates
 from torsor_helper.budget import truncate_to_tokens
 from torsor_helper.config import TorsorConfig
-from torsor_helper.operations._shared import _log_op
 from torsor_helper.operations.commands import list_commands
 from torsor_helper.store import Store
 
@@ -32,7 +31,6 @@ def agent_rules(store: Store, config: TorsorConfig, *, max_tokens: int | None = 
     charter principles + machine-readable ADR rules — for agent prompt files
     (AGENTS.md / CLAUDE.md). Rules the agent sees at prompt time cost zero
     tool-call tokens per session, and the guard still enforces them in CI."""
-    _log_op(store, "get_rules", "")
     sections: list[str] = []
 
     # Not from an unfilled charter: its "principles" are the seed's placeholder,
@@ -120,7 +118,6 @@ def write_scoped_rules(store: Store, config: TorsorConfig) -> list:
     CLAUDE.md block. Charter principles have no scope and become an unscoped
     file (loaded every session, like CLAUDE.md). The directory is fully
     managed: a file torsor no longer produces is removed."""
-    _log_op(store, "get_rules", "scoped")
     out_dir = store.paths.claude_rules_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -204,64 +201,3 @@ def write_primer_block(store: Store, config: TorsorConfig, target, *, max_tokens
     return _write_managed_block(
         target, _PRIMER_START, _PRIMER_END, project_primer(store, config, max_tokens=max_tokens)
     )
-
-_MODELS_START = "<!-- torsor:models -->"
-
-_MODELS_END = "<!-- /torsor:models -->"
-
-# Default op -> tier policy. CHEAP = deterministic torsor lookups + mechanical
-# maintenance that return exact answers (no reasoning). SMART = judgement/creation.
-_CHEAP_OPS = [
-    "recall", "get_intent", "find_files", "impact", "get_rules", "get_primer",
-    "check_drift", "check_dependencies", "check_staleness", "verify", "map_repo",
-    "consolidate", "list_commands", "recipes",
-]
-
-_SMART_WORK = [
-    "designing architecture", "writing & refactoring code",
-    "making decisions (record_decision)", "debugging novel failures",
-]
-
-def model_policy(store: Store, config: TorsorConfig) -> str:
-    """A prompt-ready model-routing policy: which work runs on the cheap model vs
-    the smart model. torsor declares it; the harness/agent routes by it."""
-    cheap = config.models.cheap or "(unset — run: torsor models --cheap <model-id>)"
-    smart = config.models.smart or "(unset — run: torsor models --smart <model-id>)"
-    lines = [
-        "## Model routing (torsor-helper — token thrift)",
-        "",
-        "Route each task to the cheapest model that can do it *correctly*:",
-        "",
-        f"- **Cheap model — `{cheap}`** for deterministic torsor lookups & mechanical work "
-        f"that return EXACT answers (no reasoning needed): {' · '.join(_CHEAP_OPS)}, and replaying "
-        f"recorded commands (`torsor commands --run`). These recur constantly — they don't need a frontier model.",
-        f"- **Smart model — `{smart}`** for judgement & creation: {' · '.join(_SMART_WORK)}.",
-    ]
-    if config.models.fast:
-        lines.append(f"- **Fast model — `{config.models.fast}`** for quick mid-tier turns when the cheap model is too weak but a frontier model is overkill.")
-    lines += [
-        "",
-        "Run `torsor verify` (the deterministic guard+deps+staleness gate) on the "
-        "cheap model as a loop / pre-commit completion check; route the *fix* after a "
-        "failed verdict to the smart model.",
-        "",
-        "Rule of thumb: if torsor can answer it deterministically, use the cheap model; "
-        "if it requires inventing something new, use the smart model.",
-    ]
-    return "\n".join(lines)
-
-def model_policy_json(store: Store, config: TorsorConfig) -> dict:
-    """Machine-readable model-routing policy for programmatic routers (any harness,
-    not just prompt-reading agents). The Markdown form (`model_policy`) is for
-    agents that read a rules file; this is for code that picks the model itself."""
-    return {
-        "cheap": config.models.cheap,
-        "smart": config.models.smart,
-        "fast": config.models.fast,
-        "route": {"cheap": list(_CHEAP_OPS), "smart": list(_SMART_WORK)},
-        "note": "Run the 'cheap' ops + command replays on the cheap model; reserve 'smart' "
-                "for design/code/decisions. torsor declares the policy; the harness routes.",
-    }
-
-def write_model_policy(store: Store, config: TorsorConfig, target) -> str:
-    return _write_managed_block(target, _MODELS_START, _MODELS_END, model_policy(store, config))

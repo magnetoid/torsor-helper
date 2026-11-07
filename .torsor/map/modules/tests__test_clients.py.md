@@ -4,8 +4,9 @@ status: derived
 tags:
 - map
 links: []
-created: '2026-09-20T21:54:01'
-updated: '2026-09-20T21:54:01'
+created: '2026-11-02T02:18:30'
+updated: '2026-11-02T02:18:30'
+rules: []
 ---
 
 # tests/test_clients.py
@@ -18,8 +19,5 @@ Symbols in `tests/test_clients.py`.
 - L28 `test_unknown_client_raises()` (function)
 - L33 `test_codex_snippet_is_toml()` (function)
 - L40 `test_every_supported_client_has_snippet_and_location()` (function)
-- L49 `test_new_vibe_coding_clients_present()` (function)
-- L54 `test_vscode_snippet_uses_servers_shape()` (function)
-- L60 `test_zed_snippet_uses_context_servers()` (function)
-- L65 `test_opencode_snippet_shape()` (function)
-- L71 `test_antigravity_snippet_is_standard_mcp_servers_block()` (function)
+- L49 `test_vscode_snippet_uses_servers_shape()` (function)
+- L55 `test_other_is_the_standard_mcp_servers_block()` (function)

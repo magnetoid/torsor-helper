@@ -7,10 +7,11 @@ tags: [active]
 # Progress
 
 ## Done
-Phase 1 Foundation, Phase 2 Index, Phase 3 Map, Phase 4 Guard.
+v0.8: memory, map, guard, deps, Coach, hooks, project docs indexed in place (ADR 0018).
+ADR 0019 trim: team/platform features and inert Coach checks removed; tests follow.
 
 ## In progress
-Stabilisation: lint, dogfooding, doc refresh.
+Docs rewritten for the trimmed surface; `mcp 2.x` migration and lazy CLI imports queued.
 
 ## Blocked
 None.

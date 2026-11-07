@@ -245,13 +245,6 @@ class Store:
         if force or not gitignore.exists():
             gitignore.write_text("".join(f"{line}\n" for line in _IGNORED), encoding="utf-8")
 
-        # Committed, unlike everything .gitignore covers: it is how a clone
-        # learns that journals union-merge. The custom map driver it names still
-        # needs a per-clone `torsor merge install` — see merge.py.
-        from torsor_helper.merge import write_attributes
-
-        write_attributes(self.paths)
-
     def write_note(
         self, path: Path, frontmatter: Frontmatter, title: str, body: str
     ) -> Note:

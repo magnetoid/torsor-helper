@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from torsor_helper import operations as ops
-from torsor_helper import updater
 from torsor_helper.config import TorsorConfig
 from torsor_helper.paths import TorsorPaths
 from torsor_helper.store import Store
@@ -15,24 +14,6 @@ def _store(tmp_path):
     store.scaffold()
     fill_seeds(store)  # the scaffold's seeds are not content any more
     return store
-
-
-# ---- updater ----
-
-def test_detect_install_method_returns_known_value():
-    assert updater.detect_install_method() in ("uv-tool", "pipx", "pip", "dev")
-
-
-def test_update_command_per_method():
-    assert updater.update_command("uv-tool") == ["uv", "tool", "upgrade", "torsor-helper"]
-    assert updater.update_command("pipx") == ["pipx", "upgrade", "torsor-helper"]
-    assert updater.update_command("pip")[-2:] == ["--upgrade", "torsor-helper"]
-    assert updater.update_command("dev") is None
-
-
-def test_manual_hint_for_dev():
-    assert "git pull" in updater.manual_hint("dev")
-    assert "uv tool upgrade" in updater.manual_hint("unknown")
 
 
 # ---- primer (token saver) ----

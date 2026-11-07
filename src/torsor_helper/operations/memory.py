@@ -10,7 +10,7 @@ from torsor_helper.budget import cap_items, estimate_tokens, truncate_to_tokens
 from torsor_helper.coach import report as coach_report
 from torsor_helper.config import TorsorConfig
 from torsor_helper.models import Frontmatter, RecallResult
-from torsor_helper.operations._shared import _embedder_for, _log_op, _open_index
+from torsor_helper.operations._shared import _embedder_for, _open_index
 from torsor_helper.recall import keyword_recall
 from torsor_helper.search import hybrid_search
 from torsor_helper.store import Store
@@ -127,7 +127,6 @@ def recall(store: Store, config: TorsorConfig, query: str, limit: int = 8, *,
     adapter could reach them — "only ADRs" and "only learnings" were
     inexpressible despite the plumbing existing. The keyword fallback applies
     them itself, since it has no SQL to push them into."""
-    _log_op(store, "recall", query)
     conn = _open_index(store, config)
     if conn is not None:
         try:
@@ -197,7 +196,6 @@ def record_handoff(
     return str(path)
 
 def get_intent(store: Store, config: TorsorConfig, topic: str | None = None) -> str:
-    _log_op(store, "get_intent", topic or "")
     cpt = config.budgets.chars_per_token
     total = config.budgets.intent_tokens
     sections: list[str] = []

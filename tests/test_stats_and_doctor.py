@@ -117,20 +117,6 @@ def test_doctor_still_exits_one_on_a_broken_project(tmp_path):
     assert result.exit_code == 1
 
 
-# --- consolidate ------------------------------------------------------------
-
-def test_consolidate_names_the_duplicates_it_counted(tmp_path):
-    store = _project(tmp_path)
-    for i in range(3):
-        store.append_journal("the exact same observation", kind="observation", links=[])
-
-    stats = ops.consolidate(store, TorsorConfig())
-
-    assert stats["duplicates"] >= 1
-    assert stats["duplicate_entries"], "the list was computed and thrown away"
-    assert any("same observation" in text for text, _ in stats["duplicate_entries"])
-
-
 def test_the_mcp_surface_gained_stats_and_recall_filters(tmp_path):
     import anyio
 

@@ -41,38 +41,6 @@ def test_the_cli_can_still_run_them(tmp_path):
     assert res.exit_code in (0, 1)   # runs; a missing `test` command is a skip
 
 
-# --- an unauthenticated server does not go on a routable interface by accident
-
-@pytest.fixture
-def no_server(monkeypatch):
-    """Never let a test actually bind a port — the point is the gate in front."""
-    calls = []
-    monkeypatch.setattr("torsor_helper.server.run", lambda *a, **k: calls.append(k))
-    return calls
-
-
-def test_http_on_a_non_loopback_host_refuses_without_an_explicit_opt_in(tmp_path, no_server):
-    _project(tmp_path)
-    res = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http", "--host", "0.0.0.0"])
-    assert res.exit_code == 2
-    assert "--allow-remote" in res.output
-    assert no_server == []   # and it must not have served anyway
-
-
-def test_a_non_loopback_host_serves_once_the_opt_in_is_explicit(tmp_path, no_server):
-    _project(tmp_path)
-    res = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http", "--host", "0.0.0.0", "--allow-remote"])
-    assert res.exit_code == 0
-    assert no_server[0]["host"] == "0.0.0.0"
-
-
-def test_loopback_http_needs_no_opt_in(tmp_path, no_server):
-    _project(tmp_path)
-    res = runner.invoke(app, ["mcp", "--root", str(tmp_path), "--http"])
-    assert res.exit_code == 0
-    assert no_server[0]["host"] == "127.0.0.1"
-
-
 # --- the only irreversible cleanup asks first ------------------------------
 
 def test_clean_apply_deep_refuses_without_yes(tmp_path):

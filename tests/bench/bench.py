@@ -24,7 +24,7 @@ from torsor_helper.config import TorsorConfig  # noqa: E402
 
 def timed(label, fn, repeat=6):
     """Report min AND spread. Some of these paths swing 4x run to run on the
-    same code and the same corpus (find and impact both walk the filesystem),
+    same code and the same corpus (impact walks the filesystem),
     so a single number reads as precision that is not there — and a change
     inside the spread proves nothing either way."""
     fn()  # warm
@@ -65,7 +65,6 @@ def main():
         timed("get_intent", lambda: ops.get_intent(store, config))
         timed("impact (hub symbol)", lambda: ops.impact(store, config, "fn0_0"))
         timed("connect", lambda: ops.connect(store, config, "fn5_1", "fn0_0"))
-        timed("find (fuzzy)", lambda: ops.find_targets(store, config, "fn12", limit=20))
 
         conn = db.connect(store.paths.index_db)
         try:
