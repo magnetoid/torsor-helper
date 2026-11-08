@@ -98,3 +98,23 @@ def test_the_onboard_prompt_still_loads_the_project(tmp_path):
     text = result.messages[0].content.text
     assert "memory" in text.lower()
     assert TorsorConfig().budgets.intent_tokens > 0
+
+
+def test_generated_instructions_name_only_tools_that_exist(tmp_path):
+    # `torsor primer --write` and the SessionStart digest tell the agent which
+    # tools to reach for. After the fold they still said get_intent(), so a
+    # regenerated primer pointed at a tool the server no longer had.
+    import re
+
+    from conftest import fill_seeds
+
+    paths = TorsorPaths(tmp_path)
+    store = Store(paths)
+    store.scaffold()
+    fill_seeds(store)
+    config = TorsorConfig()
+    texts = [ops.project_primer(store, config), ops.session_start_context(store, config, how="startup") or ""]
+    named = {m for text in texts for m in re.findall(r"\b([a-z_]+)\(", text)}
+    unknown = named - EXPECTED_TOOLS - {"torsor"}
+    assert not unknown, f"generated instructions name tools the server does not have: {sorted(unknown)}"
+    assert "bootstrap_session" in named
