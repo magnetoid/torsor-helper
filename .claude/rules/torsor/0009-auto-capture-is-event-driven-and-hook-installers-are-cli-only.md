@@ -5,7 +5,7 @@ paths:
 
 # ADR 0009: Auto-capture is event-driven, and hook installers are CLI-only
 
-- forbid_pattern: `(?:install|uninstall)_hooks` in `src/torsor_helper/server.py` — hook installers are CLI-only (ADR 0009) — the MCP server must expose only the read-only hooks_status
+- forbid_pattern: `(?:install|uninstall)_hooks` in `src/torsor_helper/server.py` — hook installers are CLI-only (ADR 0009) — hooks have no MCP surface at all
 
 Machine-enforced — `torsor guard` flags violations.
 

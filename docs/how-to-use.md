@@ -61,9 +61,9 @@ A disposable SQLite index (FTS5 + local vectors + link graph) is derived from th
 ## The daily loop
 
 1. **Session start** — the agent calls `bootstrap_session()`: a token-budgeted summary of charter → architecture → active state → recent memory, plus a short Coach digest. (Tell your agent to do this in your AGENTS.md/CLAUDE.md if it doesn't on its own.)
-2. **Before building** — `recall("have we decided how auth works?")` and `get_intent("payments")` surface prior decisions and the symbols that already exist, so the agent extends instead of duplicating.
+2. **Before building** — `recall("have we decided how auth works?")` and `bootstrap_session(topic="payments")` surface prior decisions and the symbols that already exist, so the agent extends instead of duplicating.
 3. **While working** — the agent records what it learns: `remember("SQLite WAL needed for concurrent CLI+server use", kind="learning")` and keeps `update_active(...)` current.
-4. **Before a commit** — `check_drift()` (or `torsor guard`) flags changes that violate ADR rules; `check_dependencies()` (or `torsor deps`) flags imports that resolve to no known package.
+4. **Before a commit** — `verify()` (or `torsor verify`) is one verdict over ADR rules, hallucinated imports and stale memory; `check_dependencies()` (or `torsor deps`) alone, right after adding imports.
 5. **Session end** — `handoff(summary=..., next_steps=...)` writes the note the next session resumes from. This is the single highest-value habit.
 6. **Weekly-ish** — `torsor coach` for recommendations, `torsor clean` to see what has become dead weight.
 
@@ -123,7 +123,7 @@ torsor impact format_date  # blast radius: every caller, AND every decision that
 torsor connect handle_request save_order   # shortest call-graph path between two symbols
 ```
 
-- `get_intent(topic)` (MCP) combines architecture notes with relevant existing symbols — call it before building a feature.
+- `bootstrap_session(topic=...)` (MCP) combines architecture notes with relevant existing symbols — call it before building a feature.
 - Run `torsor impact <symbol>` **before letting an agent rename/regenerate a function** — one regenerated symbol silently breaking far-off callers is a classic agent failure.
 - `impact` answers both halves of that question. Alongside the callers it lists the decisions, learnings and handoffs that name the symbol in backticks — so the recorded reason a function looks the way it does arrives *with* the list of what breaks, instead of being rediscovered afterwards. The two are independent: a symbol nothing calls can still be the one the team argued about.
 - `torsor recall <query> --symbol <name>` narrows memory to what was written down about one function or class.
@@ -200,27 +200,21 @@ recall without an agent attached.
 
 | Tool | When the agent should call it |
 |---|---|
-| `bootstrap_session()` | First thing, every session |
+| `bootstrap_session(topic?)` | First thing, every session; with a topic, before building a feature — the architecture, decisions and existing symbols around it |
 | `get_rules()` | Once per session if rules aren't already in the prompt file |
 | `recall(query, limit?)` | Before assuming; "have we decided X?" |
 | `remember(content, kind?, links?)` | After a decision, gotcha, or finished chunk |
 | `update_active(focus, progress, open_questions)` | When the working focus shifts |
 | `handoff(summary, decisions?, open_questions?, next_steps?)` | End of session |
-| `get_intent(topic?)` | Before building a feature |
-| `map_repo(force?)` / `impact(symbol)` | After big changes / before touching a shared symbol |
+| `map_repo(force?)` / `impact(symbol, limit?, to?)` | After big changes / before touching a shared symbol; `to` traces "how does X reach Y?" |
 | `record_decision(title, context, decision, consequences?, rules?, supersedes?)` | On load-bearing choices |
-| `get_primer(max_tokens?)` | Orientation without exploration, if the primer isn't already in the prompt file |
-| `check_drift(files?, as_json?, new_only?)` | Before commits |
 | `check_dependencies(files?)` | After adding imports |
 | `recommend()` | Periodically — the Coach's ranked recommendations |
-| `verify(files?, severity?)` | As a completion check — one JSON verdict over guard + deps + staleness |
-| `stale(mark?, unmark?)` | When memory may have drifted from the code |
-| `connect(source, target, max_hops?)` | "How does X reach Y?" before a refactor |
-| `stats()` | How big the memory is, what is recalled, whether the map is current |
-| `clean(apply?, deep?)` | Housekeeping; dry run unless `apply` |
+| `verify(files?, severity?)` | Before a commit and as a completion check — one JSON verdict over guard + deps + staleness |
 | `record_command(name, command, note?)` / `list_commands()` | So no session re-derives how to test or build |
 | `dismiss_recommendation(key)` | Stop showing a Coach recommendation |
-| `hooks_status()` | Which auto-capture hooks are installed (read-only; installing is CLI-only) |
+
+Housekeeping and operator information — `torsor stats`, `torsor clean`, `torsor stale --mark`, `torsor hooks status`, `torsor connect`, `torsor intent`, `torsor primer` — are CLI-only. Fifteen tools in the agent's list, each a distinct moment in the loop; the rest is yours.
 
 ### Prompts
 
