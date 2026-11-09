@@ -1,19 +1,36 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import typer
 
-from torsor_helper import db
-from torsor_helper import operations as ops
-from torsor_helper import render
 from torsor_helper.clients import SUPPORTED_CLIENTS, config_location, config_snippet, instructions_file
-from torsor_helper.config import TorsorConfig, load_config, save_config
-from torsor_helper.embeddings import get_embedder
-from torsor_helper.indexer import reindex
-from torsor_helper.paths import TorsorPaths
-from torsor_helper.store import Store
+
+if TYPE_CHECKING:
+    from torsor_helper import db, render
+    from torsor_helper import operations as ops
+else:
+    class _Lazy:
+        """A module imported on first attribute access.
+
+        `torsor --help` and the PreToolUse guard hook run dozens of times per
+        session, and the hook fires on every Edit. With the core imported at
+        module scope, each of those paid for numpy, the pydantic models and every
+        operations submodule before doing anything (tests/test_import_budget.py
+        pins what each entry point may load). The commands keep saying `ops.x`;
+        mypy sees the real modules through the TYPE_CHECKING branch."""
+
+        def __init__(self, name: str) -> None:
+            self._name = name
+
+        def __getattr__(self, attr: str):
+            return getattr(importlib.import_module(self._name), attr)
+
+    db = _Lazy("torsor_helper.db")
+    ops = _Lazy("torsor_helper.operations")
+    render = _Lazy("torsor_helper.render")
 
 app = typer.Typer(help="torsor-helper: persistent memory + architectural intent over MCP.")
 
@@ -58,6 +75,10 @@ def _load(root: Path, *, config: bool = True):
     `config=False` keeps the two commands that never read torsor.toml working on
     a project whose config is malformed — they have no reason to care.
     """
+    from torsor_helper.config import load_config
+    from torsor_helper.paths import TorsorPaths
+    from torsor_helper.store import Store
+
     tp = TorsorPaths(root)
     if not tp.base.exists():
         typer.echo("torsor-helper not initialized here (run `torsor init`).", err=True)
@@ -72,6 +93,8 @@ def _config_best_effort(tp):
     you writing memory down — but the Store still wants the settings that shape
     Markdown I/O (journal layout, project-doc sources), so they are read on their
     own and degrade to the defaults."""
+    from torsor_helper.config import load_config
+
     try:
         return load_config(tp)
     except (OSError, ValueError):
@@ -111,6 +134,10 @@ def init(
     force: bool = typer.Option(False, help="Overwrite existing seed files."),
 ) -> None:
     """Scaffold the .torsor/ pyramid and write torsor.toml."""
+    from torsor_helper.config import TorsorConfig, save_config
+    from torsor_helper.paths import TorsorPaths
+    from torsor_helper.store import Store
+
     paths = TorsorPaths(root)
     # Validate input before any filesystem side effects.
     if client and client not in SUPPORTED_CLIENTS:
@@ -150,6 +177,10 @@ def doctor(
     """Check whether this project is healthy — and whether the parts that fail
     quietly are working: a stale index, semantic recall silently on the hashing
     fallback, hooks that were never installed, an ADR rule that does not parse."""
+    from torsor_helper.config import load_config
+    from torsor_helper.paths import TorsorPaths
+    from torsor_helper.store import Store
+
     paths = TorsorPaths(root)
     checks: list[dict] = []
 
@@ -406,6 +437,9 @@ def index(
     full: bool = typer.Option(False, help="Rebuild every note's embedding, ignoring the hash cache."),
 ) -> None:
     """Build or refresh the derived search index."""
+    from torsor_helper.embeddings import get_embedder
+    from torsor_helper.indexer import reindex
+
     paths, config, store = _load(root)
     conn = db.connect(paths.index_db)
     try:
@@ -855,6 +889,10 @@ def hooks_run(
 ) -> None:
     """Stable dispatcher the on-disk hook scripts call — so scripts never change
     across upgrades. Best-effort; a missing project just exits 0."""
+    from torsor_helper.config import load_config
+    from torsor_helper.paths import TorsorPaths
+    from torsor_helper.store import Store
+
     tp = TorsorPaths(root)
     if not tp.base.exists():
         return  # nothing to capture; never break the git/agent lifecycle

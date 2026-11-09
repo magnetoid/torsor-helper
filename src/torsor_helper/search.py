@@ -3,8 +3,6 @@ from __future__ import annotations
 import math
 import re
 
-import numpy as np
-
 from torsor_helper import db
 from torsor_helper.budget import hit_cost
 from torsor_helper.indexer import _embedder_identity
@@ -29,6 +27,8 @@ def _unit_vectors(vec_by_path):
     """Pre-normalize once. Cosine between unit vectors is a plain dot product,
     and MMR compares every remaining hit against every selected one — the norms
     were being recomputed on each of those pairs."""
+    import numpy as np  # lazily: see db.py — the hook imports this module without ranking
+
     out = {}
     for path, v in vec_by_path.items():
         n = float(np.linalg.norm(v))
@@ -42,6 +42,8 @@ def _mmr_order(hits, vec_by_path, lam: float):
     duplicate notes don't crowd out distinct ones. mmr = λ·rel − (1−λ)·maxSim.
     No-ops (returns the input order) when fewer than 2 hits have vectors, so the
     keyword/hashing paths are untouched. Deterministic."""
+    import numpy as np
+
     unit = _unit_vectors(vec_by_path)
     if sum(1 for h in hits if h.path in unit) < 2:
         return list(hits)

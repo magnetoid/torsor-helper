@@ -6,6 +6,14 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### ⚡ The CLI loads the core only when a command needs it
+`torsor --help` and the PreToolUse guard hook (which fires on every Edit) imported numpy, the pydantic
+models and every operations submodule before doing anything. `cli.py` now resolves `db`, `ops` and
+`render` on first use and imports config/store/embedder inside the commands that need them; numpy is
+imported inside the three functions that pack or rank a vector. Importing `torsor_helper.cli` went
+from ~615 ms to ~97 ms on the same machine, `--help` loads 335 modules instead of 574, and the edit
+hook no longer loads numpy. `tests/test_import_budget.py` pins what each entry point may load.
+
 ### 🧰 Fifteen MCP tools, one per moment in the loop
 The second pass of ADR 0019. 23 tools → 15, with no operation removed: three ways to "load the project"
 became one tool with a switch, three drift checks became one, the call-path query became a parameter,

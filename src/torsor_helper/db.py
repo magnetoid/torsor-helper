@@ -3,11 +3,17 @@ from __future__ import annotations
 import re
 import sqlite3
 from pathlib import Path
-from typing import Sequence
-
-import numpy as np
+from typing import TYPE_CHECKING, Sequence
 
 from torsor_helper.models import Symbol, SymbolEdge
+
+if TYPE_CHECKING:
+    import numpy as np
+
+# numpy is imported inside the three functions that touch a vector, not here:
+# the PreToolUse hook and `torsor --help` import this module without ever
+# ranking one, and numpy is the single most expensive import in the process
+# (tests/test_import_budget.py).
 
 SCHEMA_VERSION = 9
 
@@ -139,6 +145,8 @@ def pack(vec: Sequence[float]) -> bytes:
     """Store L2-normalized, so cosine similarity at query time is a plain dot
     product and the whole table can be multiplied at once. A zero vector stays
     zero and scores 0 against everything, which is what it meant before."""
+    import numpy as np
+
     arr = np.asarray(list(vec), dtype=np.float32)
     norm = float(np.linalg.norm(arr))
     if norm > 0.0:
@@ -147,6 +155,8 @@ def pack(vec: Sequence[float]) -> bytes:
 
 
 def unpack(blob: bytes) -> np.ndarray:
+    import numpy as np
+
     return np.frombuffer(blob, dtype=np.float32)
 
 
@@ -395,6 +405,8 @@ def cosine_search(conn, qvec, limit):
     unpacked, normalized and dotted each row: the vectors are stored normalized
     (see pack), and `dim` filters out any left over from a different embedder,
     so the blobs concatenate safely."""
+    import numpy as np
+
     q = np.asarray(list(qvec), dtype=np.float32)
     qn = float(np.linalg.norm(q))
     if qn == 0.0:
