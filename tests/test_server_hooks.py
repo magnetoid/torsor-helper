@@ -3,10 +3,12 @@ import anyio
 from torsor_helper.server import build_server
 
 
-def test_hooks_status_is_registered(tmp_path):
+def test_hooks_have_no_mcp_surface_at_all(tmp_path):
+    # hooks_status was the one read-only hooks tool; it is operator information
+    # (`torsor hooks status`, `torsor doctor`) that an agent never acts on.
     tools = anyio.run(build_server(tmp_path).list_tools)
     names = {t.name for t in tools}
-    assert "hooks_status" in names
+    assert "hooks_status" not in names
 
 
 def test_install_uninstall_are_not_mcp_tools(tmp_path):

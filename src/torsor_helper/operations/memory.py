@@ -70,8 +70,8 @@ def bootstrap_session(store: Store, config: TorsorConfig, *, max_tokens: int | N
     return truncate_to_tokens("\n\n".join(sections), total, cpt)
 
 _SESSION_START_HEADER = (
-    "torsor: project memory, {when}. Do NOT call bootstrap_session() — this is it; "
-    "reach for recall() / get_intent() / impact() when you need more than this digest.\n\n"
+    "torsor: project memory, {when}. Do NOT call bootstrap_session() bare — this is it; "
+    "reach for recall(query) / bootstrap_session(topic) / impact(symbol) when you need more than this digest.\n\n"
 )
 
 def session_start_context(store: Store, config: TorsorConfig, *, how: str = "startup") -> str | None:

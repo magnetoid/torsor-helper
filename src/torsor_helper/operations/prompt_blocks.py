@@ -158,9 +158,9 @@ _PRIMER_START = "<!-- torsor:primer -->"
 _PRIMER_END = "<!-- /torsor:primer -->"
 
 _TOKEN_PLAYBOOK = """### Work token-efficiently
-- Call `bootstrap_session()` ONCE at session start — never re-call it mid-session. (Skip it entirely when torsor's SessionStart hook already injected the digest.)
-- Before reading files to "understand the project", try `recall(query)` / `get_intent(topic)` — prior decisions and the symbol map are already indexed.
-- Use `impact(symbol)` instead of repo-wide grep to find callers.
+- Call `bootstrap_session()` with no topic ONCE at session start — never re-call it bare mid-session. (Skip it entirely when torsor's SessionStart hook already injected the digest.)
+- Before reading files to "understand the project", try `recall(query)` / `bootstrap_session(topic)` — prior decisions and the symbol map are already indexed, and a topic returns only what is relevant to it.
+- Use `impact(symbol)` instead of repo-wide grep to find callers; `impact(symbol, to=...)` for "how does X reach Y?".
 - Don't re-derive what's in this primer; it is current as of the last `torsor primer --write`.
 - `remember()` decisions and `handoff()` at session end so the next session skips rediscovery entirely."""
 

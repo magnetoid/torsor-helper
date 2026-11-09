@@ -35,6 +35,12 @@ op-frequency log, the model-routing policy, and the Coach modules `coupling`, `t
 detection is withdrawn). The client registry keeps Claude Code, Cursor, Codex, VS Code, Gemini and a
 generic `other`.
 
+**Second pass (2026-11-07): the MCP surface is fifteen tools.** Three ways to load the project became
+`bootstrap_session(topic=)`; `check_drift` and `stale` folded into `verify`; `connect` became
+`impact(to=)`; and `stats`, `clean` and `hooks_status` left the agent-facing surface for the CLI, where
+the operator already was. Every operation still exists and the CLI still exposes it. The test
+`tests/test_tool_folds.py` pins the list, so adding a tool is a deliberate act.
+
 ## Consequences
 - Fewer tools in every session's tool list, and no feature that is inert without a team or a hook.
 - A feature comes back only with evidence a solo developer reached for it; "an agent might" is not evidence.

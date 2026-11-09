@@ -83,7 +83,7 @@ def client(tmp_path):
 def test_the_server_introduces_itself(client):
     reply = client.send("tools/list")
     names = {t["name"] for t in reply["result"]["tools"]}
-    assert {"recall", "remember", "bootstrap_session", "verify", "stats"} <= names
+    assert {"recall", "remember", "bootstrap_session", "verify", "impact"} <= names
 
 
 def test_a_tool_call_round_trips(client):

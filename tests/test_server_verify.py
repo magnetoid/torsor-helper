@@ -5,10 +5,10 @@ import anyio
 from torsor_helper.server import build_server
 
 
-def test_verify_and_stale_are_registered(tmp_path):
+def test_verify_is_registered_and_stale_is_not(tmp_path):
     tools = anyio.run(build_server(tmp_path).list_tools)
     names = {t.name for t in tools}
-    assert {"verify", "stale"} <= names
+    assert "verify" in names and "stale" not in names  # staleness is one of verify's checks
 
 
 def test_verify_tool_returns_json_verdict(tmp_path):

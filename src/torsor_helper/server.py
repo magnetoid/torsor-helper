@@ -55,8 +55,10 @@ def build_server(root: Path | str) -> MCPServer:
         return mcp.tool(structured_output=False)(wrapper)
 
     @tool
-    def bootstrap_session() -> str:
-        """Return a budgeted summary of the whole pyramid for session start."""
+    def bootstrap_session(topic: str = "") -> str:
+        """Load the project. No topic: a budgeted summary of the whole pyramid — call once at session start. With a topic ("payments", "auth"): the architecture, decisions and existing symbols relevant to it — call before building something, so you extend what exists instead of duplicating it."""
+        if topic:
+            return ops.get_intent(store, config, topic)
         return ops.bootstrap_session(store, config)
 
     @tool
@@ -87,20 +89,6 @@ def build_server(root: Path | str) -> MCPServer:
         return ops.record_handoff(store, summary, decisions, open_questions, next_steps)
 
     @tool
-    def clean(apply: bool = False, deep: bool = False) -> str:
-        """Reclaim orphaned map notes and dead index rows. Dry run unless apply. Never deletes journals — that is `torsor clean --expire-journals`, from the CLI only."""
-        stats = ops.clean(store, config, apply=apply, deep=deep)
-        verb = "Removed" if apply else "Would remove"
-        summary = (
-            f"{verb} {stats['map_orphans']} orphaned map note(s), "
-            f"{stats['journals_expired']} expired journal(s), "
-            f"{stats['dead_rows']} dead index row(s); {stats['reclaimed_bytes']} byte(s)."
-        )
-        if stats["dry_run"]:
-            summary += " Nothing deleted — call again with apply=true to act on this plan."
-        return "\n".join([*stats["notes"], summary])
-
-    @tool
     def map_repo(paths: list[str] | None = None, force: bool = False) -> str:
         """(Re)generate the repository symbol map and refresh the symbol inventory. Skips when unchanged unless force."""
         stats = ops.map_repo(store, config, paths, force=force)
@@ -112,8 +100,14 @@ def build_server(root: Path | str) -> MCPServer:
         )
 
     @tool
-    def impact(symbol: str, limit: int = config.budgets.max_items) -> str:
-        """Blast radius of a symbol before you change it: which functions/files reference it, AND which decisions and learnings mention it — so you see the recorded intent before you break it (run map_repo first). The reported counts are the true totals; raise limit to list more."""
+    def impact(symbol: str, limit: int = config.budgets.max_items, to: str | None = None) -> str:
+        """Blast radius of a symbol before you change it: which functions/files reference it, AND which decisions and learnings mention it — so you see the recorded intent before you break it (run map_repo first). The reported counts are the true totals; raise limit to list more. With `to`, instead trace the shortest call path from symbol to `to` ("how does X reach Y?")."""
+        if to:
+            res = ops.connect(store, config, symbol, to)
+            if not res["found"]:
+                return (f"No call path from {symbol!r} to {to!r} "
+                        "(directed; run map_repo to refresh the symbol graph).")
+            return f"{res['hops']} hop(s) from {symbol!r} to {to!r}:\n{render.call_path(res['path'])}"
         res = ops.impact(store, config, symbol, limit=limit)
         if res["count"] == 0 and not res["mentions"]:
             return f"No references to {symbol!r} found (run map_repo to refresh the symbol graph)."
@@ -132,23 +126,6 @@ def build_server(root: Path | str) -> MCPServer:
                 block += f"\n… +{hidden} more (raise limit to list them)"
             blocks.append(block)
         return "\n\n".join(blocks)
-
-    @tool
-    def connect(source: str, target: str, max_hops: int = config.index.connect_max_hops) -> str:
-        """Trace the shortest directed call-graph path from one symbol to another ("how does X reach Y?") — who-calls-what across files (run map_repo first)."""
-        res = ops.connect(store, config, source, target, max_hops=max_hops)
-        if not res["found"]:
-            return (
-                f"No call path from {source!r} to {target!r} "
-                f"(directed; run map_repo to refresh the symbol graph)."
-            )
-        chain = render.call_path(res["path"])
-        return f"{res['hops']} hop(s) from {source!r} to {target!r}:\n{chain}"
-
-    @tool
-    def get_intent(topic: str = "") -> str:
-        """Surface the architecture (patterns, tech, ADRs) and symbols relevant to a topic."""
-        return ops.get_intent(store, config, topic or None)
 
     @tool
     def get_rules() -> str:
@@ -173,31 +150,10 @@ def build_server(root: Path | str) -> MCPServer:
         return "\n".join([*lines, tail] if tail else lines)
 
     @tool
-    def get_primer(max_tokens: int = config.budgets.primer_tokens) -> str:
-        """Token-saver: a budgeted project primer (charter + architecture + repo map + token-efficient tool habits). Load once instead of exploring; `torsor primer --write AGENTS.md` makes it free."""
-        return ops.project_primer(store, config, max_tokens=max_tokens)
-
-    @tool
     def record_decision(title: str, context: str, decision: str, consequences: str = "", rules: list[dict] | None = None, supersedes: str | None = None) -> str:
         """Record an Architecture Decision Record. Optional `rules` become drift-guard rules; `supersedes` (an ADR id/slug) marks a prior ADR superseded."""
         path = ops.record_decision(store, title, context, decision, consequences, rules, supersedes)
         return f"Recorded {path}"
-
-    @tool
-    def check_drift(files: list[str] | None = None, as_json: bool = False, new_only: bool = False) -> str:
-        """Flag changes that violate declared architectural intent (ADR rules). Defaults to git-changed files. as_json for machine-readable findings; new_only to exclude baselined (grandfathered) debt."""
-        violations = ops.new_drift(store, config, files) if new_only else ops.check_drift(store, config, files)
-        if as_json:
-            import json
-
-            return json.dumps([v.model_dump() for v in violations])
-        if not violations:
-            return "No drift from declared intent detected."
-        # as_json above is the machine-readable contract and stays whole; this
-        # prose path lands in the agent's context, so it is capped.
-        kept, tail = cap_items(violations, config.budgets.max_items, more="as_json=true for all")
-        lines = [f"- {render.violation(v)}" for v in kept]
-        return f"{len(violations)} drift violation(s):\n" + "\n".join([*lines, tail] if tail else lines)
 
     @tool
     def check_dependencies(files: list[str] | None = None, as_json: bool = False) -> str:
@@ -234,31 +190,6 @@ def build_server(root: Path | str) -> MCPServer:
         return json.dumps(ops.verify(store, config, files, severity=severity))
 
     @tool
-    def stale(mark: bool = False, unmark: bool = False) -> str:
-        """Flag memory that contradicts current code: dangling [[wikilinks]] and dead
-        file-path references. Read-only unless mark=True, which sets status: stale
-        on the offending notes (reversible; the body is untouched)."""
-        if mark and unmark:
-            return "mark and unmark are opposites; pass one."
-        result = ops.check_staleness(store, config, mark=mark, unmark=unmark)
-        findings = result["findings"]
-        if not findings:
-            return "No staleness detected — memory matches the code."
-        kept, tail = cap_items(findings, config.budgets.max_items)
-        lines = [f"- {render.staleness(r)}" for r in kept]
-        out = f"{len(findings)} staleness finding(s):\n" + "\n".join([*lines, tail] if tail else lines)
-        if result["marked"]:
-            out += f"\n\nMarked {len(result['marked'])} note(s) status: stale."
-        return out
-
-    @tool
-    def stats() -> str:
-        """How big this project's memory is, what gets recalled most, and whether the symbol map is current. Read-only."""
-        import json
-
-        return json.dumps(ops.stats(store, config))
-
-    @tool
     def recommend(context: str = "", limit: int = 8) -> str:
         """Health + best-practice recommendations (the Coach). Pass a context (e.g. what you're about to build) for reuse hints."""
         recs = ops.recommend(store, config, context or None, limit=limit)
@@ -271,17 +202,6 @@ def build_server(root: Path | str) -> MCPServer:
         """Stop showing a Coach recommendation. `key` is the one printed with it. Reversible only by editing .torsor/state/coach_state.json."""
         ops.dismiss_recommendation(store, key)
         return f"Dismissed {key!r}."
-
-    @tool
-    def hooks_status() -> str:
-        """Report which git hooks and Claude Code events carry a torsor auto-capture
-        entry. Read-only — installing and removing hooks is CLI-only (`torsor hooks install`)."""
-        status = ops.hooks_status(store, config)
-        git = "not a git repo" if not status["git_repo"] else ", ".join(
-            f"{name}={'on' if on else 'off'}" for name, on in status["git_hooks"].items()
-        )
-        events = ", ".join(status["claude_events"]) or "none"
-        return f"git hooks: {git}\nclaude events: {events}"
 
     # Prompts: the cheapest surface an MCP client has. Claude Code and Cursor
     # render these as slash-commands, so the loop steps stop depending on the

@@ -117,7 +117,7 @@ def test_doctor_still_exits_one_on_a_broken_project(tmp_path):
     assert result.exit_code == 1
 
 
-def test_the_mcp_surface_gained_stats_and_recall_filters(tmp_path):
+def test_the_mcp_recall_tool_has_filters(tmp_path):
     import anyio
 
     from torsor_helper.server import build_server
@@ -125,6 +125,6 @@ def test_the_mcp_surface_gained_stats_and_recall_filters(tmp_path):
     _project(tmp_path)
     tools = {t.name: t for t in anyio.run(build_server(tmp_path).list_tools)}
 
-    assert "stats" in tools
+    assert "stats" not in tools  # operator information: `torsor stats`
     recall_args = set(tools["recall"].input_schema.get("properties") or {})
     assert {"type", "kind", "include_superseded"} <= recall_args

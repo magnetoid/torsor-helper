@@ -6,6 +6,22 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🧰 Fifteen MCP tools, one per moment in the loop
+The second pass of ADR 0019. 23 tools → 15, with no operation removed: three ways to "load the project"
+became one tool with a switch, three drift checks became one, the call-path query became a parameter,
+and the operator actions left the agent's tool list for the CLI, where the operator already was.
+
+- `bootstrap_session(topic="")` — no topic: the session-start digest as before; with a topic: what
+  `get_intent(topic)` returned. `get_intent` and `get_primer` are gone from MCP (`torsor intent`,
+  `torsor primer --write` remain).
+- `impact(symbol, limit, to=None)` — with `to`, the shortest call path from `symbol` to `to`; `connect`
+  is gone from MCP (`torsor connect` remains).
+- `verify(files, severity)` is the one drift check: `check_drift` and `stale` are gone from MCP (`torsor
+  guard`, `torsor stale --mark` remain; staleness was already one of verify's three checks).
+- `stats`, `clean` and `hooks_status` are CLI-only (`torsor stats`, `torsor clean`, `torsor hooks status`).
+
+The `tools/list` the agent reads every session is a quarter smaller (10.3 KB → 7.8 KB on a fresh project). `tests/test_tool_folds.py` pins the fifteen.
+
 ### 🔌 MCP Python SDK 2.x
 `mcp>=1.2,<2` → `mcp>=2.0,<3`. 1.x is in maintenance mode and 2.0 renamed `FastMCP` to `MCPServer`, so
 anything else in the same environment that pulled `mcp` 2.x could not be installed next to torsor. The

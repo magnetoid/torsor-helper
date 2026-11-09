@@ -14,7 +14,7 @@ This guide is the practical "how do I actually use it while coding" walkthrough.
 |---|---|---|
 | New chat starts from zero; long chats forget mid-stream | You re-explain the project every session | `bootstrap_session` + the committed pyramid + `handoff` |
 | You switch between Claude Code, Codex and Cursor | Each has its own memory, on this machine only | `.torsor/` is in the repo — one memory, every agent, every clone |
-| Agent rebuilds a helper you already have | Duplicated, divergent code | `recall` / `get_intent` before building |
+| Agent rebuilds a helper you already have | Duplicated, divergent code | `recall` / `bootstrap_session(topic)` before building |
 | Agent silently breaks the architecture you set | Bugs, layering rot, rejected patterns return | ADR rules + `guard` — as a hook on every edit, `--strict` in CI |
 | Agent renames/regenerates a function used elsewhere | Far-off callers break | `impact <symbol>` shows the blast radius first |
 | Agent imports a package that doesn't exist | Supply-chain risk ("slopsquatting") | `deps` — offline check |
@@ -52,7 +52,7 @@ git add .torsor && git commit -m "Add project memory"
 Five habits. The agent does most of them via MCP tools; you can run any of them from the CLI.
 
 1. **Start the session →** the agent calls `bootstrap_session()` — a budgeted summary of charter → architecture → active state → recent memory + a short Coach nudge. No blank-slate start.
-2. **Before building →** `recall("how does auth work here?")` and `get_intent("payments")` surface prior decisions and existing symbols, so the agent *extends* instead of *duplicating*.
+2. **Before building →** `recall("how does auth work here?")` and `bootstrap_session(topic="payments")` surface prior decisions and existing symbols, so the agent *extends* instead of *duplicating*.
 3. **Before changing a shared function →** `impact("charge_card")` lists every caller across files. One regenerated symbol silently breaking callers is the classic vibe-coding bug; this prevents it.
 4. **Before committing →** `torsor guard` flags anything that violates your ADR rules; `torsor deps` flags hallucinated imports. With hooks installed, the guard already ran against each proposed edit *before* it landed. Wire `torsor guard --strict` into CI to fail only on *new* drift.
 5. **End the session →** `handoff(summary=…, next_steps=…)` writes the note the next session resumes from. **This is the single highest-value habit** — it's what makes tomorrow's session continue instead of restart.
@@ -68,9 +68,9 @@ torsor primer --client claude-code   # adds the project primer + token-efficienc
 torsor rules  --client claude-code   # adds the standing rules
 ```
 
-The primer already includes habits like *"call `bootstrap_session()` once at session start; `recall`/`get_intent` before reading files; `impact` instead of repo-wide grep; `handoff()` at session end."* Add a line of your own to CLAUDE.md/AGENTS.md if you want it stricter, e.g.:
+The primer already includes habits like *"call `bootstrap_session()` once at session start; `recall`/`bootstrap_session(topic)` before reading files; `impact` instead of repo-wide grep; `handoff()` at session end."* Add a line of your own to CLAUDE.md/AGENTS.md if you want it stricter, e.g.:
 
-> Always call `bootstrap_session()` at the start of a session and `handoff()` before you stop. Before writing a new function, `recall`/`get_intent` to check it doesn't already exist.
+> Always call `bootstrap_session()` at the start of a session and `handoff()` before you stop. Before writing a new function, `recall`/`bootstrap_session(topic)` to check it doesn't already exist.
 
 ## Greenfield vs existing repo
 
@@ -101,7 +101,7 @@ Two levers, both local, both zero tool-call cost once set up:
 > **You:** "Add rate limiting to the payments endpoint."
 
 1. Agent calls `bootstrap_session()` → already knows this is a FastAPI app, that the domain layer must not import the web layer (ADR 0002), and that last session added the `payments` router.
-2. Agent calls `get_intent("rate limit")` → finds you already have `app/util/throttle.py`. It reuses it instead of writing a new limiter.
+2. Agent calls `bootstrap_session(topic="rate limit")` → finds you already have `app/util/throttle.py`. It reuses it instead of writing a new limiter.
 3. Agent edits `payments.py`. Before regenerating `charge()`, it calls `impact("charge")` → sees 3 callers in `billing/` and adjusts them too. The edit-gate hook checks each Write against ADR 0002 as it happens.
 4. You ask it to commit. `torsor guard` runs → clean (no layering violation). `torsor deps` → the `slowapi` import it added is real and declared.
 5. Agent calls `remember("payments uses slowapi limiter via app/util/throttle", kind="learning")` and `handoff(summary="added rate limiting to /payments", next_steps="add tests for the 429 path")`.
@@ -114,9 +114,9 @@ Next session, `bootstrap_session()` surfaces that handoff — the agent picks up
 
 **Where does my data live? Is it safe?** In `.torsor/` as plain Markdown you own and commit to git. Nothing leaves your machine. The SQLite index under `.torsor/.index/` is derived and git-ignored.
 
-**Does it slow the agent down?** The opposite — one `recall`/`get_intent` call replaces re-reading many files. `torsor map` skips entirely when nothing changed; recall reindexes incrementally.
+**Does it slow the agent down?** The opposite — one `recall`/`bootstrap_session(topic)` call replaces re-reading many files. `torsor map` skips entirely when nothing changed; recall reindexes incrementally.
 
-**How does it actually save tokens?** Three ways: (1) the primer/rules sit in the prompt file, so the agent doesn't spend tool calls rediscovering them; (2) one exact-answer lookup (`recall`, `impact`, `get_intent`) replaces exploratory file-reading; (3) the command book means no session re-derives how to test or build.
+**How does it actually save tokens?** Three ways: (1) the primer/rules sit in the prompt file, so the agent doesn't spend tool calls rediscovering them; (2) one exact-answer lookup (`recall`, `impact`, `bootstrap_session(topic)`) replaces exploratory file-reading; (3) the command book means no session re-derives how to test or build.
 
 **My index looks stale / broke.** Delete `.torsor/.index/` and run `torsor index` (or just let the next `recall` rebuild it). It's always disposable; Markdown is the source of truth.
 

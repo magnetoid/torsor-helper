@@ -50,9 +50,9 @@ def test_clean_requires_init(tmp_path):
     assert "not initialized" in result.output.lower()
 
 
-def test_server_registers_clean_tool(tmp_path):
+def test_clean_is_not_an_mcp_tool(tmp_path):
     names = {t.name for t in anyio.run(build_server(tmp_path).list_tools)}
-    assert "clean" in names
+    assert "clean" not in names  # deletion is operator-only: `torsor clean`
 
 
 def test_expiring_journals_takes_its_own_flag(tmp_path):
@@ -79,11 +79,3 @@ def test_expiring_journals_takes_its_own_flag(tmp_path):
     gone = runner.invoke(app, ["clean", "--apply", "--expire-journals", "--root", str(tmp_path)])
     assert gone.exit_code == 0, gone.output
     assert not journal.exists()
-
-
-def test_the_mcp_clean_tool_cannot_expire_journals(tmp_path):
-    # Deleting the only copy of what was remembered is an operator decision,
-    # like the hook installers (ADR 0009): the agent-facing tool has no way to ask.
-    runner.invoke(app, ["init", "--root", str(tmp_path)])
-    tools = {t.name: t for t in anyio.run(build_server(tmp_path).list_tools)}
-    assert set(tools["clean"].input_schema.get("properties") or {}) == {"apply", "deep"}

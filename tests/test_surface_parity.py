@@ -54,10 +54,10 @@ def test_the_option_reader_can_actually_see_options():
 
 
 @pytest.mark.parametrize("tool, cli, shared", [
-    ("stale", "stale", {"mark", "unmark"}),
+    ("verify", "verify", {"severity"}),
     ("recall", "recall", {"limit", "kind"}),
     ("map_repo", "map", {"force"}),
-    ("check_drift", "guard", {"new_only"}),
+    ("impact", "impact", {"limit"}),
     ("recommend", "coach", {"limit"}),
 ])
 def test_a_feature_offers_the_same_controls_on_both_surfaces(tools, tool, cli, shared):
