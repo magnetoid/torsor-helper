@@ -100,3 +100,33 @@ def test_the_cli_installs_its_warning_format(tmp_path, monkeypatch):
     monkeypatch.setattr(warnings, "showwarning", warnings.showwarning)  # restore after the test
     runner.invoke(app, ["stats", "--root", str(tmp_path)])
     assert warnings.showwarning is cli._show_warning
+
+
+def test_a_progress_only_update_leaves_the_active_context_note_untouched(tmp_path):
+    # Codex on PR #26: reconstructing active-context from two sections dropped
+    # anything else in it, e.g. the template's "Recent changes".
+    store = _store(tmp_path)
+    path = store.paths.active_context
+    path.write_text(
+        "---\ntype: active-context\ntags: [active]\n---\n\n# Active Context\n\n## Current focus\nship\n\n"
+        "## Recent changes\nmerged #24\n\n## Open questions\nCI?\n",
+        encoding="utf-8",
+    )
+    before = path.read_text(encoding="utf-8")
+    ops.update_active(store, progress="half way")
+    assert path.read_text(encoding="utf-8") == before
+
+
+def test_updating_one_section_keeps_the_sections_it_does_not_know(tmp_path):
+    store = _store(tmp_path)
+    store.paths.active_context.write_text(
+        "---\ntype: active-context\ntags: [active]\n---\n\n# Active Context\n\n## Current focus\nship\n\n"
+        "## Recent changes\nmerged #24\n\n## Open questions\nCI?\n",
+        encoding="utf-8",
+    )
+    ops.update_active(store, focus="tag v0.9.0")
+    body = store.read_note(store.paths.active_context).body
+    assert "## Current focus\ntag v0.9.0\n" in body
+    assert "## Recent changes\nmerged #24" in body
+    assert "## Open questions\nCI?" in body
+    assert "ship" not in body
