@@ -91,9 +91,15 @@ def check_path_refs(store: Store) -> list[Recommendation]:
     High-precision by construction: only paths written in an inline `code` span
     are checked — illustrative example paths in prose are conventionally in
     "double quotes", and real references in `backticks`. Paths need a `/` (bare
-    filenames are too ambiguous); fenced blocks and URLs are stripped first."""
+    filenames are too ambiguous); fenced blocks and URLs are stripped first.
+
+    MAP notes are skipped like the link checks above: they are rendered from
+    docstrings, where `dist/entry.js` is a build artefact and `src/foo.ts` an
+    example, and a note whose own module is gone is `torsor clean`'s orphan."""
     out: list[Recommendation] = []
     for note in store.iter_notes():
+        if note.tier is Tier.MAP:
+            continue
         rel = _rel(store, note.path)
         body = _FENCE_RE.sub("", note.body)
         seen: set[str] = set()

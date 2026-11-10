@@ -5,6 +5,8 @@ lands in context (see budget.py) — these are the paths an agent pays for on
 every single session, so an overrun here is the most expensive kind."""
 from __future__ import annotations
 
+import re
+
 from torsor_helper import db, templates
 from torsor_helper.budget import cap_items, estimate_tokens, truncate_to_tokens
 from torsor_helper.coach import report as coach_report
@@ -165,19 +167,45 @@ def remember(store: Store, content: str, kind: str = "observation", links: list[
     path = store.append_journal(content, kind=kind, links=links or [])
     return str(path)
 
-def update_active(store: Store, focus: str, progress: str, open_questions: str) -> None:
+_ACTIVE_SECTION = {
+    "focus": re.compile(r"## Current focus\n(.*?)(?:\n## |\Z)", re.S),
+    "open_questions": re.compile(r"## Open questions\n(.*?)(?:\n## |\Z)", re.S),
+}
+
+
+def _current_active(store: Store) -> dict[str, str]:
+    """The sections of active-context.md as they stand; "" for a missing or
+    still-seeded file, so a partial update never writes template text back."""
+    path = store.paths.active_context
+    if not path.exists() or templates.is_unfilled(store.paths, path):
+        return {"focus": "", "open_questions": ""}
+    body = store.read_note(path).body
+    return {k: (m.group(1).strip() if (m := rx.search(body)) else "") for k, rx in _ACTIVE_SECTION.items()}
+
+
+def update_active(
+    store: Store, focus: str | None = None, progress: str | None = None, open_questions: str | None = None,
+) -> None:
+    """Rewrite the sections given and keep the rest. On janus the MCP tool
+    demanded all three on every call, so an agent that had only finished a task
+    had to restate its focus and open questions or wipe them."""
+    if focus is None or open_questions is None:
+        current = _current_active(store)
+        focus = current["focus"] if focus is None else focus
+        open_questions = current["open_questions"] if open_questions is None else open_questions
     store.write_note(
         store.paths.active_context,
         Frontmatter(type="active-context", tags=["active"]),
         "Active Context",
         f"## Current focus\n{focus}\n\n## Open questions\n{open_questions}\n",
     )
-    store.write_note(
-        store.paths.progress,
-        Frontmatter(type="progress", tags=["active"]),
-        "Progress",
-        f"{progress}\n",
-    )
+    if progress is not None:
+        store.write_note(
+            store.paths.progress,
+            Frontmatter(type="progress", tags=["active"]),
+            "Progress",
+            f"{progress}\n",
+        )
 
 def record_handoff(
     store: Store,

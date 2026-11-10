@@ -78,8 +78,10 @@ def build_server(root: Path | str) -> MCPServer:
         return ops.remember(store, content, kind=kind, links=links)
 
     @tool
-    def update_active(focus: str, progress: str, open_questions: str) -> str:
-        """Update the active working state (current focus, progress, open questions)."""
+    def update_active(focus: str | None = None, progress: str | None = None, open_questions: str | None = None) -> str:
+        """Update the active working state. Pass only the sections that changed (current focus, progress, open questions); the others are kept."""
+        if focus is None and progress is None and open_questions is None:
+            return "nothing to update — pass focus, progress and/or open_questions"
         ops.update_active(store, focus, progress, open_questions)
         return "active context updated"
 

@@ -205,6 +205,22 @@ def impact(store: Store, config: TorsorConfig, symbol: str, *, limit: int | None
             "mentions": kept_mentions, "mentions_count": len(mentions)}
 
 
+def _project_relative(root: Path, path: str) -> str:
+    """A note path as the agent should read it: relative to the project. The
+    index stores the path it was walked with, which is absolute when the root
+    is — on janus every mention line carried a 100-character prefix."""
+    p = Path(path)
+    for base in (root, root.resolve()):
+        try:
+            return p.relative_to(base).as_posix()
+        except ValueError:
+            pass
+    try:
+        return p.resolve().relative_to(root.resolve()).as_posix()
+    except (ValueError, OSError):
+        return path
+
+
 def _mentions(conn, store: Store, symbol: str, base: str) -> list[dict]:
     """Notes naming this symbol, as {path, title, type}. Both the dotted spelling
     and the bare one, because a note may write either."""
@@ -214,11 +230,12 @@ def _mentions(conn, store: Store, symbol: str, base: str) -> list[dict]:
             if path not in paths:
                 paths.append(path)
     rows = db.note_rows(conn, paths)
+    root = Path(store.paths.root)
     out = []
     for path in paths:
         row = rows.get(path) or {}
         out.append({
-            "path": path,
+            "path": _project_relative(root, path),
             "title": row.get("title") or Path(path).stem,
             "type": row.get("type") or "note",
         })

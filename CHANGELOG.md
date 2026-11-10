@@ -6,6 +6,21 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🔧 Fixes from running the trimmed build against a real 5 000-file project
+- **Upgrading no longer breaks every existing project.** ADR 0019 removed `[models]`,
+  `budgets.practices_tokens` and `automation.auto_snapshot_on_commit` — keys `torsor init` itself had
+  written into every `torsor.toml`. The strict loader then rejected the file, so every command, every MCP
+  tool and both hooks failed with "Extra inputs are not permitted". Retired keys are now dropped on load
+  (a typo still fails loudly) and `torsor doctor` names them so you can delete them.
+- **`verify` no longer fails on paths quoted in docstrings.** The stale-path check read generated map
+  notes, where ``dist/entry.js`` is a build artefact and `src/foo.ts` an example; it now skips the MAP
+  tier like the two link checks already did. An orphaned map note stays `torsor clean`'s finding.
+- **`update_active` takes one section at a time** over MCP and on the CLI (`torsor active --progress …`);
+  sections you omit are kept. It used to demand focus, progress and open questions on every call.
+- `impact` mention lines show note paths relative to the project instead of absolute ones.
+- The CLI prints a warning (e.g. the fastembed fallback) as one `warning: …` line, not Python's
+  file:line + source-line block.
+
 ### ⚡ The CLI loads the core only when a command needs it
 `torsor --help` and the PreToolUse guard hook (which fires on every Edit) imported numpy, the pydantic
 models and every operations submodule before doing anything. `cli.py` now resolves `db`, `ops` and
