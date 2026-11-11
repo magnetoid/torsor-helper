@@ -8,7 +8,7 @@
 One small, local-first Python **MCP** server — works with Claude Code, Codex, Cursor, VS Code, Gemini CLI and any other MCP client.
 
 ![CI](https://github.com/magnetoid/torsor-helper/actions/workflows/ci.yml/badge.svg)
-![release](https://img.shields.io/badge/release-v0.8.0-success)
+![release](https://img.shields.io/badge/release-v0.9.0-success)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![protocol](https://img.shields.io/badge/protocol-MCP-7c3aed)

@@ -6,6 +6,8 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+## [0.9.0] — A Small Helper (2026-11-11)
+
 ### 🔧 Fixes from running the trimmed build against a real 5 000-file project
 - **Upgrading no longer breaks every existing project.** ADR 0019 removed `[models]`,
   `budgets.practices_tokens` and `automation.auto_snapshot_on_commit` — keys `torsor init` itself had
