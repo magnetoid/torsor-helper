@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import re
+from operator import mul
 
 from torsor_helper import db
 from torsor_helper.budget import hit_cost
@@ -27,13 +28,11 @@ def _unit_vectors(vec_by_path):
     """Pre-normalize once. Cosine between unit vectors is a plain dot product,
     and MMR compares every remaining hit against every selected one — the norms
     were being recomputed on each of those pairs."""
-    import numpy as np  # lazily: see db.py — the hook imports this module without ranking
-
     out = {}
     for path, v in vec_by_path.items():
-        n = float(np.linalg.norm(v))
+        n = math.sqrt(sum(x * x for x in v))
         if n > 0.0:
-            out[path] = v / n
+            out[path] = [x / n for x in v]
     return out
 
 
@@ -41,9 +40,8 @@ def _mmr_order(hits, vec_by_path, lam: float):
     """Reorder relevance-sorted hits by Maximal Marginal Relevance so near-
     duplicate notes don't crowd out distinct ones. mmr = λ·rel − (1−λ)·maxSim.
     No-ops (returns the input order) when fewer than 2 hits have vectors, so the
-    keyword/hashing paths are untouched. Deterministic."""
-    import numpy as np
-
+    keyword/hashing paths are untouched. Deterministic. Plain Python: the pool
+    is at most a few dozen hits, so there is nothing here for numpy to speed up."""
     unit = _unit_vectors(vec_by_path)
     if sum(1 for h in hits if h.path in unit) < 2:
         return list(hits)
@@ -57,8 +55,8 @@ def _mmr_order(hits, vec_by_path, lam: float):
             v = unit.get(h.path)
             sim = 0.0
             if v is not None:
-                sims = [float(np.dot(v, unit[s.path])) for s in selected
-                        if s.path in unit and unit[s.path].shape == v.shape]
+                sims = [sum(map(mul, v, unit[s.path])) for s in selected
+                        if s.path in unit and len(unit[s.path]) == len(v)]
                 sim = max(sims) if sims else 0.0
             val = lam * rel - (1.0 - lam) * sim
             if best_val is None or val > best_val:

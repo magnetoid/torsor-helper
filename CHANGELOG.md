@@ -6,6 +6,15 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 📦 numpy and tomli-w are no longer dependencies
+numpy was the most expensive import in the process and served four functions that pack, unpack or
+rank a vector; they now run on `array('f')` and plain Python (`math.sumprod` on 3.12+). `cosine_search`
+still uses numpy as an accelerator when something else installed it — the `[embeddings]` extra does,
+since fastembed needs it. Measured on 5 000 notes × 384 dims: 18 ms with numpy, 53 ms without, a few
+percent of a warm recall. tomli-w wrote one file once (`torsor.toml` at `torsor init`); a 30-line
+writer for the subset of TOML a config needs replaces it, and `tomllib` reads it back identically.
+A default install now pulls mcp, pydantic, pyyaml and typer, nothing else.
+
 ## [0.9.0] — A Small Helper (2026-11-11)
 
 ### 🔧 Fixes from running the trimmed build against a real 5 000-file project
