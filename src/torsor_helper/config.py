@@ -207,14 +207,21 @@ def load_config(paths: TorsorPaths) -> TorsorConfig:
     return TorsorConfig.model_validate(data)
 
 
+_TOML_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
+
+
+def _toml_char(ch: str) -> str:
+    # TOML forbids raw control characters inside a basic string; tomli-w escaped them too.
+    return f"\\u{ord(ch):04X}" if ord(ch) < 0x20 or ord(ch) == 0x7F else ch
+
+
 def _toml_value(value: object) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, (int, float)):
         return repr(value)
     if isinstance(value, str):
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
+        return '"' + "".join(_TOML_ESCAPES.get(ch) or _toml_char(ch) for ch in value) + '"'
     if isinstance(value, (list, tuple)):
         return "[" + ", ".join(_toml_value(v) for v in value) + "]"
     raise TypeError(f"cannot write {type(value).__name__} to torsor.toml")

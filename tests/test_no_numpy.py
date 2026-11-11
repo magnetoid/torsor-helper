@@ -113,6 +113,17 @@ def test_save_config_writes_toml_that_tomllib_reads_back_identically(tmp_path):
     assert load_config(paths) == cfg
 
 
+def test_save_config_escapes_control_characters_in_strings(tmp_path):
+    # The model accepts any string; tomli-w escaped these and so must we, or a
+    # valid config saves as a file load_config then rejects.
+    paths = TorsorPaths(tmp_path)
+    cfg = TorsorConfig()
+    cfg.memory.sources = ["docs/line\nbreak.md", "tab\there.md", "back\\slash.md", "bell\x07.md", "del\x7f.md"]
+    save_config(paths, cfg)
+    assert load_config(paths) == cfg
+    assert "\x07" not in paths.config_file.read_text()
+
+
 def test_numpy_and_tomli_w_are_not_required_dependencies():
     import pathlib
     data = tomllib.loads(pathlib.Path("pyproject.toml").read_text())

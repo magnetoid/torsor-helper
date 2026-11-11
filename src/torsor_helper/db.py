@@ -6,7 +6,7 @@ import sqlite3
 from array import array
 from operator import mul
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Iterable, Sequence
 
 from torsor_helper.models import Symbol, SymbolEdge
 
@@ -18,12 +18,13 @@ from torsor_helper.models import Symbol, SymbolEdge
 # that the hook and --help never load it.
 
 
-def _dot(a, b) -> float:
+def _sum_of_products(a: Iterable[float], b: Iterable[float]) -> float:
     return sum(map(mul, a, b))
 
 
-if hasattr(math, "sumprod"):  # 3.12+: the same product-sum in C, ~40 % faster
-    _dot = math.sumprod  # type: ignore[assignment]
+# 3.12+ has the same product-sum in C, ~40 % faster; getattr keeps mypy on 3.11
+# (where the attribute does not exist) from flagging a dead branch.
+_dot: Callable[[Iterable[float], Iterable[float]], float] = getattr(math, "sumprod", _sum_of_products)
 
 
 def _numpy():
