@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+import sys
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -49,6 +51,13 @@ def _resolve_block_target(root: Path, write: Optional[Path], client: Optional[st
     return None
 
 
+def _show_warning(message, category, filename, lineno, file=None, line=None) -> None:
+    """Python's default prints the warning as `path:line: Category: text` plus the
+    source line — torsor's file and code, which mean nothing to the user. One
+    line, the message only."""
+    print(f"warning: {message}", file=file if file is not None else sys.stderr)
+
+
 def _version_callback(value: bool) -> None:
     if value:
         from torsor_helper import __version__
@@ -65,6 +74,7 @@ def _main(
     ),
 ) -> None:
     """torsor-helper: persistent memory + architectural intent over MCP."""
+    warnings.showwarning = _show_warning
 
 
 def _load(root: Path, *, config: bool = True):
@@ -177,7 +187,7 @@ def doctor(
     """Check whether this project is healthy — and whether the parts that fail
     quietly are working: a stale index, semantic recall silently on the hashing
     fallback, hooks that were never installed, an ADR rule that does not parse."""
-    from torsor_helper.config import load_config
+    from torsor_helper.config import load_config, retired_config_keys
     from torsor_helper.paths import TorsorPaths
     from torsor_helper.store import Store
 
@@ -199,7 +209,11 @@ def doctor(
 
     try:
         config = load_config(paths)
-        check("config", True, str(paths.config_file))
+        retired = retired_config_keys(paths)
+        check("config", not retired,
+              str(paths.config_file) if not retired else
+              f"{paths.config_file} has keys from an earlier release, ignored: {', '.join(retired)} "
+              "— delete them", warn=True)
     except Exception as exc:
         check("config", False, f"{paths.config_file}: {exc}")
         _doctor_report(checks, as_json)
@@ -345,11 +359,14 @@ def remember(
 @app.command()
 def active(
     root: Path = typer.Option(Path("."), "--root", "-r", envvar="TORSOR_ROOT", help="Project root containing .torsor/."),
-    focus: str = typer.Option(..., "--focus", help="What you are working on now."),
-    progress: str = typer.Option("", "--progress", help="What is done."),
-    open_questions: str = typer.Option("", "--open-questions", help="What is still unresolved."),
+    focus: Optional[str] = typer.Option(None, "--focus", help="What you are working on now."),
+    progress: Optional[str] = typer.Option(None, "--progress", help="What is done."),
+    open_questions: Optional[str] = typer.Option(None, "--open-questions", help="What is still unresolved."),
 ) -> None:
-    """Update the active working state (current focus, progress, open questions)."""
+    """Update the active working state. Pass only the sections that changed; the others are kept."""
+    if focus is None and progress is None and open_questions is None:
+        typer.echo("Nothing to update — pass --focus, --progress and/or --open-questions.", err=True)
+        raise typer.Exit(code=2)
     _, _, store = _load(root, config=False)
     ops.update_active(store, focus, progress, open_questions)
     typer.echo("Active context updated.")

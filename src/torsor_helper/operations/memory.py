@@ -5,6 +5,8 @@ lands in context (see budget.py) — these are the paths an agent pays for on
 every single session, so an overrun here is the most expensive kind."""
 from __future__ import annotations
 
+import re
+
 from torsor_helper import db, templates
 from torsor_helper.budget import cap_items, estimate_tokens, truncate_to_tokens
 from torsor_helper.coach import report as coach_report
@@ -165,19 +167,44 @@ def remember(store: Store, content: str, kind: str = "observation", links: list[
     path = store.append_journal(content, kind=kind, links=links or [])
     return str(path)
 
-def update_active(store: Store, focus: str, progress: str, open_questions: str) -> None:
-    store.write_note(
-        store.paths.active_context,
-        Frontmatter(type="active-context", tags=["active"]),
-        "Active Context",
-        f"## Current focus\n{focus}\n\n## Open questions\n{open_questions}\n",
-    )
-    store.write_note(
-        store.paths.progress,
-        Frontmatter(type="progress", tags=["active"]),
-        "Progress",
-        f"{progress}\n",
-    )
+_ACTIVE_HEADINGS = {"focus": "## Current focus", "open_questions": "## Open questions"}
+
+
+def _replace_section(body: str, heading: str, content: str) -> str:
+    """`body` with the section under `heading` replaced by `content`, every
+    other section untouched; appended when the heading is absent."""
+    rx = re.compile(rf"({re.escape(heading)}\n)(.*?)(?=\n## |\Z)", re.S)
+    if rx.search(body):
+        return rx.sub(lambda m: f"{m.group(1)}{content}\n", body, count=1)
+    return f"{body.rstrip()}\n\n{heading}\n{content}\n"
+
+
+def update_active(
+    store: Store, focus: str | None = None, progress: str | None = None, open_questions: str | None = None,
+) -> None:
+    """Rewrite only the sections given; everything else in both notes is kept.
+    On janus the MCP tool demanded all three on every call, so an agent that had
+    only finished a task had to restate its focus and open questions or wipe them
+    — and a first fix rebuilt active-context from two sections, dropping its
+    "Recent changes"."""
+    sections = {"focus": focus, "open_questions": open_questions}
+    if any(v is not None for v in sections.values()):
+        path = store.paths.active_context
+        if path.exists() and not templates.is_unfilled(store.paths, path):
+            body = store.read_note(path).body
+        else:
+            body = "## Current focus\n\n\n## Open questions\n\n"
+        for key, value in sections.items():
+            if value is not None:
+                body = _replace_section(body, _ACTIVE_HEADINGS[key], value)
+        store.write_note(path, Frontmatter(type="active-context", tags=["active"]), "Active Context", body)
+    if progress is not None:
+        store.write_note(
+            store.paths.progress,
+            Frontmatter(type="progress", tags=["active"]),
+            "Progress",
+            f"{progress}\n",
+        )
 
 def record_handoff(
     store: Store,

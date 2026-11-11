@@ -116,3 +116,19 @@ def test_dangling_links_still_fires_on_an_authored_note(tmp_path):
     )
 
     assert any("gone" in r.message for r in staleness.check_dangling_links(store))
+
+
+def test_a_path_in_a_generated_map_note_is_not_a_reference(tmp_path):
+    # Map notes are rendered from docstrings. On janus, `_tui_need_rebuild`'s
+    # docstring mentioned ``dist/entry.js`` (a build artefact) and a TS comment
+    # showed `@file:src/foo.ts` as an example; verify FAILed on both. The other
+    # two staleness checks already skip the MAP tier for the same reason, and an
+    # orphaned note (its own module gone) is `torsor clean`'s finding, not drift.
+    store = _store(tmp_path)
+    (store.paths.map_dir / "modules").mkdir(parents=True, exist_ok=True)
+    (store.paths.map_dir / "modules" / "janus_cli__main.py.md").write_text(
+        "---\ntitle: janus_cli/main.py\ntier: map\ntype: module\nsource: janus_cli/main.py\n---\n"
+        "- L1433 `_tui_need_rebuild(root)` — True when `dist/entry.js` is missing.\n",
+        encoding="utf-8",
+    )
+    assert not any(r.kind == "stale_path" for r in staleness.check_path_refs(store))

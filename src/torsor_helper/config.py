@@ -161,11 +161,50 @@ class TorsorConfig(_Strict):
     clean: CleanConfig = Field(default_factory=CleanConfig)
 
 
+# Keys an earlier release wrote into torsor.toml itself (via `torsor init`) and
+# ADR 0019 then removed. The config is strict so a typo fails loudly; these are
+# not typos, they are every existing project's file, so the loader drops them
+# and `torsor doctor` names them. Section "" is the top level.
+RETIRED_KEYS: dict[str, tuple[str, ...]] = {
+    "budgets": ("practices_tokens",),
+    "": ("models",),
+    "automation": ("auto_snapshot_on_commit",),
+}
+
+
+def _strip_retired(data: dict) -> list[str]:
+    """Remove retired keys from a parsed torsor.toml in place; return their
+    dotted names in file order."""
+    removed = []
+    for section, keys in RETIRED_KEYS.items():
+        table = data if section == "" else data.get(section)
+        if not isinstance(table, dict):
+            continue
+        for key in keys:
+            if key in table:
+                del table[key]
+                removed.append(key if section == "" else f"{section}.{key}")
+    return removed
+
+
+def _read_toml(paths: TorsorPaths) -> dict:
+    with paths.config_file.open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def retired_config_keys(paths: TorsorPaths) -> list[str]:
+    """Dotted names of retired keys still present in this project's torsor.toml
+    (for `torsor doctor`); [] when the file is absent or clean."""
+    if not paths.config_file.exists():
+        return []
+    return _strip_retired(_read_toml(paths))
+
+
 def load_config(paths: TorsorPaths) -> TorsorConfig:
     if not paths.config_file.exists():
         return TorsorConfig()
-    with paths.config_file.open("rb") as fh:
-        data = tomllib.load(fh)
+    data = _read_toml(paths)
+    _strip_retired(data)
     return TorsorConfig.model_validate(data)
 
 
