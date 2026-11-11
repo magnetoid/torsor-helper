@@ -1,6 +1,5 @@
 from datetime import datetime
 
-import numpy as np
 
 from torsor_helper import db
 from torsor_helper.config import TorsorConfig
@@ -22,9 +21,9 @@ def _hit(path, score):
 def test_mmr_demotes_near_duplicate():
     hits = [_hit("x", 1.0), _hit("y", 0.9), _hit("z", 0.8)]
     vecs = {
-        "x": np.array([1.0, 0.0, 0.0]),
-        "y": np.array([0.99, 0.01, 0.0]),  # near-duplicate of x
-        "z": np.array([0.0, 1.0, 0.0]),    # distinct, slightly lower relevance
+        "x": ([1.0, 0.0, 0.0]),
+        "y": ([0.99, 0.01, 0.0]),  # near-duplicate of x
+        "z": ([0.0, 1.0, 0.0]),    # distinct, slightly lower relevance
     }
     order = [h.path for h in _mmr_order(hits, vecs, 0.7)]
     assert order[0] == "x"
@@ -33,13 +32,13 @@ def test_mmr_demotes_near_duplicate():
 
 def test_mmr_noop_without_two_vectors():
     hits = [_hit("x", 1.0), _hit("y", 0.9)]
-    order = [h.path for h in _mmr_order(hits, {"x": np.array([1.0, 0.0, 0.0])}, 0.7)]
+    order = [h.path for h in _mmr_order(hits, {"x": ([1.0, 0.0, 0.0])}, 0.7)]
     assert order == ["x", "y"]  # <2 vectors → untouched (keyword/hashing paths safe)
 
 
 def test_mmr_deterministic():
     hits = [_hit("x", 1.0), _hit("y", 0.9), _hit("z", 0.8)]
-    vecs = {"x": np.array([1.0, 0.0, 0.0]), "y": np.array([0.99, 0.01, 0.0]), "z": np.array([0.0, 1.0, 0.0])}
+    vecs = {"x": ([1.0, 0.0, 0.0]), "y": ([0.99, 0.01, 0.0]), "z": ([0.0, 1.0, 0.0])}
     assert [h.path for h in _mmr_order(hits, vecs, 0.7)] == [h.path for h in _mmr_order(hits, vecs, 0.7)]
 
 

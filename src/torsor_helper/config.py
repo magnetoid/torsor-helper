@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import tomllib
 
-import tomli_w
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Literal
 
@@ -208,7 +207,44 @@ def load_config(paths: TorsorPaths) -> TorsorConfig:
     return TorsorConfig.model_validate(data)
 
 
+_TOML_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
+
+
+def _toml_char(ch: str) -> str:
+    # TOML forbids raw control characters inside a basic string; tomli-w escaped them too.
+    return f"\\u{ord(ch):04X}" if ord(ch) < 0x20 or ord(ch) == 0x7F else ch
+
+
+def _toml_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return '"' + "".join(_TOML_ESCAPES.get(ch) or _toml_char(ch) for ch in value) + '"'
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
+    raise TypeError(f"cannot write {type(value).__name__} to torsor.toml")
+
+
+def dumps_toml(data: dict, _prefix: str = "") -> str:
+    """The subset of TOML a TorsorConfig needs: scalars, lists of scalars and
+    nested tables. tomli-w was a dependency for this one file written once at
+    `torsor init`; tomllib reads it back (tests/test_no_numpy.py)."""
+    scalars = {k: v for k, v in data.items() if not isinstance(v, dict)}
+    tables = {k: v for k, v in data.items() if isinstance(v, dict)}
+    out: list[str] = []
+    if _prefix and scalars:
+        out.append(f"[{_prefix}]")
+    out.extend(f"{key} = {_toml_value(value)}" for key, value in scalars.items())
+    for key, table in tables.items():
+        name = f"{_prefix}.{key}" if _prefix else key
+        if out:
+            out.append("")
+        out.append(dumps_toml(table, name).rstrip("\n"))
+    return "\n".join(out) + "\n"
+
+
 def save_config(paths: TorsorPaths, config: TorsorConfig) -> None:
     paths.base.mkdir(parents=True, exist_ok=True)
-    with paths.config_file.open("wb") as fh:
-        tomli_w.dump(config.model_dump(), fh)
+    paths.config_file.write_text(dumps_toml(config.model_dump()), encoding="utf-8")

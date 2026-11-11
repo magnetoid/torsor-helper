@@ -1,4 +1,4 @@
-import numpy as np
+import math
 
 from torsor_helper import db
 
@@ -18,15 +18,14 @@ def test_pack_stores_the_direction_normalized():
     # pack normalizes so cosine similarity is a dot product and the whole
     # vectors table can be multiplied at once (see cosine_search).
     vec = [0.1, -0.2, 0.3]
-    out = db.unpack(db.pack(vec))
-    assert np.isclose(float(np.linalg.norm(out)), 1.0)
-    expected = np.array(vec, dtype=np.float32)
-    assert np.allclose(out, expected / np.linalg.norm(expected), atol=1e-6)
+    out = list(db.unpack(db.pack(vec)))
+    assert math.isclose(math.sqrt(sum(x * x for x in out)), 1.0, abs_tol=1e-6)
+    n = math.sqrt(sum(x * x for x in vec))
+    assert all(math.isclose(a, b / n, abs_tol=1e-6) for a, b in zip(out, vec))
 
 
 def test_pack_leaves_a_zero_vector_alone():
-    out = db.unpack(db.pack([0.0, 0.0, 0.0]))
-    assert np.allclose(out, 0.0)
+    assert list(db.unpack(db.pack([0.0, 0.0, 0.0]))) == [0.0, 0.0, 0.0]
 
 
 def test_upsert_note_and_hashes(tmp_path):

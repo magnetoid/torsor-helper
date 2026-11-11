@@ -27,10 +27,8 @@ dependencies = [
     # <3: 2.0 renamed FastMCP to MCPServer and moved its module — a major is a
     # migration to do deliberately, not one to pick up by resolve.
     "mcp>=2.0,<3",
-    "numpy>=1.26",
     "pydantic>=2.6",
     "pyyaml>=6.0",
-    "tomli-w>=1.0",
     "typer>=0.12",
 ]
 
@@ -89,7 +87,7 @@ markers = [
 
 [tool.mypy]
 # No python_version pin: it makes mypy parse installed stubs under that version,
-# and numpy's use 3.12 syntax. The CI matrix covers the versions instead.
+# and some use 3.12 syntax. The CI matrix covers the versions instead.
 ignore_missing_imports = true      # the tree-sitter grammar wheels ship no stubs
 # Deliberately not --strict: this is a ratchet, not a rewrite. It already found
 # three real bugs at this level (an int parameter rebound to a float, a Typer
