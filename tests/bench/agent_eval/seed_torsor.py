@@ -13,7 +13,15 @@ is not fed the answers:
 - code map: `torsor map`
 - hooks and MCP config: `torsor hooks install --no-git`, `torsor init --write`
 
-Usage: uv run python tests/bench/agent_eval/seed_torsor.py <janus-checkout> [--commits 20]
+An existing `.torsor/` is never deleted: it is moved to `.torsor.real` and
+becomes the source of the charter and active context unless `--source-torsor`
+names another. If `.torsor.real` already exists the seeder stops.
+
+The guard mode is torsor's default, `advise` (the agent sees the finding and
+decides). `--guard-mode block` makes the PreToolUse hook deny the edit instead
+(ADR 0012); the seeded rules carry `severity: error` so that mode has teeth.
+
+Usage: uv run python tests/bench/agent_eval/seed_torsor.py <janus-checkout> [--commits 20] [--guard-mode block]
 """
 from __future__ import annotations
 
@@ -37,9 +45,9 @@ ADRS = [
         ),
         consequences="Existing literals are baselined; the guard reports new ones on edit.",
         rules=[
-            dict(kind="forbid_pattern", target=r"Path\.home\(\)\s*/\s*[\"']\.janus", scope="**/*.py",
+            dict(kind="forbid_pattern", target=r"Path\.home\(\)\s*/\s*[\"']\.janus", severity="error", scope="**/*.py",
                  exclude="tests/**", message="use get_janus_home() — a literal ~/.janus breaks profiles"),
-            dict(kind="forbid_pattern", target=r"[\"']~/\.janus", scope="**/*.py",
+            dict(kind="forbid_pattern", target=r"[\"']~/\.janus", severity="error", scope="**/*.py",
                  exclude="tests/**", message="use display_janus_home() for user-facing paths"),
         ],
     ),
@@ -53,7 +61,7 @@ ADRS = [
         decision="New menus go through janus_cli/curses_ui.py; janus_cli/tools_config.py is the pattern.",
         consequences="Importing simple_term_menu anywhere new is a guard finding.",
         rules=[
-            dict(kind="forbid_import", target="simple_term_menu", scope="**/*.py",
+            dict(kind="forbid_import", target="simple_term_menu", severity="error", scope="**/*.py",
                  exclude="janus_cli/main.py", message="new menus use janus_cli/curses_ui.py"),
         ],
     ),
@@ -66,7 +74,7 @@ ADRS = [
         decision="Repaint-in-place lines are space-padded to the previous width instead.",
         consequences="Any `\\033[K` or `\\x1b[K` in a Python source is a guard finding.",
         rules=[
-            dict(kind="forbid_pattern", target=r"\\(033|x1b|e)\[K", scope="**/*.py",
+            dict(kind="forbid_pattern", target=r"\\(033|x1b|e)\[K", severity="error", scope="**/*.py",
                  message="pad with spaces; \\033[K leaks under patch_stdout"),
         ],
     ),
@@ -86,16 +94,27 @@ def main() -> None:
     ap.add_argument("--source-torsor", type=Path, default=None,
                     help="a .torsor/ from real use whose charter and active context to carry over")
     ap.add_argument("--commits", type=int, default=20)
+    ap.add_argument("--guard-mode", choices=("advise", "block"), default="advise",
+                    help="automation.guard_on_edit for the arm (torsor's default is advise)")
     args = ap.parse_args()
     root: Path = args.checkout.resolve()
     torsor_dir = root / ".torsor"
+    source: Path | None = args.source_torsor
     if torsor_dir.exists():
-        shutil.rmtree(torsor_dir)
+        kept = root / ".torsor.real"
+        if kept.exists():
+            sys.exit(f"{kept} already exists; move it away (or pass it as --source-torsor after "
+                     f"removing {torsor_dir} yourself) before reseeding")
+        torsor_dir.rename(kept)  # a journal is the only copy of what remember() wrote
+        source = source or kept
+        print(f"kept the existing .torsor as {kept}")
 
     sh("torsor", "init", "--write", cwd=root)
-    if args.source_torsor:
+    toml = torsor_dir / "torsor.toml"
+    toml.write_text(toml.read_text().replace('guard_on_edit = "advise"', f'guard_on_edit = "{args.guard_mode}"'))
+    if source:
         for rel in ("charter.md", "active/context.md", "active/progress.md"):
-            src = args.source_torsor / rel
+            src = source / rel
             if src.exists():
                 (torsor_dir / rel).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy(src, torsor_dir / rel)

@@ -12,7 +12,7 @@ grades every result without a model.
 | arm | gets |
 |---|---|
 | `plain` | the janus checkout as it is: `CLAUDE.md`, `AGENTS.md`, git history. No MCP servers, no hooks. |
-| `torsor` | the same, plus `.torsor/` (charter, active context, a journal built from the last 20 commits, three ADRs with guard rules transcribed from AGENTS.md "Known Pitfalls", the code map), the torsor MCP server, and the SessionStart + PreToolUse hooks. |
+| `torsor` | the same, plus `.torsor/` (charter, active context, a journal built from the last 20 commits, three ADRs with guard rules transcribed from AGENTS.md "Known Pitfalls", the code map), the torsor MCP server, and the SessionStart + PreToolUse hooks. The guard runs in torsor's default `advise` mode: the hook shows the finding, the agent decides. `seed_torsor.py --guard-mode block` seeds an arm where the hook denies the edit instead (ADR 0012); the rules carry `severity: error` so that mode bites. |
 
 Same model, same tool allowlist, same turn cap, fresh git worktree per run.
 The three ADR rules encode prose that is **already in AGENTS.md for both
@@ -25,7 +25,7 @@ Five questions and five edits, each tagged with the claim it tests:
 - `orientation` (q1, q2, q5): facts in the repo both arms can grep. Measures tokens and turns to a correct answer, not whether one arm can answer at all.
 - `memory` (q3, q4): facts in git history / recorded state. The plain arm can reach them through `git log`; the torsor arm through recall and the active context. q4 is the one task where the plain arm has no sure source, and the grader accepts "nothing recorded" as a fail, deliberately: that is the memory claim.
 - `convention` (e1, e4, e5): edits that must follow a repo convention (command registry, tool registration + toolset, config defaults). Graded by regexes over the changed files.
-- `rule` (e2, e3): edits that tempt a Known Pitfall (hardcoded `~/.janus`, `\033[K`). Graded by regexes over the diff's added lines. This is where the guard hook can fire.
+- `rule` (e2, e3): edits that tempt a Known Pitfall (hardcoded `~/.janus`, `\033[K`). Graded by regexes over the diff's added lines. This is where the guard hook can fire. The graded diff is the agent's work only: the arm's setup (`.torsor/`, `.mcp.json`, `.claude/settings.json`) is excluded, since the seeded ADR text quotes the very literals these tasks forbid.
 
 Graders are substrings and regexes, so a run can pass on wording luck or fail
 on phrasing; read the saved answers and diffs before trusting a single cell.
@@ -34,8 +34,10 @@ Repetitions (`--reps`) matter more than task count.
 ## Running
 
 ```bash
-# 1. a janus checkout with .venv (symlinked is fine); seed the torsor arm from real material
-uv run python tests/bench/agent_eval/seed_torsor.py /path/to/janus --source-torsor /path/to/janus/.torsor.real
+# 1. a janus checkout with .venv (symlinked is fine); seed the torsor arm from real material.
+#    An existing .torsor/ is kept as .torsor.real and used as the source of charter + active context.
+uv run python tests/bench/agent_eval/seed_torsor.py /path/to/janus            # advisory guard (torsor's default)
+uv run python tests/bench/agent_eval/seed_torsor.py /path/to/janus --guard-mode block
 
 # 2. the headless CLI must be logged in (claude login) — the harness never handles credentials
 claude -p "ok" --max-turns 1 --output-format json | head -c 200

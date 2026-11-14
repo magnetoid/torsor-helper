@@ -37,6 +37,10 @@ ALLOWED_TOOLS = (
     "mcp__torsor-helper__*"
 )
 TORSOR_FILES = (".torsor", ".mcp.json", ".claude/settings.json")
+# The arm's setup is not the agent's work: it stays out of the graded diff and
+# the saved one. Seeded ADR text quotes the very literals the `rule` tasks
+# forbid, so staging it would fail the torsor arm on its own memory.
+AGENT_DIFF_PATHSPEC = (".", *(f":(exclude){f}" for f in TORSOR_FILES))
 
 
 def sh(*args: str, cwd: Path, check: bool = True, timeout: int | None = None) -> subprocess.CompletedProcess:
@@ -120,10 +124,17 @@ def grade_question(task: dict, answer: str) -> tuple[bool, list[str]]:
     return ok, notes
 
 
+def agent_diff(worktree: Path, *extra: str) -> str:
+    """The agent's own changes: everything in the worktree except the arm's setup files."""
+    return sh("git", "diff", "--cached", *extra, "--", *AGENT_DIFF_PATHSPEC, cwd=worktree).stdout
+
+
 def grade_edit(task: dict, worktree: Path) -> tuple[bool, list[str]]:
-    sh("git", "add", "-A", cwd=worktree)
-    diff = sh("git", "diff", "--cached", "--unified=0", cwd=worktree).stdout
-    changed = sh("git", "diff", "--cached", "--name-only", cwd=worktree).stdout.split()
+    sh("git", "add", "-A", "--", ".", cwd=worktree)
+    for rel in TORSOR_FILES:  # unstage the arm's setup; `add` refuses an exclude pathspec that names an ignored path
+        sh("git", "reset", "-q", "--", rel, cwd=worktree, check=False)
+    diff = agent_diff(worktree, "--unified=0")
+    changed = agent_diff(worktree, "--name-only").split()
     added = "\n".join(line[1:] for line in diff.splitlines() if line.startswith("+") and not line.startswith("+++"))
     notes, ok = [], True
     for req in task.get("require", []):
@@ -174,6 +185,9 @@ def main() -> None:
         tasks = [t for t in tasks if any(t["id"].startswith(p) for p in args.only)]
     arms = [a for a in args.arms.split(",") if a in ARMS]
     checkout = args.checkout.resolve()
+    # absolute: `git worktree add` resolves the destination from the checkout,
+    # every later open() and cwd= from here — a relative --out split the two
+    args.out = args.out.resolve()
     args.out.mkdir(parents=True, exist_ok=True)
     scratch = args.out / "worktrees"
     scratch.mkdir(exist_ok=True)
@@ -198,7 +212,7 @@ def main() -> None:
                         passed, notes = grade_question(task, answer)
                     else:
                         passed, notes = grade_edit(task, wt)
-                        res["diff"] = sh("git", "diff", "--cached", cwd=wt).stdout[:60000]
+                        res["diff"] = agent_diff(wt)[:60000]
                         if args.run_tests:
                             res["tests_pass"] = run_tests(task, wt)
                     record = {
