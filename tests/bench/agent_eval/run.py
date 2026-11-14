@@ -89,6 +89,10 @@ def run_agent(worktree: Path, prompt: str, arm: str, model: str, max_turns: int,
         "claude", "-p", prompt, "--output-format", "json", "--no-session-persistence",
         "--permission-mode", "acceptEdits", "--allowedTools", ALLOWED_TOOLS,
         "--max-turns", str(max_turns), "--model", model, "--strict-mcp-config",
+        # The operator's own plugins, hooks and skills (user settings) stay out of
+        # both arms: they add ~9k tokens to every run and their SessionStart hooks
+        # steer the agent. Project settings stay — that is where torsor's hooks live.
+        "--setting-sources", "project,local",
     ]
     if arm == "torsor":
         cmd += ["--mcp-config", str(worktree / ".mcp.json")]
