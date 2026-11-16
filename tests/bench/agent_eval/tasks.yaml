@@ -1,0 +1,129 @@
+# Ten tasks on the janus repository, run by the same agent with and without
+# torsor. Each has a grader that needs no model: substrings the answer must
+# contain, or regexes the diff must (not) match. See README.md for the design.
+#
+# Grader keys
+#   expect_any:   question — the answer passes if it contains ANY of these (case-insensitive)
+#   expect_all:   question — ... ALL of these
+#   require:      edit — list of {file: glob, regex: ...}; every entry must match some changed file
+#   forbid:       edit — list of {regex: ...}; the diff's added lines must not match
+#   tests:        edit — janus test paths to run through scripts/run_tests.sh (optional, --run-tests)
+
+- id: q1-slash-command-registry
+  kind: question
+  claim: orientation
+  prompt: >
+    Where must a new slash command be registered in this repo so every surface
+    (CLI, gateway, Telegram, autocomplete) picks it up, and which two files hold
+    the per-surface handlers? Answer in at most four lines, naming the files.
+  expect_all: ["COMMAND_REGISTRY", "janus_cli/commands.py", "cli.py", "gateway/runner.py"]
+
+- id: q2-run-one-test-file
+  kind: question
+  claim: orientation
+  prompt: >
+    Give me the exact command to run only tests/gateway/test_runner.py the way
+    CI runs it. One line, no explanation.
+  expect_any: ["scripts/run_tests.sh tests/gateway/test_runner.py"]
+
+- id: q3-latest-tui-model-fix
+  kind: question
+  claim: memory
+  prompt: >
+    What did the most recent fix to the TUI's /model command change? Two
+    sentences at most.
+  expect_any: ["reasoning", "effort"]
+  expect_all: ["/new"]
+
+- id: q4-open-questions
+  kind: question
+  claim: memory
+  prompt: >
+    What are the currently known loose ends / open questions in this project
+    that someone picking it up should know about? Be concrete; at most five
+    bullets. If you cannot find any recorded, say so.
+  expect_any: ["approver", "eslint", "Tier 3"]
+
+- id: q5-git-branch-status-bar
+  kind: question
+  claim: orientation
+  prompt: >
+    Which config key turns on the git branch in the CLI status bar, where is its
+    default declared, and which module reads the branch without spawning git?
+    Three lines.
+  expect_all: ["status_bar_git_branch", "janus_cli/config.py", "git_branch.py"]
+
+- id: e1-add-uptime-command
+  kind: edit
+  claim: convention
+  prompt: >
+    Add a /uptime slash command that replies with how long the current session
+    has been running (hh:mm:ss). Wire it the way this repo expects slash
+    commands to be wired so the CLI and the gateway both get it. Do not run
+    the test suite; keep the change minimal.
+  require:
+    - {file: "janus_cli/commands.py", regex: 'CommandDef\(\s*"uptime"'}
+    - {file: "cli.py", regex: "uptime"}
+    - {file: "gateway/runner.py", regex: "uptime"}
+  forbid:
+    - {regex: "simple_term_menu"}
+
+- id: e2-skins-dir-helper
+  kind: edit
+  claim: rule
+  prompt: >
+    In janus_cli/skin_engine.py add a function user_skins_dir() that returns the
+    directory where a user's drop-in skin YAML files live, creating it if it
+    does not exist, and use it in the one place the module currently computes
+    that directory inline (if it does). Keep the change minimal, do not run tests.
+  require:
+    - {file: "janus_cli/skin_engine.py", regex: "def user_skins_dir"}
+    - {file: "janus_cli/skin_engine.py", regex: "get_janus_home"}
+  forbid:
+    - {regex: 'Path\.home\(\)\s*/\s*["'']\.janus'}
+    - {regex: '~/\.janus'}
+    - {regex: 'expanduser\(["'']~/\.janus'}
+
+- id: e3-progress-line
+  kind: edit
+  claim: rule
+  prompt: >
+    Add a small helper render_progress_line(label, done, total, width=80) to
+    janus_cli/display.py that returns a single-line string suitable for
+    repainting in place in the terminal (carriage return, no newline), clearing
+    any leftover characters from a longer previous line. Do not run tests.
+  require:
+    - {file: "janus_cli/display.py", regex: "def render_progress_line"}
+  forbid:
+    - {regex: '\\033\[K'}
+    - {regex: '\\x1b\[K'}
+    - {regex: '\\e\[K'}
+
+- id: e4-core-tool
+  kind: edit
+  claim: convention
+  prompt: >
+    Add a core tool named word_count that takes a text string and returns the
+    number of words, lines and characters as JSON, and make sure an agent can
+    actually be given it. Follow how core tools are added in this repo. Do not
+    run tests.
+  require:
+    - {file: "tools/*.py", regex: "registry\\.register\\("}
+    - {file: "tools/*.py", regex: '"word_count"'}
+    - {file: "toolsets.py", regex: '"word_count"'}
+  forbid:
+    - {regex: "web_search|browser_navigate|execute_code"}   # cross-tool references in schema text
+
+- id: e5-config-key
+  kind: edit
+  claim: convention
+  prompt: >
+    Add a non-secret config option display.show_cost_in_footer (default false)
+    that the CLI reads at startup into self.show_cost_in_footer. Put the default
+    where this repo keeps config defaults so the CLI and the gateway agree. Do
+    not run tests.
+  require:
+    - {file: "janus_cli/config.py", regex: '"show_cost_in_footer":\s*False'}
+    - {file: "cli.py", regex: "show_cost_in_footer"}
+  forbid:
+    - {regex: 'OPTIONAL_ENV_VARS'}
