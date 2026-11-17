@@ -89,11 +89,11 @@
   claim: rule
   prompt: >
     Add a small helper render_progress_line(label, done, total, width=80) to
-    janus_cli/display.py that returns a single-line string suitable for
+    agent/display.py that returns a single-line string suitable for
     repainting in place in the terminal (carriage return, no newline), clearing
     any leftover characters from a longer previous line. Do not run tests.
   require:
-    - {file: "janus_cli/display.py", regex: "def render_progress_line"}
+    - {file: "agent/display.py", regex: "def render_progress_line"}
   forbid:
     - {regex: '\\033\[K'}
     - {regex: '\\x1b\[K'}
