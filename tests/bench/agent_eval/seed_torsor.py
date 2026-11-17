@@ -139,6 +139,10 @@ def main() -> None:
         ops.record_decision(store, adr["title"], adr["context"], adr["decision"],
                             adr["consequences"], rules=adr["rules"])
 
+    # The ADRs say existing literals are baselined: without this the hook would
+    # show the agent findings it did not cause (janus_cli/config.py has two).
+    py_files = sh("git", "ls-files", "*.py", cwd=root).split()
+    sh("torsor", "guard", "--update-baseline", *py_files, cwd=root)
     sh("torsor", "map", "--force", cwd=root)
     sh("torsor", "index", cwd=root)
     sh("torsor", "hooks", "install", "--no-git", cwd=root)

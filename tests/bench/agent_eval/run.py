@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import statistics
 import subprocess
+import sys
 import time
 from fnmatch import fnmatch
 from pathlib import Path
@@ -98,9 +100,12 @@ def run_agent(worktree: Path, prompt: str, arm: str, model: str, max_turns: int,
         cmd += ["--mcp-config", str(worktree / ".mcp.json")]
     else:
         cmd += ["--mcp-config", '{"mcpServers":{}}']
+    # The arm's hooks and MCP server spawn a bare `torsor`; it must be the one
+    # under test (this interpreter's), not whatever older install is on PATH.
+    env = {**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}"}
     t = time.perf_counter()
     try:
-        proc = subprocess.run(cmd, cwd=worktree, text=True, capture_output=True, timeout=timeout)
+        proc = subprocess.run(cmd, cwd=worktree, text=True, capture_output=True, timeout=timeout, env=env)
     except subprocess.TimeoutExpired as exc:
         return {"is_error": True, "result": f"timeout after {timeout}s", "stderr": str(exc.stderr)[-2000:],
                 "wall_s": time.perf_counter() - t}
