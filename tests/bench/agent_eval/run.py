@@ -24,7 +24,10 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
+import threading
 import time
+from collections import Counter
 from fnmatch import fnmatch
 from pathlib import Path
 
@@ -86,9 +89,59 @@ def remove_worktree(checkout: Path, dest: Path) -> None:
     sh("git", "worktree", "remove", "--force", str(dest), cwd=checkout, check=False)
 
 
+def parse_stream(lines: list[tuple[float, str]]) -> dict:
+    """The final `result` event of a `stream-json` run, plus a trace built from
+    the events before it. `lines` are (seconds since start, raw line): the
+    stream carries no timestamps of its own, so the reader stamps each line.
+
+    trace.tools  — every tool call in order (name, ms until its result)
+    trace.hooks  — every hook run (name, ms, outcome, chars of context it injected)
+    Without this a cell says only that one arm cost more, never which tool or
+    hook spent it."""
+    data: dict = {}
+    tools: list[dict] = []
+    open_tools: dict[str, dict] = {}
+    hooks: list[dict] = []
+    open_hooks: dict[str, float] = {}
+    for t, raw in lines:
+        try:
+            ev = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        kind, sub = ev.get("type"), ev.get("subtype")
+        if kind == "result":
+            data = ev
+        elif kind == "system" and sub == "hook_started":
+            open_hooks[ev.get("hook_id", "")] = t
+        elif kind == "system" and sub == "hook_response":
+            start = open_hooks.pop(ev.get("hook_id", ""), t)
+            context = ""
+            try:
+                context = json.loads(ev.get("stdout") or "{}").get("hookSpecificOutput", {}).get("additionalContext", "")
+            except (json.JSONDecodeError, AttributeError):
+                pass
+            hooks.append({"hook": ev.get("hook_name"), "ms": round((t - start) * 1000),
+                          "outcome": ev.get("outcome"), "context_chars": len(context or "")})
+        elif kind in ("assistant", "user"):
+            content = (ev.get("message") or {}).get("content")
+            for c in content if isinstance(content, list) else []:
+                if c.get("type") == "tool_use":
+                    call = {"tool": c.get("name"), "ms": None}
+                    open_tools[c.get("id", "")] = {"call": call, "t": t}
+                    tools.append(call)
+                elif c.get("type") == "tool_result" and c.get("tool_use_id") in open_tools:
+                    pending = open_tools.pop(c["tool_use_id"])
+                    pending["call"]["ms"] = round((t - pending["t"]) * 1000)
+    if not data:
+        data = {"is_error": True, "result": "\n".join(raw for _, raw in lines[-5:])[-4000:]}
+    data["trace"] = {"tools": tools, "hooks": hooks}
+    return data
+
+
 def run_agent(worktree: Path, prompt: str, arm: str, model: str, max_turns: int, timeout: int) -> dict:
     cmd = [
-        "claude", "-p", prompt, "--output-format", "json", "--no-session-persistence",
+        "claude", "-p", prompt, "--output-format", "stream-json", "--verbose", "--include-hook-events",
+        "--no-session-persistence",
         "--permission-mode", "acceptEdits", "--allowedTools", ALLOWED_TOOLS,
         "--max-turns", str(max_turns), "--model", model, "--strict-mcp-config",
         # The operator's own plugins, hooks and skills (user settings) stay out of
@@ -104,16 +157,25 @@ def run_agent(worktree: Path, prompt: str, arm: str, model: str, max_turns: int,
     # under test (this interpreter's), not whatever older install is on PATH.
     env = {**os.environ, "PATH": f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}"}
     t = time.perf_counter()
-    try:
-        proc = subprocess.run(cmd, cwd=worktree, text=True, capture_output=True, timeout=timeout, env=env)
-    except subprocess.TimeoutExpired as exc:
-        return {"is_error": True, "result": f"timeout after {timeout}s", "stderr": str(exc.stderr)[-2000:],
-                "wall_s": time.perf_counter() - t}
-    try:
-        data = json.loads(proc.stdout)
-    except json.JSONDecodeError:
-        data = {"is_error": True, "result": proc.stdout[-4000:]}
-    data["stderr"] = proc.stderr[-2000:]
+    lines: list[tuple[float, str]] = []
+    with tempfile.TemporaryFile("w+") as err:  # a file, not a pipe: nobody reads stderr while stdout streams
+        proc = subprocess.Popen(cmd, cwd=worktree, text=True, stdout=subprocess.PIPE, stderr=err, env=env)
+        fired: list[bool] = []
+        killer = threading.Timer(timeout, lambda: (fired.append(True), proc.kill()))
+        killer.start()
+        try:
+            assert proc.stdout is not None
+            for raw in proc.stdout:
+                lines.append((time.perf_counter() - t, raw))
+            proc.wait()
+        finally:
+            killer.cancel()
+        err.seek(0)
+        stderr = err.read()[-2000:]
+    data = parse_stream(lines)
+    if fired:
+        data.update(is_error=True, result=f"timeout after {timeout}s")
+    data["stderr"] = stderr
     data["wall_s"] = time.perf_counter() - t
     return data
 
@@ -231,6 +293,7 @@ def main() -> None:
                         "duration_ms": res.get("duration_ms"), "wall_s": res.get("wall_s"),
                         "usage": res.get("usage"), "answer": answer, "diff": res.get("diff"),
                         "stderr": res.get("stderr"), "tests_pass": res.get("tests_pass"),
+                        "trace": res.get("trace"),
                     }
                     out.write_text(json.dumps(record, indent=1))
                     print(f"{'PASS' if passed else 'FAIL'}  ${record['cost_usd'] or 0:.2f}  {record['turns']} turns")
@@ -275,6 +338,22 @@ def report(out: Path) -> None:
         print(f"{arm:<7} passed {sum(r['passed'] for r in rows)}/{len(rows)}  "
               f"cost ${sum(r['cost_usd'] or 0 for r in rows):.2f}  "
               f"tokens {sum(_tokens(r['usage']) for r in rows):,}  |  {claims}")
+    traced = [r for r in recs if r.get("trace")]
+    if traced:
+        print("\nwhere the time and turns went (runs recorded with a trace)")
+        for arm in ARMS:
+            rows = [r for r in traced if r["arm"] == arm]
+            if not rows:
+                continue
+            calls = Counter(c["tool"] for r in rows for c in r["trace"]["tools"])
+            tool_s = sum((c["ms"] or 0) for r in rows for c in r["trace"]["tools"]) / 1000
+            hook_ms: dict[str, list[int]] = {}
+            for r in rows:
+                for h in r["trace"]["hooks"]:
+                    hook_ms.setdefault(h["hook"], []).append(h["ms"])
+            hooks = ", ".join(f"{name} x{len(v)} {sum(v) / 1000:.1f}s" for name, v in sorted(hook_ms.items()))
+            print(f"{arm:<7} {len(rows)} runs  tool time {tool_s:.0f}s  hooks: {hooks or 'none'}")
+            print("        calls: " + (", ".join(f"{name} {n}" for name, n in calls.most_common()) or "none"))
     errors = [r for r in recs if r["is_error"]]
     if errors:
         print(f"\n{len(errors)} run(s) errored: " + ", ".join(f"{r['task']}/{r['arm']}" for r in errors))

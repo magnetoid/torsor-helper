@@ -51,7 +51,12 @@ uv run python tests/bench/agent_eval/run.py --report /tmp/eval
 ```
 
 Each run writes one JSON record (grade, notes, cost, turns, tokens, wall time,
-the answer, the diff) so a cell can be re-read later. Finished runs are
+the answer, the diff, and a `trace`) so a cell can be re-read later. The run
+streams (`--output-format stream-json --include-hook-events`) and stamps each
+event on arrival, so `trace.tools` lists every tool call with its latency and
+`trace.hooks` every hook with its duration and how much context it injected;
+`--report` sums both per arm. torsor's MCP tools are deferred in Claude Code,
+so the first one costs a `ToolSearch` call — the trace shows it. Finished runs are
 skipped on rerun, so a stopped matrix resumes.
 
 ## Reading the result
