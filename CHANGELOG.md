@@ -6,6 +6,13 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### ⚡ The MCP server loads fastembed while the agent is still thinking
+Importing fastembed and loading its model cost every server process about two seconds, paid by the
+agent's first `recall`. The server now starts that load on a background thread as it comes up; the
+first recall arrives turns later and finds the model ready. On janus (3 000 notes), the first recall
+went from 1.9–2.5 s to 0.2 s. A recall that arrives during the load waits for it instead of loading a
+second copy. The hashing embedder has nothing to load and is unaffected.
+
 ### 📦 numpy and tomli-w are no longer dependencies
 numpy was the most expensive import in the process and served four functions that pack, unpack or
 rank a vector; they now run on `array('f')` and plain Python (`math.sumprod` on 3.12+). `cosine_search`

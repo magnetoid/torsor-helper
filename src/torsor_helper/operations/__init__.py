@@ -97,6 +97,7 @@ from torsor_helper.operations._shared import (  # noqa: F401  (facade re-exports
     _EMBEDDER_CACHE,
     _embedder_for,
     _open_index,
+    start_embedder_warmup,
 )
 
 # The git wrapper lives in gitinfo (a leaf module). This alias keeps the private
