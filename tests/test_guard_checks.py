@@ -180,3 +180,67 @@ def test_check_drift_survives_malformed_decision_note(tmp_path):
     (tmp_path / "app.py").write_text("import requests\n")
     vs = check_drift(store, ["app.py"])  # must not raise; good rules still apply
     assert any(v.file == "app.py" for v in vs)
+
+
+# --- forbid_pattern code_only: comments and docstrings are prose, not code ----
+# Found by the agent eval on janus: every run padded with spaces correctly, and
+# the rule still fired on the docstring sentence "spaces rather than \033[K".
+
+_ESC = r"\\033\[K"
+_SRC = '''"""Module doc: never emit \\033[K here."""
+
+
+def repaint(text):
+    """Pad with spaces rather than \\033[K."""
+    # not \\033[K: it leaks under patch_stdout
+    return "\\r" + text  # \\033[K would be wrong
+BAD = "\\033[K"
+'''
+
+
+def _pattern_rule(**extra):
+    from torsor_helper.models import Rule
+
+    return Rule(**{"kind": "forbid_pattern", "target": _ESC, "scope": "*.py", **extra})
+
+
+def test_forbid_pattern_still_matches_prose_by_default():
+    from torsor_helper.guard import violations_for_file
+
+    assert [v.line for v in violations_for_file("a.py", _SRC, _pattern_rule())] == [1, 5, 6, 7, 8]
+
+
+def test_code_only_skips_comments_and_docstrings_but_not_string_literals():
+    from torsor_helper.guard import violations_for_file
+
+    assert [v.line for v in violations_for_file("a.py", _SRC, _pattern_rule(code_only=True))] == [8]
+
+
+def test_code_only_on_unparseable_python_still_drops_comments():
+    from torsor_helper.guard import violations_for_file
+
+    src = "def broken(:\n    # \\033[K in a comment\n    x = '\\033[K'\n"
+    assert [v.line for v in violations_for_file("a.py", src, _pattern_rule(code_only=True))] == [3]
+
+
+def test_code_only_leaves_non_python_files_unchanged():
+    from torsor_helper.guard import violations_for_file
+
+    rule = _pattern_rule(code_only=True, scope="*.js")
+    assert [v.line for v in violations_for_file("a.js", "// \\033[K\n", rule)] == [1]
+
+
+def test_code_only_keeps_code_that_shares_a_line_with_a_docstring():
+    from torsor_helper.guard import violations_for_file
+
+    rule = _pattern_rule(code_only=True, target=r"print\(")
+    src = 'def f(): "print( is fine in prose"; print("bad")\nx = 1; "print( prose"\n"é print( prose"; print(2)\n'
+    assert [v.line for v in violations_for_file("a.py", src, rule)] == [1, 3]
+
+
+def test_code_only_counts_lines_the_way_the_tokenizer_does():
+    from torsor_helper.guard import violations_for_file
+
+    rule = _pattern_rule(code_only=True, target=r"print\(")
+    src = 'x = "a b"\n# print("example")\nprint(1)\n'
+    assert [v.line for v in violations_for_file("a.py", src, rule)] == [3]

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import ast
+import io
 import re
+import tokenize
 from pathlib import Path
 
 from torsor_helper.cartographer import absolute_from_module
@@ -302,13 +304,58 @@ def _forbid_layer_import(relpath: str, text: str, rule: Rule) -> list[Violation]
     return out
 
 
+def _python_code_lines(text: str) -> list[str]:
+    """`text`'s lines with comments cut and docstrings blanked, line numbers kept.
+
+    A docstring is any string that stands alone as a statement; only its own
+    span is blanked, so `f(); "doc"; g()` keeps both calls. Unparseable source
+    (a half-written edit) still loses the comments tokenized before the error,
+    and nothing else: code_only never hides more than it can prove is prose.
+
+    Lines are split where the tokenizer splits them, not by `str.splitlines`,
+    which also breaks on U+2028 and friends inside a string and would shift
+    every row after it."""
+    lines = [line.rstrip("\r\n") for line in io.StringIO(text).readlines()]
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT:
+                row, col = tok.start
+                lines[row - 1] = lines[row - 1][:col]
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return lines
+    tree = parse_quietly(text)
+    if tree is None:
+        return lines
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)):
+            _blank_span(lines, node.lineno, node.col_offset,
+                        node.end_lineno or node.lineno, node.end_col_offset or 0)
+    return lines
+
+
+def _blank_span(lines: list[str], row: int, col: int, end_row: int, end_col: int) -> None:
+    """Replace a node's source span with spaces. ast columns are UTF-8 byte
+    offsets; they become character positions on the original line. Lines a
+    comment cut have lost only text after the span, so offsets still hold."""
+    def chars(line: str, byte_col: int) -> int:
+        return len(line.encode("utf-8")[:byte_col].decode("utf-8", errors="ignore"))
+
+    for r in range(row, end_row + 1):
+        line = lines[r - 1]
+        start = chars(line, col) if r == row else 0
+        stop = chars(line, end_col) if r == end_row else len(line)
+        lines[r - 1] = line[:start] + " " * (stop - start) + line[stop:]
+
+
 def _forbid_pattern(relpath: str, text: str, rule: Rule) -> list[Violation]:
     try:
         pattern = re.compile(rule.target)
     except re.error:
         return []
+    code_only = rule.code_only and relpath.endswith((".py", ".pyi"))
     out: list[Violation] = []
-    for i, line in enumerate(text.splitlines(), start=1):
+    for i, line in enumerate(_python_code_lines(text) if code_only else text.splitlines(), start=1):
         if pattern.search(line):
             out.append(_violation(rule, relpath, i, f"matches forbidden pattern '{rule.target}'"))
     return out

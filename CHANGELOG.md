@@ -6,6 +6,15 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 🧹 `forbid_pattern` can ignore comments and docstrings (`code_only: true`)
+A rule banning an escape sequence or a call also fired on the sentence explaining why it is banned.
+The agent eval on janus showed it: every run padded the line with spaces correctly, and the rule
+still flagged the docstring "spaces rather than `\033[K`". With `code_only: true`, a Python file's
+comments and docstrings are blanked before the regex runs; string literals are still checked,
+since a forbidden escape inside one is exactly what gets printed. Off by default, Python-only (other
+languages are checked unchanged), and source that does not parse keeps everything but the comments
+already tokenized.
+
 ### 📦 numpy and tomli-w are no longer dependencies
 numpy was the most expensive import in the process and served four functions that pack, unpack or
 rank a vector; they now run on `array('f')` and plain Python (`math.sumprod` on 3.12+). `cosine_search`

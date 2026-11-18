@@ -142,6 +142,11 @@ class Rule(BaseModel):
     # something legitimate — ADR 0002 forbids importing the CLI, which is right
     # for every core module and wrong for the __main__ that has to.
     exclude: str = ""
+    # forbid_pattern only: match code, not prose. In a Python file comments and
+    # docstrings are blanked before the regex runs; string literals stay, since
+    # a forbidden escape inside one is exactly what gets emitted. Other
+    # languages are checked unchanged.
+    code_only: bool = False
     message: str = ""
     source: str = ""     # ADR/title that declared this rule (for citation)
     severity: str = "warning"  # hint | info | warning | error
