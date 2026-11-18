@@ -139,3 +139,54 @@ def test_hooks_run_pre_edit_block_mode_sets_deny(tmp_path):
     out = json.loads(r.stdout)["hookSpecificOutput"]
     assert out["permissionDecision"] == "deny"
     assert "ADR 0001" in out["permissionDecisionReason"]
+
+
+_PATTERN_ADR = """---
+type: decision
+status: accepted
+rules:
+- kind: forbid_pattern
+  target: 'ESC_K'
+  scope: "*.py"
+  severity: error
+  message: pad with spaces
+---
+
+# ADR 0002: No erase escape
+"""
+
+
+def test_a_new_violation_above_a_baselined_one_is_blamed_on_the_new_line(tmp_path):
+    # Found by the agent eval: the baseline is a count per (file, rule), and the
+    # excess was taken from the END of the file, so an addition above an
+    # existing violation blamed the old line. The agent was told to fix code it
+    # had not written.
+    store = Store(TorsorPaths(tmp_path))
+    store.scaffold()
+    (store.paths.decisions_dir / "0002-no-esc.md").write_text(_PATTERN_ADR, encoding="utf-8")
+    target = tmp_path / "a.py"
+    target.write_text("def a():\n    pass\n\n\nOLD = 'ESC_K'  # grandfathered\n", encoding="utf-8")
+    ops.guard_run(store, TorsorConfig(), ["a.py"], update_baseline=True)
+
+    verdict = ops.pre_edit(store, TorsorConfig(), "Edit", {
+        "file_path": str(target), "old_string": "    pass\n", "new_string": "    return 'ESC_K'\n",
+    })
+
+    assert verdict is not None
+    assert [v.line for v in verdict["new"]] == [2]
+    assert "a.py:2 " in verdict["context"]
+
+
+def test_an_edit_that_only_moves_a_baselined_violation_stays_silent(tmp_path):
+    store = Store(TorsorPaths(tmp_path))
+    store.scaffold()
+    (store.paths.decisions_dir / "0002-no-esc.md").write_text(_PATTERN_ADR, encoding="utf-8")
+    target = tmp_path / "a.py"
+    target.write_text("OLD = 'ESC_K'\n", encoding="utf-8")
+    ops.guard_run(store, TorsorConfig(), ["a.py"], update_baseline=True)
+
+    verdict = ops.pre_edit(store, TorsorConfig(), "Edit", {
+        "file_path": str(target), "old_string": "OLD", "new_string": "import sys\n\nOLD",
+    })
+
+    assert verdict is None
