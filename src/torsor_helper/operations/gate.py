@@ -174,13 +174,24 @@ def pre_edit(store, config, tool_name, tool_input) -> dict | None:
     text = _proposed_text(path, tool_name, tool_input)
     if text is None:
         return None
-    violations = [
-        v
-        for rule in guard.load_rules(store)
-        if guard.rule_applies(relpath, rule)
-        for v in guard.violations_for_file(relpath, text, rule)
-    ]
-    new = _baseline.new_violations(violations, _baseline.load(store.paths.baseline_file))
+    rules = [rule for rule in guard.load_rules(store) if guard.rule_applies(relpath, rule)]
+
+    def check(source: str) -> list:
+        return [v for rule in rules for v in guard.violations_for_file(relpath, source, rule)]
+
+    violations = check(text)
+    if not violations:
+        return None
+    # The baseline only counts; the file as it is now says WHICH lines were
+    # already there, so the excess is blamed on the line the edit adds.
+    try:
+        before = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        before = ""
+    new = _baseline.new_violations(
+        violations, _baseline.load(store.paths.baseline_file),
+        line_text=_baseline.line_texts(text), prior=_baseline.prior_lines(check(before), before),
+    )
     if not new:
         return None
 
