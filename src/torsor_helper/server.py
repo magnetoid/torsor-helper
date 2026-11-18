@@ -299,4 +299,6 @@ def build_server(root: Path | str) -> MCPServer:
 
 def run(root: Path | str) -> None:
     """Run the MCP server over stdio — the transport for a local, single-user agent."""
-    build_server(root).run(transport="stdio")
+    mcp = build_server(root)
+    ops.start_embedder_warmup(TorsorPaths(Path(root)))
+    mcp.run(transport="stdio")

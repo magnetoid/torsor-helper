@@ -6,19 +6,49 @@ embedder cache is a single object — copying it per concern would silently load
 the model more than once."""
 from __future__ import annotations
 
+import threading
+
 from torsor_helper import db
 from torsor_helper.embeddings import get_embedder
 from torsor_helper.indexer import reindex
 
 
 _EMBEDDER_CACHE: dict = {}
+# Held across the load, so a recall that arrives while the start-up warm-up is
+# still loading the model waits for it rather than loading a second copy.
+_EMBEDDER_LOCK = threading.Lock()
 
 
 def _embedder_for(config):
     key = (config.embeddings.provider, config.embeddings.model, config.embeddings.dim)
-    if key not in _EMBEDDER_CACHE:
-        _EMBEDDER_CACHE[key] = get_embedder(config)
-    return _EMBEDDER_CACHE[key]
+    with _EMBEDDER_LOCK:
+        if key not in _EMBEDDER_CACHE:
+            _EMBEDDER_CACHE[key] = get_embedder(config)
+        return _EMBEDDER_CACHE[key]
+
+
+def start_embedder_warmup(paths) -> threading.Thread | None:
+    """Load the configured embedder on a daemon thread; None when there is nothing to load.
+
+    Importing fastembed and loading its model costs 1.6-2.4 s per process, and
+    it used to land on the agent's first recall. The MCP server starts before
+    the agent's first turn and the first recall comes turns later, so the load
+    runs in that gap. The hashing embedder costs nothing to build, and a
+    project that is missing or misconfigured is left for the tools to report."""
+    from torsor_helper.config import load_config
+
+    if not paths.base.exists():
+        return None
+    try:
+        config = load_config(paths)
+    except Exception:  # noqa: BLE001 - every tool call reports it; the warm-up stays quiet
+        return None
+    if config.embeddings.provider != "fastembed":
+        return None
+    thread = threading.Thread(target=_embedder_for, args=(config,), name="torsor-embedder-warmup",
+                              daemon=True)
+    thread.start()
+    return thread
 
 
 def _open_index(store, config):
