@@ -96,7 +96,7 @@ ADRs carry machine-readable `rules:` in their frontmatter. Four rule kinds:
 | `require_import` | mandatory seam: files in scope must import this | module prefix, e.g. `app.audit` |
 | `forbid_pattern` | line-level regex ban | regex, e.g. `print\(` |
 
-Each rule takes an optional `scope` (fnmatch glob, default `*.py`), `severity` (`hint`/`info`/`warning`/`error`), and `message`.
+Each rule takes an optional `scope` (path-aware glob: `*` stays in one directory, `**` spans them; default `*.py`), `severity` (`hint`/`info`/`warning`/`error`), and `message`. A `forbid_pattern` rule can add `code_only: true` so a Python file's comments and docstrings don't count — the line explaining why `\033[K` is banned is not a use of it. String literals are still checked.
 
 **Workflow:**
 
