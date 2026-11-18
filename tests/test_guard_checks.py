@@ -228,3 +228,19 @@ def test_code_only_leaves_non_python_files_unchanged():
 
     rule = _pattern_rule(code_only=True, scope="*.js")
     assert [v.line for v in violations_for_file("a.js", "// \\033[K\n", rule)] == [1]
+
+
+def test_code_only_keeps_code_that_shares_a_line_with_a_docstring():
+    from torsor_helper.guard import violations_for_file
+
+    rule = _pattern_rule(code_only=True, target=r"print\(")
+    src = 'def f(): "print( is fine in prose"; print("bad")\nx = 1; "print( prose"\n"é print( prose"; print(2)\n'
+    assert [v.line for v in violations_for_file("a.py", src, rule)] == [1, 3]
+
+
+def test_code_only_counts_lines_the_way_the_tokenizer_does():
+    from torsor_helper.guard import violations_for_file
+
+    rule = _pattern_rule(code_only=True, target=r"print\(")
+    src = 'x = "a b"\n# print("example")\nprint(1)\n'
+    assert [v.line for v in violations_for_file("a.py", src, rule)] == [3]
