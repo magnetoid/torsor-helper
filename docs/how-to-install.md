@@ -84,6 +84,8 @@ torsor init --client <name>
 
 Without the extra, recall uses a deterministic offline hashing embedder — every feature still works with no model download and no API key. Graceful degradation is a design rule.
 
+With the extra, the first recall downloads the model (~130 MB) once per machine into `~/.cache/torsor-helper/fastembed`. Set `XDG_CACHE_HOME` or `FASTEMBED_CACHE_PATH` to put it elsewhere. Every project shares it, and it is the one thing torsor keeps outside the project root (ADR 0020).
+
 ## 5. Verify the install
 
 ```bash

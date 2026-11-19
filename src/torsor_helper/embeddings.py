@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import os
 import re
 import warnings
 from typing import Protocol, Sequence, runtime_checkable
@@ -59,10 +60,24 @@ class FastEmbedEmbedder:
         return [list(map(float, v)) for v in self._model.embed(list(texts))]
 
 
-def _make_fastembed(model: str):  # pragma: no cover - exercised only when installed
+def model_cache_dir() -> str:
+    """Where fastembed keeps its model: a per-user cache, never the system temp dir.
+
+    fastembed's own default is `tempfile.gettempdir()`, which the OS clears; the
+    next process then downloads the model again (~32 s for bge-small) or, offline,
+    falls back to hashing. The model is a shared download, not project state, so
+    it lives outside the project root (ADR 0020). `FASTEMBED_CACHE_PATH` still
+    wins, then `XDG_CACHE_HOME`, then `~/.cache`."""
+    if explicit := os.environ.get("FASTEMBED_CACHE_PATH"):
+        return explicit
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return os.path.join(base, "torsor-helper", "fastembed")
+
+
+def _make_fastembed(model: str):
     from fastembed import TextEmbedding
 
-    return TextEmbedding(model_name=model)
+    return TextEmbedding(model_name=model, cache_dir=model_cache_dir())
 
 
 def get_embedder(config) -> Embedder:
