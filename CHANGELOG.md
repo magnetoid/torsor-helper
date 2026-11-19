@@ -6,6 +6,14 @@ in numbered phases (see the [roadmap](README.md#️-roadmap)).
 
 ## [Unreleased]
 
+### 💾 The fastembed model is downloaded once, not after every temp cleanup
+fastembed kept its model in the system temp directory, which the OS clears. The next process then
+downloaded it again (32 s for bge-small), or fell back to hashing when offline. The model now
+lives in a per-user cache: `$FASTEMBED_CACHE_PATH`, else `$XDG_CACHE_HOME/torsor-helper/fastembed`,
+else `~/.cache/torsor-helper/fastembed`. It is the one thing torsor keeps outside the project root
+(ADR 0020): a download shared by every project, not state about any of them. The first recall after
+upgrading downloads the model once into the new location.
+
 ### 📦 numpy and tomli-w are no longer dependencies
 numpy was the most expensive import in the process and served four functions that pack, unpack or
 rank a vector; they now run on `array('f')` and plain Python (`math.sumprod` on 3.12+). `cosine_search`
