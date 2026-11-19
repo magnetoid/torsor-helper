@@ -29,12 +29,15 @@ def _capture(monkeypatch) -> dict:
 def test_the_model_is_cached_per_user_not_in_temp(monkeypatch, tmp_path):
     monkeypatch.delenv("FASTEMBED_CACHE_PATH", raising=False)
     monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    # tmp_path is itself under the real temp dir, so point "system temp" elsewhere
+    # or a correct per-user path would look like a temp path.
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "systmp"))
     seen = _capture(monkeypatch)
 
     embeddings._make_fastembed("BAAI/bge-small-en-v1.5")
 
-    assert seen["cache_dir"] == str(tmp_path / ".cache" / "torsor-helper" / "fastembed")
+    assert seen["cache_dir"] == str(tmp_path / "home" / ".cache" / "torsor-helper" / "fastembed")
     assert not Path(seen["cache_dir"]).is_relative_to(tempfile.gettempdir())
 
 
